@@ -42,3 +42,48 @@ export const publishedDishes = sqliteTable("published_dishes", {
   imageKey: text("image_key"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const groups = sqliteTable("groups", {
+  id: text("id").primaryKey(),
+  ownerId: text("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  eventTime: text("event_time").notNull(),
+  neighborhood: text("neighborhood").notNull(),
+  budgetMax: integer("budget_max").notNull(),
+  maxDistanceKm: integer("max_distance_km").notNull(),
+  vegetarianRequired: integer("vegetarian_required").notNull().default(0),
+  allergies: text("allergies").notNull().default("[]"),
+  inviteCode: text("invite_code").notNull(),
+  status: text("status", { enum: ["voting", "finalized"] }).notNull().default("voting"),
+  selectedCandidateId: text("selected_candidate_id"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [uniqueIndex("groups_invite_code_unique").on(table.inviteCode)]);
+
+export const groupCandidates = sqliteTable("group_candidates", {
+  groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  candidateId: text("candidate_id").notNull(),
+  name: text("name").notNull(),
+  restaurant: text("restaurant").notNull(),
+  neighborhood: text("neighborhood").notNull(),
+  distanceKm: integer("distance_km").notNull(),
+  price: text("price").notNull(),
+  image: text("image").notNull(),
+  score: integer("score").notNull(),
+  eligible: integer("eligible", { mode: "boolean" }).notNull(),
+  explanation: text("explanation").notNull(),
+  conflicts: text("conflicts").notNull().default("[]"),
+}, (table) => [primaryKey({ columns: [table.groupId, table.candidateId] })]);
+
+export const groupVotes = sqliteTable("group_votes", {
+  groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  candidateId: text("candidate_id").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [primaryKey({ columns: [table.groupId, table.userId] })]);
+
+export const groupRsvps = sqliteTable("group_rsvps", {
+  groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  status: text("status", { enum: ["yes", "maybe", "no"] }).notNull(),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [primaryKey({ columns: [table.groupId, table.userId] })]);

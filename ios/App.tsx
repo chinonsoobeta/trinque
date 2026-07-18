@@ -13,6 +13,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -36,6 +37,8 @@ type AnalysisEnvelope =
   | { ok: false; mode: 'unavailable'; requestId: string; error: { code: string; message: string }; demoAvailable: true };
 
 type NearbyMatch = { id: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; dietary: string; score: number; explanation: string };
+type MobileGroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; explanation: string; conflicts: string[] };
+type MobileGroup = { id: string; name: string; eventTime: string; neighborhood: string; budgetMax: number; maxDistanceKm: number; vegetarianRequired: number; allergies: string[]; inviteCode: string; status: 'voting' | 'finalized'; selectedCandidateId: string | null; candidates: MobileGroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number> };
 
 type Dish = {
   id: number;
@@ -266,7 +269,7 @@ export default function App() {
         <StatusBar style="dark" />
         <View style={styles.appShell}>
           {tab === 'Discover' && <DiscoverScreen savedIds={savedIds} onSave={toggleSaved} onAnalyze={openAnalyzer} />}
-          {tab === 'Groups' && <GroupsScreen />}
+          {tab === 'Groups' && <GroupsScreen guestToken={guestToken} />}
           {tab === 'Saved' && <SavedScreen dishes={savedDishes} onSave={toggleSaved} onDiscover={() => setTab('Discover')} />}
           {tab === 'Profile' && <ProfileScreen />}
           <TabBar active={tab} onSelect={setTab} onAnalyze={openAnalyzer} />
@@ -340,52 +343,84 @@ function DiscoverScreen({ savedIds, onSave, onAnalyze }: { savedIds: number[]; o
   );
 }
 
-function GroupsScreen() {
-  const [votes, setVotes] = useState({ pasta: 4, cod: 3, cauliflower: 2 });
-  const [locked, setLocked] = useState(false);
+function GroupsScreen({ guestToken }: { guestToken: string | null }) {
+  const [group, setGroup] = useState<MobileGroup | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!remoteApi || !guestToken) return;
+    void fetch(`${remoteApi}/api/groups`, { headers: { Authorization: `Guest ${guestToken}` } }).then(async (response) => {
+      if (response.ok) setGroup(((await response.json()) as { group: MobileGroup | null }).group);
+    });
+  }, [guestToken]);
+
+  const createGroup = async () => {
+    if (!remoteApi || !guestToken) { Alert.alert('Guest session required', 'Connect the Trinque API to create a persistent decision room.'); return; }
+    setBusy(true);
+    try {
+      const eventTime = new Date(Date.now() + 86400000); eventTime.setHours(19, 30, 0, 0);
+      const response = await fetch(`${remoteApi}/api/groups`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Friday supper', eventTime: eventTime.toISOString(), neighborhood: 'Mount Pleasant', budgetMax: 35, maxDistanceKm: 4, vegetarianRequired: 1, allergies: ['sesame'] }) });
+      if (!response.ok) throw new Error();
+      setGroup(((await response.json()) as { group: MobileGroup }).group);
+    } catch { Alert.alert('Couldn’t create the group', 'Try again when the connection returns.'); } finally { setBusy(false); }
+  };
+
+  const groupAction = async (path: string, body: object = {}) => {
+    if (!remoteApi || !guestToken || !group) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`${remoteApi}/api/groups/${group.id}/${path}`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!response.ok) throw new Error(((await response.json()) as { error?: string }).error);
+      setGroup(((await response.json()) as { group: MobileGroup }).group);
+    } catch (error) { Alert.alert('Plan not updated', error instanceof Error ? error.message : 'Try again.'); } finally { setBusy(false); }
+  };
+
+  const shareCalendar = async () => {
+    if (!remoteApi || !guestToken || !group) return;
+    const response = await fetch(`${remoteApi}/api/groups/${group.id}/calendar`, { headers: { Authorization: `Guest ${guestToken}` } });
+    if (!response.ok) { Alert.alert('Calendar not ready'); return; }
+    await Share.share({ title: 'Trinque dining plan', message: await response.text() });
+  };
+
+  const candidates = group?.candidates.slice(0, 5) ?? [];
+  const winner = group?.candidates.find((candidate) => candidate.candidateId === group.selectedCandidateId);
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
       <Header eyebrow="The decision room" />
       <View style={styles.pageIntro}>
         <Text style={styles.heroKicker}>GROUP FIT</Text>
         <Text style={styles.pageTitle}>Dinner without the group-chat spiral.</Text>
-        <Text style={styles.pageBody}>Trinque balances everyone’s needs, then makes the tradeoffs visible.</Text>
+        <Text style={styles.pageBody}>Trinque enforces the hard constraints, explains every tradeoff, records your vote, and turns the winner into a plan.</Text>
       </View>
 
       <View style={styles.planCard}>
         <View style={styles.planHeader}>
           <View>
-            <Text style={styles.planEyebrow}>TONIGHT · 7:30 PM</Text>
-            <Text style={styles.planTitle}>Friday dinner</Text>
+            <Text style={styles.planEyebrow}>{group ? new Date(group.eventTime).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }).toUpperCase() : 'READY WHEN YOU ARE'}</Text>
+            <Text style={styles.planTitle}>{group?.name ?? 'Friday supper'}</Text>
           </View>
           <View style={styles.avatarStack}><Text style={styles.avatar}>NK</Text><Text style={[styles.avatar, styles.avatarTwo]}>AM</Text><Text style={[styles.avatar, styles.avatarThree]}>+2</Text></View>
         </View>
         <View style={styles.constraintRow}>
-          {['Under $35', '1 vegetarian', 'No peanuts', '< 20 min'].map((item) => <View key={item} style={styles.constraint}><Text style={styles.constraintText}>✓ {item}</Text></View>)}
+          {(group ? [`Under $${group.budgetMax}`, `${group.vegetarianRequired} vegetarian`, `Avoid ${group.allergies.join(', ')}`, `< ${group.maxDistanceKm} km`] : ['Under $35', '1 vegetarian', 'Avoid sesame', '< 4 km']).map((item) => <View key={item} style={styles.constraint}><Text style={styles.constraintText}>✓ {item}</Text></View>)}
         </View>
       </View>
 
-      <SectionHeading kicker="BALANCED FOR EVERYONE" title="Three strong fits" action="" />
-      {[
-        { key: 'pasta' as const, dish: dishes[0], fit: 95, reason: 'Best overall taste match · vegetarian-friendly' },
-        { key: 'cod' as const, dish: dishes[1], fit: 89, reason: 'Top pick for 3 people · confirm soy ingredients' },
-        { key: 'cauliflower' as const, dish: dishes[2], fit: 86, reason: 'Safest dietary fit · easiest walk' },
-      ].map(({ key, dish, fit, reason }) => (
-        <View key={key} style={styles.voteCard}>
-          <Image source={{ uri: dish.image }} style={styles.voteImage} />
+      <SectionHeading kicker="BALANCED FOR EVERYONE" title={group ? 'Ranked with hard stops' : 'Build the real shortlist'} action="" />
+      {!group ? <View style={styles.emptyCard}><Text style={styles.emptyIcon}>♢</Text><Text style={styles.emptyTitle}>One tap to open the room</Text><Text style={styles.emptyBody}>This demo plan uses a $35 budget, 4 km radius, one vegetarian guest, and a hard sesame exclusion.</Text><Pressable disabled={busy} style={styles.primaryButton} onPress={createGroup}><Text style={styles.primaryButtonText}>{busy ? 'Ranking…' : 'Create decision room'}</Text><Text style={styles.primaryArrow}>→</Text></Pressable></View> : candidates.map((candidate, index) => (
+        <View key={candidate.candidateId} style={[styles.voteCard, !candidate.eligible && styles.ineligibleCard]}>
+          <Image source={{ uri: candidate.image }} style={styles.voteImage} />
           <View style={styles.voteInfo}>
-            <View style={styles.voteMeta}><Text style={styles.fitBadge}>{fit}% fit</Text><Text style={styles.votePrice}>{dish.price}</Text></View>
-            <Text style={styles.voteName}>{dish.name}</Text>
-            <Text style={styles.voteReason}>{reason}</Text>
-            <Pressable disabled={locked} style={({ pressed }) => [styles.voteButton, pressed && styles.pressed, locked && styles.disabledButton]} onPress={() => setVotes((current) => ({ ...current, [key]: current[key] + 1 }))}>
-              <Text style={styles.voteButtonText}>{locked ? 'Voting closed' : `♡  Vote · ${votes[key]}`}</Text>
+            <View style={styles.voteMeta}><Text style={styles.fitBadge}>{candidate.eligible ? `${candidate.score}% fit` : 'Hard conflict'}</Text><Text style={styles.votePrice}>{candidate.price}</Text></View>
+            <Text style={styles.voteName}>{candidate.name}</Text>
+            <Text style={styles.voteReason}>{candidate.restaurant} · {candidate.distanceKm} km{`\n`}{candidate.explanation}</Text>
+            <Pressable disabled={busy || !candidate.eligible || group.status === 'finalized'} style={({ pressed }) => [styles.voteButton, pressed && styles.pressed, (busy || !candidate.eligible || group.status === 'finalized') && styles.disabledButton]} onPress={() => groupAction('vote', { candidateId: candidate.candidateId })}>
+              <Text style={styles.voteButtonText}>{group.status === 'finalized' ? 'Voting closed' : `♡  Vote · ${group.votes[candidate.candidateId] ?? 0}`}</Text>
             </Pressable>
           </View>
         </View>
       ))}
-      <Pressable style={({ pressed }) => [styles.primaryButton, styles.lockButton, pressed && styles.pressed]} onPress={() => setLocked((current) => !current)}>
-        <Text style={styles.primaryButtonText}>{locked ? 'Reopen the table' : 'Lock the winner'}</Text><Text style={styles.primaryArrow}>{locked ? '↺' : '→'}</Text>
-      </Pressable>
+      {group?.status === 'voting' ? <Pressable disabled={busy} style={({ pressed }) => [styles.primaryButton, styles.lockButton, pressed && styles.pressed, busy && styles.disabledButton]} onPress={() => groupAction('finalize')}><Text style={styles.primaryButtonText}>{busy ? 'Locking…' : 'Lock the eligible winner'}</Text><Text style={styles.primaryArrow}>→</Text></Pressable> : winner ? <View style={styles.mobileFinalPlan}><Text style={styles.planEyebrow}>YOUR BEST TABLE</Text><Text style={styles.mobileFinalTitle}>{winner.restaurant}</Text><Text style={styles.mobileFinalBody}>{winner.name}. {winner.explanation}</Text><View style={styles.mobileFinalActions}><Pressable style={styles.finalAction} onPress={() => groupAction('rsvp', { status: 'yes' })}><Text style={styles.finalActionText}>I’m in · {group?.rsvps.yes ?? 0}</Text></Pressable><Pressable style={styles.finalAction} onPress={shareCalendar}><Text style={styles.finalActionText}>Share calendar</Text></Pressable></View></View> : null}
     </ScrollView>
   );
 }
@@ -633,7 +668,14 @@ const styles = StyleSheet.create({
   voteButton: { borderTopWidth: 1, borderTopColor: palette.line, marginTop: 'auto', paddingTop: 9 },
   voteButtonText: { color: palette.terracotta, fontSize: 11, fontWeight: '900' },
   disabledButton: { opacity: 0.6 },
+  ineligibleCard: { opacity: 0.58 },
   lockButton: { marginHorizontal: 18, marginTop: 7, justifyContent: 'center' },
+  mobileFinalPlan: { marginHorizontal: 18, marginTop: 8, padding: 20, borderRadius: 21, backgroundColor: palette.burgundy },
+  mobileFinalTitle: { color: palette.cream, fontFamily: Platform.select({ ios: 'Georgia-Bold', default: 'serif' }), fontSize: 25, marginTop: 7 },
+  mobileFinalBody: { color: '#EEDFD9', fontSize: 12, lineHeight: 18, marginTop: 8 },
+  mobileFinalActions: { flexDirection: 'row', gap: 9, marginTop: 16 },
+  finalAction: { flex: 1, minHeight: 44, borderWidth: 1, borderColor: '#FFFFFF55', borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  finalActionText: { color: '#FFFFFF', fontWeight: '800', fontSize: 11 },
   savedCard: { marginHorizontal: 18, marginBottom: 14, minHeight: 148, backgroundColor: palette.paper, borderRadius: 21, borderWidth: 1, borderColor: palette.line, padding: 10, flexDirection: 'row' },
   savedImage: { width: 112, borderRadius: 15, backgroundColor: palette.blush },
   savedInfo: { flex: 1, padding: 12 },

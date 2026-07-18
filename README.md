@@ -8,7 +8,7 @@ Trinque is a dish-first social discovery app. Upload a food photo, let GPT-5.6 i
 - Upload a dish photo for structured GPT-5.6 analysis.
 - Review and correct every AI-generated field before publishing.
 - Publish the reviewed dish and see newly ranked nearby taste matches with explanations, dietary caveats, price, and distance.
-- Create a group plan that balances location, budget, allergies, vegetarian needs, and votes.
+- Create a durable group plan that enforces budget, travel, allergy, and vegetarian constraints; records votes; locks an eligible winner; tracks RSVP; and exports a calendar event.
 - Use the complete deterministic demo without an API key.
 
 ## Run locally

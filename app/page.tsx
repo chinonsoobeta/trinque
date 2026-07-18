@@ -15,6 +15,8 @@ type AnalysisEnvelope =
   | { ok: false; mode: "unavailable"; requestId: string; error: { code: string; message: string }; demoAvailable: true };
 type NearbyMatch = { id: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; dietary: string; score: number; explanation: string };
 type PublishedDish = Analysis & { id: string; sourceMode: "live" | "demo"; imageUrl?: string | null; localPreview?: string };
+type GroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; explanation: string; conflicts: string[] };
+type GroupSnapshot = { id: string; name: string; eventTime: string; neighborhood: string; budgetMax: number; maxDistanceKm: number; vegetarianRequired: number; allergies: string[]; inviteCode: string; status: "voting" | "finalized"; selectedCandidateId: string | null; candidates: GroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number> };
 
 const dishes: Dish[] = [
   { id: 1, name: "Brown butter agnolotti", restaurant: "Bar Susu", area: "Mount Pleasant", distance: "0.8 km", price: "$24", image: "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=1400&q=86", match: 96, note: "Silky, nutty, bright with lemon", tags: ["Pasta", "Vegetarian"], likes: 284 },
@@ -42,7 +44,6 @@ export default function Home() {
   const [analysisWarning, setAnalysisWarning] = useState("");
   const [analysisError, setAnalysisError] = useState("");
   const [pendingImage, setPendingImage] = useState<string | undefined>();
-  const [plan, setPlan] = useState(false);
   const [toast, setToast] = useState("");
   const [guestToken, setGuestToken] = useState<string | null>(null);
   const [identityLabel, setIdentityLabel] = useState("Guest");
@@ -169,7 +170,7 @@ export default function Home() {
 
       <main>
         {view === "groups" ? (
-          <GroupPlanner plan={plan} setPlan={setPlan} flash={flash} />
+          <GroupPlanner guestToken={guestToken} flash={flash} />
         ) : (
           <>
             <section className="hero">
@@ -270,22 +271,59 @@ function Analyzer({ preview, phase, analysis, analysisMode, warning, error, matc
   </div></div>;
 }
 
-function GroupPlanner({ plan, setPlan, flash }: { plan: boolean; setPlan: (value: boolean) => void; flash: (text: string) => void }) {
-  const [votes, setVotes] = useState<Record<string, number>>({ "Maruhachi Ra-men": 3, "Via Tevere": 2, "Bar Susu": 1 });
-  function vote(place: string) { setVotes((current) => ({ ...current, [place]: current[place] + 1 })); flash("Your vote is in"); }
+function GroupPlanner({ guestToken, flash }: { guestToken: string | null; flash: (text: string) => void }) {
+  const [group, setGroup] = useState<GroupSnapshot | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [budgetMax, setBudgetMax] = useState("35");
+  const [maxDistanceKm, setMaxDistanceKm] = useState("4");
+  const [vegetarianRequired, setVegetarianRequired] = useState("1");
+  const [allergies, setAllergies] = useState("sesame");
+
+  useEffect(() => {
+    if (!guestToken) return;
+    void fetch("/api/groups", { headers: { Authorization: `Guest ${guestToken}` } }).then(async (response) => {
+      if (response.ok) setGroup(((await response.json()) as { group: GroupSnapshot | null }).group);
+    });
+  }, [guestToken]);
+
+  async function createGroup() {
+    if (!guestToken) { flash("Guest session is still connecting"); return; }
+    setBusy(true);
+    try {
+      const eventTime = new Date(Date.now() + 24 * 60 * 60 * 1000); eventTime.setHours(19, 30, 0, 0);
+      const response = await fetch("/api/groups", { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ name: "Friday supper", eventTime: eventTime.toISOString(), neighborhood: "Mount Pleasant", budgetMax: Number(budgetMax), maxDistanceKm: Number(maxDistanceKm), vegetarianRequired: Number(vegetarianRequired), allergies: allergies.split(",") }) });
+      if (!response.ok) throw new Error();
+      setGroup(((await response.json()) as { group: GroupSnapshot }).group); flash("Your decision room is ready");
+    } catch { flash("Couldn’t create the group yet"); } finally { setBusy(false); }
+  }
+
+  async function groupAction(path: string, body?: object) {
+    if (!guestToken || !group) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/groups/${group.id}/${path}`, { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
+      if (!response.ok) throw new Error((await response.json() as { error?: string }).error);
+      const payload = await response.json() as { group: GroupSnapshot };
+      setGroup(payload.group); flash(path === "vote" ? "Your vote is in" : path === "finalize" ? "The table is locked" : "RSVP saved");
+    } catch (error) { flash(error instanceof Error && error.message ? error.message : "That action didn’t go through"); } finally { setBusy(false); }
+  }
+
+  async function downloadCalendar() {
+    if (!guestToken || !group) return;
+    const response = await fetch(`/api/groups/${group.id}/calendar`, { headers: { Authorization: `Guest ${guestToken}` } });
+    if (!response.ok) { flash("Calendar export isn’t ready"); return; }
+    const url = URL.createObjectURL(await response.blob()); const link = document.createElement("a"); link.href = url; link.download = "trinque-friday-supper.ics"; link.click(); URL.revokeObjectURL(url); flash("Calendar event downloaded");
+  }
+
+  if (!group) return <section className="group-page"><div className="group-intro"><div className="eyebrow"><span>♢</span> Shared table</div><h1>From group chat to a table everyone can enjoy.</h1><p>Set the non-negotiables. Trinque will rank nearby dishes, explain conflicts, collect your vote, and turn the winner into a real plan.</p></div><div className="group-starter"><span className="kicker">START A DECISION ROOM</span><h2>Friday supper</h2><div className="planner-form"><label>Maximum per person<input value={budgetMax} onChange={(event) => setBudgetMax(event.target.value)} inputMode="numeric" /></label><label>Travel radius (km)<input value={maxDistanceKm} onChange={(event) => setMaxDistanceKm(event.target.value)} inputMode="numeric" /></label><label>Vegetarian guests<input value={vegetarianRequired} onChange={(event) => setVegetarianRequired(event.target.value)} inputMode="numeric" /></label><label>Hard allergy exclusions<input value={allergies} onChange={(event) => setAllergies(event.target.value)} placeholder="sesame, peanuts" /></label></div><button className="primary full" disabled={busy || !guestToken} onClick={createGroup}>{guestToken ? busy ? "Building shortlist…" : "Rank the table →" : "Connecting guest session…"}</button></div></section>;
+
+  const winner = group.candidates.find((candidate) => candidate.candidateId === group.selectedCandidateId);
   return <section className="group-page">
-    <div className="group-intro"><div className="eyebrow"><span>♢</span> Shared table</div><h1>Five people. One genuinely good plan.</h1><p>Trinque balances everyone’s budget, dietary needs, location and cravings—without the group-chat spiral.</p><div className="members">{["CO", "AM", "JR", "SK", "+1"].map((name, i) => <span key={name} style={{ background: colors[i % colors.length] }}>{name}</span>)}</div></div>
-    <div className="planner">
-      <aside className="constraints"><span className="kicker">Tonight · 7:30 PM</span><h2>Friday supper</h2>
-        {[["◎", "Mount Pleasant", "Within 4 km"], ["$", "$20–35 per person", "Drinks optional"], ["!", "1 shellfish allergy", "Avoid cross-contamination"], ["♧", "2 vegetarians", "Good mains required"]].map(([icon, title, note], i) => <div className={i === 2 ? "constraint warning" : "constraint"} key={title}><span>{icon}</span><div><b>{title}</b><small>{note}</small></div></div>)}
-        <button className="secondary full" onClick={() => flash("Invite link copied")}>Copy invite link</button>
-      </aside>
-      <div className="shortlist"><div className="section-heading"><div><span className="kicker">AI-ranked shortlist</span><h2>Best fits for everyone</h2></div><span className="live">● Live voting</span></div>
-        {[dishes[1], dishes[3], dishes[0]].map((dish, index) => <article className={index === 0 ? "vote-card winner" : "vote-card"} key={dish.id}>
-          <div className="vote-image" style={{ backgroundImage: "url(" + dish.image + ")" }}><span>#{index + 1}</span></div>
-          <div className="vote-copy"><div><span>{98 - index * 5}% group fit</span><h3>{dish.restaurant}</h3><p>{dish.name} · {dish.price} · {dish.distance}</p></div><button onClick={() => vote(dish.restaurant)}>▲ <b>{votes[dish.restaurant]}</b></button></div>
-        </article>)}
-        {!plan ? <button className="primary plan-button" onClick={() => setPlan(true)}>Let Trinque make the plan →</button> : <div className="final-plan"><span>✦ Your best table</span><h3>Maruhachi Ra-men at 7:30 PM</h3><p>Best overall match, safe customization options, and a 14-minute walk for the group.</p><div><button className="primary" onClick={() => flash("RSVP sent to the group")}>Send RSVP</button><button className="secondary" onClick={() => flash("Calendar file ready")}>Add to calendar</button></div></div>}
+    <div className="group-intro"><div className="eyebrow"><span>♢</span> Shared table</div><h1>{group.status === "finalized" ? "The group chat has a destination." : "Vote with the tradeoffs in view."}</h1><p>Hard constraints stay hard. Every candidate explains why it fits—or why it was excluded.</p><div className="members">{["YOU", "+3"].map((name, index) => <span key={name} style={{ background: colors[index] }}>{name}</span>)}</div></div>
+    <div className="planner"><aside className="constraints"><span className="kicker">{new Date(group.eventTime).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span><h2>{group.name}</h2>{[["◎", group.neighborhood, `Within ${group.maxDistanceKm} km`], ["$", `Up to $${group.budgetMax}`, "Per person"], ["!", group.allergies.join(", ") || "No listed allergies", "Hard exclusion"], ["♧", `${group.vegetarianRequired} vegetarian guest`, "Candidate must fit"]].map(([icon, title, note], index) => <div className={index === 2 && group.allergies.length ? "constraint warning" : "constraint"} key={title}><span>{icon}</span><div><b>{title}</b><small>{note}</small></div></div>)}<button className="secondary full" onClick={() => { void navigator.clipboard?.writeText(`${location.origin}/?join=${group.inviteCode}`); flash("Invite link copied"); }}>Copy invite link</button></aside>
+      <div className="shortlist"><div className="section-heading"><div><span className="kicker">EXPLAINABLE RANKING</span><h2>{group.status === "voting" ? "Best eligible fits" : "Final dining plan"}</h2></div><span className="live">● Persisted</span></div>
+        {group.candidates.slice(0, 5).map((candidate, index) => <article className={`${candidate.eligible && index === 0 ? "vote-card winner" : "vote-card"} ${candidate.eligible ? "" : "ineligible"}`} key={candidate.candidateId}><div className="vote-image" style={{ backgroundImage: `url(${candidate.image})` }}><span>{candidate.eligible ? `#${index + 1}` : "!"}</span></div><div className="vote-copy"><div><span>{candidate.eligible ? `${candidate.score}% group fit` : "Hard conflict"}</span><h3>{candidate.restaurant}</h3><p>{candidate.name} · {candidate.price} · {candidate.distanceKm} km</p><small>{candidate.explanation}</small></div><button disabled={busy || !candidate.eligible || group.status === "finalized"} onClick={() => void groupAction("vote", { candidateId: candidate.candidateId })}>▲ <b>{group.votes[candidate.candidateId] ?? 0}</b></button></div></article>)}
+        {group.status === "voting" ? <button className="primary plan-button" disabled={busy} onClick={() => void groupAction("finalize")}>Lock the best eligible table →</button> : winner ? <div className="final-plan"><span>✦ Your best table</span><h3>{winner.restaurant}</h3><p>{winner.name} at {new Date(group.eventTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}. {winner.explanation}</p><div><button className="primary" onClick={() => void groupAction("rsvp", { status: "yes" })}>I’m in · {group.rsvps.yes ?? 0}</button><button className="secondary" onClick={() => void downloadCalendar()}>Add to calendar</button></div></div> : null}
       </div>
     </div>
   </section>;

@@ -1,0 +1,24 @@
+import { and, eq } from "drizzle-orm";
+import { getDb } from "@/db";
+import { groups } from "@/db/schema";
+import { groupSnapshot } from "@/lib/group-api";
+import { selectGroupWinner, type RankedGroupCandidate } from "@/lib/group-planning";
+import { requireIdentity } from "@/lib/identity";
+
+export const runtime = "edge";
+
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const identity = await requireIdentity(request);
+  if (!identity) return Response.json({ error: "Guest session required." }, { status: 401 });
+  const { id } = await params;
+  const db = await getDb();
+  const [owned] = await db.select().from(groups).where(and(eq(groups.id, id), eq(groups.ownerId, identity.id))).limit(1);
+  if (!owned) return Response.json({ error: "Group plan not found." }, { status: 404 });
+  const snapshot = await groupSnapshot(id);
+  if (!snapshot) return Response.json({ error: "Group plan not found." }, { status: 404 });
+  const candidates = snapshot.candidates as RankedGroupCandidate[];
+  const winner = selectGroupWinner(candidates, snapshot.votes);
+  if (!winner) return Response.json({ error: "No candidate satisfies every hard constraint." }, { status: 409 });
+  await db.update(groups).set({ status: "finalized", selectedCandidateId: winner.candidateId }).where(eq(groups.id, id));
+  return Response.json({ group: await groupSnapshot(id), winner });
+}

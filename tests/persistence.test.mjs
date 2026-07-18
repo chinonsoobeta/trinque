@@ -12,6 +12,7 @@ test("D1 migrations preserve durable identities and independent three-member gro
   const groupMembershipSql = await readFile(new URL("../drizzle/0005_bored_sabra.sql", import.meta.url), "utf8");
   const operationsSql = await readFile(new URL("../drizzle/0006_flimsy_kitty_pryde.sql", import.meta.url), "utf8");
   const evaluationSql = await readFile(new URL("../drizzle/0007_elite_black_bolt.sql", import.meta.url), "utf8");
+  const diagnosticsSql = await readFile(new URL("../drizzle/0008_numerous_scrambler.sql", import.meta.url), "utf8");
   const db = new DatabaseSync(":memory:");
   db.exec("PRAGMA foreign_keys = ON");
   for (const statement of sql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
@@ -25,6 +26,7 @@ test("D1 migrations preserve durable identities and independent three-member gro
   db.prepare("INSERT INTO preferences (user_id, location_latitude, location_longitude, location_updated_at) VALUES (?, ?, ?, ?)").run("legacy-owner", 49.28, -123.12, "2026-07-18T12:05:00.000Z");
   for (const statement of operationsSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
   for (const statement of evaluationSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
+  for (const statement of diagnosticsSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
 
   db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("guest-1", "guest", "Guest explorer", "hash-1");
   db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("guest-b", "guest", "Guest B", "hash-b");
@@ -78,6 +80,8 @@ test("D1 migrations preserve durable identities and independent three-member gro
   db.prepare("INSERT INTO feedback_reports (id, user_id, reason, target_type, target_id) VALUES (?, ?, ?, ?, ?)").run("feedback-1", "guest-1", "stale_dish", "published_dish", "dish-1");
   assert.deepEqual({ ...db.prepare("SELECT event, language, country_code FROM analytics_events WHERE id = ?").get("event-1") }, { event: "dish_published", language: "fr", country_code: "CA" });
   assert.deepEqual({ ...db.prepare("SELECT reason, target_type, status FROM feedback_reports WHERE id = ?").get("feedback-1") }, { reason: "stale_dish", target_type: "published_dish", status: "open" });
+  db.prepare("INSERT INTO client_error_reports (id, user_id, kind, code, platform, app_version, route) VALUES (?, ?, ?, ?, ?, ?, ?)").run("error-1", "guest-1", "js_exception", "TypeError", "ios", "1.0.0", "/groups");
+  assert.deepEqual({ ...db.prepare("SELECT kind, code, platform, app_version, route FROM client_error_reports WHERE id = ?").get("error-1") }, { kind: "js_exception", code: "TypeError", platform: "ios", app_version: "1.0.0", route: "/groups" });
   assert.throws(() => db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("guest-2", "guest", "Other guest", "hash-1"));
   db.close();
 });

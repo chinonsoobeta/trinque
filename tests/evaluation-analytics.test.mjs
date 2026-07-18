@@ -36,3 +36,19 @@ test("evaluation and feedback remain measured, consent-aware, localized, and ava
   assert.match(harness, /status: "unmeasured"/);
   assert.doesNotMatch(harness, /fabricat|mock score|placeholder score/i);
 });
+
+test("iOS release artifacts keep distribution, links, diagnostics, and access blockers explicit", async () => {
+  const [eas, config, diagnostics, aasa, releaseDoc] = await Promise.all([
+    "../ios/eas.json", "../ios/app.config.ts", "../app/api/diagnostics/route.ts", "../worker/index.ts", "../docs/ios-release-readiness.md",
+  ].map((path) => readFile(new URL(path, import.meta.url), "utf8")));
+  const profiles = JSON.parse(eas).build;
+  assert.equal(profiles.preview.distribution, "internal");
+  assert.equal(profiles.production.distribution, "store");
+  assert.equal(profiles.production.environment, "production");
+  assert.match(config, /associatedDomains/);
+  assert.match(diagnostics, /analyticsConsent/);
+  assert.doesNotMatch(diagnostics, /request\.body|authorization|stack|image/i);
+  assert.match(aasa, /APPLE_DEVELOPER_TEAM_ID/);
+  assert.match(releaseDoc, /NO-GO/);
+  assert.match(releaseDoc, /owner-only/);
+});

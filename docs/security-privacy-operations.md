@@ -29,7 +29,7 @@ Authenticated guest and trusted-header identities can:
 - delete a published dish and its retained image;
 - delete all Trinque user data and retained images.
 
-Consent-aware analytics events and submitted feedback are included in the user export and deleted with the user identity. Analytics requests received without current analytics consent are acknowledged but not stored.
+Consent-aware analytics events, bounded client diagnostics, and submitted feedback are included in the user export and deleted with the user identity. Analytics/diagnostic requests received without current analytics consent are acknowledged but not stored. Diagnostics retain only an error class, kind, platform, app version, and coarse route; they do not retain stack traces or payloads.
 
 Database foreign keys cascade identity-owned records. Restaurants shared with other records retain provider/place facts while their `created_by_id` becomes null.
 

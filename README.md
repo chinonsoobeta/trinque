@@ -48,6 +48,8 @@ The server-side restaurant adapter, normalized route contracts, field masks, pho
 
 The consent-aware event contract, user feedback routes, and honest 50-case identifier evaluation harness are documented in [docs/evaluation-analytics.md](docs/evaluation-analytics.md).
 
+The iOS EAS profiles, production API wiring, privacy-safe diagnostics, and universal-link/TestFlight release checklist are documented in [docs/ios-release-readiness.md](docs/ios-release-readiness.md).
+
 ## GPT-5.6 integration
 
 POST /api/analyze uses the OpenAI Responses API with gpt-5.6-sol, low reasoning effort, high-detail image input, and a strict JSON schema. The prompt explicitly treats ingredient and allergen inference as uncertain. A deterministic seed provider remains available through the separate labeled demo action so judges can still complete the experience without credentials.

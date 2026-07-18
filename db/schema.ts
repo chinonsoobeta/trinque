@@ -84,6 +84,17 @@ export const feedbackReports = sqliteTable("feedback_reports", {
   resolvedAt: text("resolved_at"),
 }, (table) => [index("feedback_reports_target_idx").on(table.targetType, table.targetId, table.createdAt), index("feedback_reports_status_idx").on(table.status, table.createdAt)]);
 
+export const clientErrorReports = sqliteTable("client_error_reports", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  kind: text("kind", { enum: ["js_exception", "unhandled_rejection", "api_error"] }).notNull(),
+  code: text("code").notNull(),
+  platform: text("platform", { enum: ["ios", "web"] }).notNull(),
+  appVersion: text("app_version").notNull(),
+  route: text("route"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [index("client_error_reports_user_created_idx").on(table.userId, table.createdAt)]);
+
 export const restaurants = sqliteTable("restaurants", {
   id: text("id").primaryKey(),
   provider: text("provider", { enum: ["google", "community"] }).notNull(),

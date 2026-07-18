@@ -6,6 +6,7 @@ import { logOperation, requestIdFor } from "../lib/operations";
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
+  APPLE_DEVELOPER_TEAM_ID?: string;
   TRINQUE_ALLOWED_ORIGINS?: string;
   IMAGES: {
     input(stream: ReadableStream): {
@@ -42,6 +43,14 @@ const worker = {
     if (request.method === "OPTIONS" && origin) {
       if (!originAllowed) return observed(new Response(null, { status: 403 }), requestId, startedAt, origin, false);
       return observed(new Response(null, { status: 204, headers: { "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Request-Id", "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS" } }), requestId, startedAt, origin, true);
+    }
+
+    if (url.pathname === "/.well-known/apple-app-site-association") {
+      const teamId = String(env.APPLE_DEVELOPER_TEAM_ID ?? "").trim();
+      const response = teamId
+        ? Response.json({ applinks: { apps: [], details: [{ appID: `${teamId}.com.chinonsoobeta.trinque`, components: [{ "/": "/", "?": { join: "*" }, comment: "Trinque group invite links" }] }] } }, { headers: { "Cache-Control": "public, max-age=300" } })
+        : Response.json({ error: "apple_team_id_not_configured" }, { status: 503, headers: { "Cache-Control": "no-store" } });
+      return observed(response, requestId, startedAt, origin, originAllowed);
     }
 
     if (url.pathname === "/_vinext/image") {

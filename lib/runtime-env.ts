@@ -3,6 +3,7 @@ export type TrinqueRuntimeEnv = {
   GOOGLE_PLACES_API_KEY?: string;
   DB?: unknown;
   UPLOADS?: unknown;
+  APPLE_DEVELOPER_TEAM_ID?: string;
   TRINQUE_ALLOWED_ORIGINS?: string;
   TRINQUE_BUDGET_ANALYSIS_USER_HOURLY?: string;
   TRINQUE_BUDGET_ANALYSIS_GLOBAL_HOURLY?: string;

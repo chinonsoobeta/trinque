@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LANGUAGE_LABEL_KEYS, resolveUiLanguage, translate, UI_LANGUAGES, type MessageKey, type UiLanguage } from './i18n';
+import { installCrashReporting } from './crash-reporting';
 import {
   ActivityIndicator,
   Alert,
@@ -197,6 +198,8 @@ export default function App() {
   useEffect(() => {
     Appearance.setColorScheme(theme === 'system' ? 'unspecified' : theme);
   }, [theme]);
+
+  useEffect(() => installCrashReporting({ apiBase: remoteApi, guestToken, route: tab.toLowerCase() }), [guestToken, tab]);
 
   useEffect(() => {
     const handleUrl = (url: string | null) => {

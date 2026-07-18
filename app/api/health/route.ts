@@ -1,5 +1,5 @@
 import { capabilityStatus } from "@/lib/readiness";
-import { getRuntimeEnv, selectOpenAIKey } from "@/lib/runtime-env";
+import { getRuntimeEnv, selectGooglePlacesKey, selectOpenAIKey } from "@/lib/runtime-env";
 
 export const runtime = "edge";
 
@@ -8,6 +8,7 @@ export async function GET() {
     const env = await getRuntimeEnv();
     const capabilities = capabilityStatus({
       openAIKey: selectOpenAIKey(env.OPENAI_API_KEY, process.env.OPENAI_API_KEY),
+      googlePlacesKey: selectGooglePlacesKey(env.GOOGLE_PLACES_API_KEY, process.env.GOOGLE_PLACES_API_KEY),
       hasDatabase: Boolean(env.DB),
       hasUploads: Boolean(env.UPLOADS),
     });
@@ -17,7 +18,7 @@ export async function GET() {
   } catch {
     return Response.json({
       ok: false,
-      ...capabilityStatus({ openAIKey: process.env.OPENAI_API_KEY, hasDatabase: false, hasUploads: false }),
+      ...capabilityStatus({ openAIKey: process.env.OPENAI_API_KEY, googlePlacesKey: process.env.GOOGLE_PLACES_API_KEY, hasDatabase: false, hasUploads: false }),
     }, { status: 503, headers: { "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" } });
   }
 }

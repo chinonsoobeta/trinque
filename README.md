@@ -1,6 +1,6 @@
 # Trinque
 
-Trinque is a dish-first social discovery app. Upload a food photo, let GPT-5.6 identify what makes the dish special, find similar options nearby, and coordinate a restaurant choice with friends.
+Trinque is a dish-first social discovery app. Upload a food photo, let GPT-5.6 identify what makes the dish special, find similar options nearby, and coordinate a restaurant choice with friends. The regional pilot contract supports every locality in the United States, Canada, Mexico, the United Kingdom, and France without a static city list.
 
 ## The demo
 
@@ -38,7 +38,7 @@ Guest sessions are created server-side and stored as an opaque token on the devi
 
 To enable live photo analysis, copy .env.example to .env.local and add an OpenAI API key. Never commit the key.
 
-For production, add `OPENAI_API_KEY` as a secret in the Sites environment. The public client never receives it. `GET /api/health` reports whether live analysis, D1 persistence, and R2 uploads are available without exposing secret values.
+For production, add `OPENAI_API_KEY` and `GOOGLE_PLACES_API_KEY` as secrets in the Sites environment. The public client never receives them. `GET /api/health` reports OpenAI, Places, D1, and R2 independently without exposing secret values.
 
 ## GPT-5.6 integration
 
@@ -57,6 +57,7 @@ Codex translated the product thesis into a working demo, shaped the PRD and tech
 This runs the production web build and regression suite, then type-checks and exports the iOS app. The same gate runs in GitHub Actions on every push and pull request.
 
 See [checklist.md](./checklist.md) for the phased acceptance evidence and [build-notes.md](./build-notes.md) for deployment configuration.
+The current system map, terminology, regional contracts, and regression baseline are recorded in [docs/architecture-baseline.md](./docs/architecture-baseline.md).
 
 ## Stack
 

@@ -50,6 +50,8 @@ The consent-aware event contract, user feedback routes, and honest 50-case ident
 
 The iOS EAS profiles, production API wiring, privacy-safe diagnostics, and universal-link/TestFlight release checklist are documented in [docs/ios-release-readiness.md](docs/ios-release-readiness.md).
 
+The final regional pilot gate and current no-go evidence are in [docs/pilot-readiness-report.md](docs/pilot-readiness-report.md); anchor locations are fixtures only, never a city allowlist.
+
 ## GPT-5.6 integration
 
 POST /api/analyze uses the OpenAI Responses API with gpt-5.6-sol, low reasoning effort, high-detail image input, and a strict JSON schema. The prompt explicitly treats ingredient and allergen inference as uncertain. A deterministic seed provider remains available through the separate labeled demo action so judges can still complete the experience without credentials.

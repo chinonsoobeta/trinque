@@ -1,10 +1,13 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { getDb } from "@/db";
 import { publishedDishes, restaurants } from "@/db/schema";
 import type { DishAnalysis } from "@/lib/dish-analysis";
+import { matchNearby, type PublishedDishCandidate } from "@/lib/dish-matching";
 import { normalizePublicationRestaurant, preparePublishedDish, type PublicationKnowledge, type PublishRestaurantInput } from "@/lib/dish-records";
 import { requireIdentity } from "@/lib/identity";
-import { rankNearbyMatches } from "@/lib/nearby-matches";
+import { placesApiKey } from "@/lib/places/http";
+import { createPlacesProvider } from "@/lib/places/provider";
+import { PlacesProviderError, type RestaurantPlace } from "@/lib/places/types";
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/lib/regions";
 import { storeDishImage } from "@/lib/uploads";
 
@@ -30,10 +33,16 @@ export async function POST(request: Request) {
   let restaurantInput: ReturnType<typeof normalizePublicationRestaurant>;
   let dishRecord: ReturnType<typeof preparePublishedDish>;
   try {
-    restaurantInput = normalizePublicationRestaurant(body.restaurant);
+    if (body.restaurant.provider === "google") {
+      const provider = createPlacesProvider(await placesApiKey());
+      const place = await provider.restaurantDetails(body.restaurant.providerPlaceId ?? "", body.language);
+      restaurantInput = normalizePublicationRestaurant({ provider: "google", providerPlaceId: place.providerPlaceId, name: place.displayName, latitude: place.latitude, longitude: place.longitude, locality: place.locality, administrativeRegion: place.administrativeRegion, countryCode: place.countryCode, address: place.address, currencyCode: place.currencyCode });
+    } else restaurantInput = normalizePublicationRestaurant(body.restaurant);
     dishRecord = preparePublishedDish({ analysis: body.analysis, sourceMode: body.sourceMode!, knowledge: body.knowledge, language: body.language, restaurant: restaurantInput });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "invalid_publication" }, { status: 400, headers: cors });
+    const status = error instanceof PlacesProviderError ? error.status : 400;
+    const code = error instanceof PlacesProviderError ? error.code : error instanceof Error ? error.message : "invalid_publication";
+    return Response.json({ error: code }, { status, headers: cors });
   }
   const imageKey = body.imageDataUrl ? await storeDishImage(body.imageDataUrl, identity.id) : null;
   const id = crypto.randomUUID();
@@ -53,10 +62,39 @@ export async function POST(request: Request) {
   }
   const reviewedAnalysis = { name: body.analysis.name, cuisine: body.analysis.cuisine, ingredients: body.analysis.ingredients, dietary: body.analysis.dietary, confidence: body.analysis.confidence, description: body.analysis.description };
   await db.insert(publishedDishes).values({ id, ownerId: identity.id, contributorId: identity.id, restaurantId, sourceMode: body.sourceMode!, ...reviewedAnalysis, ...dishRecord, confidence: Math.round(body.analysis.confidence), imageKey });
-  const dish = { id, ownerId: identity.id, contributorId: identity.id, restaurantId, sourceMode: body.sourceMode, ...body.analysis, ...dishRecord, imageKey, imageUrl: imageKey ? `/api/media/${imageKey}` : null };
-  return Response.json({ dish, matches: rankNearbyMatches(body.analysis) }, { status: 201, headers: cors });
+  const dish = { id, ownerId: identity.id, contributorId: identity.id, restaurantId, sourceMode: body.sourceMode, ...body.analysis, ...dishRecord, restaurant: { ...restaurantInput, id: restaurantId }, imageKey, imageUrl: imageKey ? `/api/media/${imageKey}` : null };
+  let matches = { confirmedNearbyDishes: [], communityOrInferredDishes: [], restaurantLevelAlternatives: [] } as ReturnType<typeof matchNearby>;
+  let matchingStatus: { status: "live" | "unavailable"; code?: string; message?: string } = { status: "live" };
+  let restaurantAlternatives: RestaurantPlace[] = [];
+  let providerStatus: { status: "live" | "unavailable"; code?: string; message?: string } = { status: "live" };
+  try {
+    const provider = createPlacesProvider(await placesApiKey());
+    const resolved = await provider.resolveCoordinates(restaurantInput.latitude, restaurantInput.longitude, body.language);
+    restaurantAlternatives = await provider.nearbyRestaurants(resolved, { language: body.language, radiusMeters: 10_000 });
+    restaurantAlternatives = restaurantAlternatives.filter((place) => place.providerPlaceId !== restaurantInput.providerPlaceId);
+  } catch (error) {
+    const providerError = error instanceof PlacesProviderError ? error : new PlacesProviderError("unavailable", "Live restaurant alternatives are unavailable.");
+    providerStatus = { status: "unavailable", code: providerError.code, message: providerError.message };
+  }
+  try {
+    const candidateRows = await db.select({ dish: publishedDishes, restaurant: restaurants }).from(publishedDishes).innerJoin(restaurants, eq(publishedDishes.restaurantId, restaurants.id)).where(and(eq(publishedDishes.countryCode, restaurantInput.countryCode), ne(publishedDishes.id, id))).orderBy(desc(publishedDishes.createdAt)).limit(200);
+    const candidates: PublishedDishCandidate[] = candidateRows.flatMap(({ dish: candidate, restaurant }) => {
+      if (candidate.latitude == null || candidate.longitude == null || !candidate.countryCode) return [];
+      return [{ id: candidate.id, name: candidate.name, originalName: candidate.originalName, cuisine: candidate.cuisine, ingredients: candidate.ingredients, dietary: candidate.dietary, description: candidate.description, canonicalCuisine: candidate.canonicalCuisine, canonicalIngredients: parseConcepts(candidate.canonicalIngredients), canonicalFlavours: parseConcepts(candidate.canonicalFlavours), provenance: candidate.provenance, verificationStatus: candidate.verificationStatus, availabilityKnowledge: candidate.availabilityKnowledge, lastConfirmedAt: candidate.lastConfirmedAt, createdAt: candidate.createdAt, latitude: candidate.latitude, longitude: candidate.longitude, countryCode: candidate.countryCode, priceAmount: candidate.priceAmount, currencyCode: candidate.currencyCode, imageUrl: candidate.imageKey ? `/api/media/${candidate.imageKey}` : null, restaurant: { id: restaurant.id, name: restaurant.name, locality: restaurant.locality, address: restaurant.address } }];
+    });
+    matches = matchNearby({ analysis: body.analysis, location: { latitude: restaurantInput.latitude, longitude: restaurantInput.longitude, countryCode: restaurantInput.countryCode }, dishes: candidates, restaurantAlternatives });
+  } catch {
+    matchingStatus = { status: "unavailable", code: "dish_records_unavailable", message: "Published dish matching is temporarily unavailable; no demo results were substituted." };
+  }
+  return Response.json({ dish, matches, matchMode: "live", matchingStatus, providerStatus }, { status: 201, headers: cors });
 }
 
 function validAnalysis(value?: DishAnalysis): value is DishAnalysis {
   return Boolean(value && value.name?.trim() && value.cuisine?.trim() && value.ingredients?.trim() && value.dietary?.trim() && value.description?.trim() && Number.isFinite(value.confidence) && value.confidence >= 0 && value.confidence <= 100 && value.canonical?.dishName?.trim() && value.canonical?.cuisine?.trim() && Array.isArray(value.canonical.ingredients) && Array.isArray(value.canonical.flavours) && ["ai_normalized", "user_reviewed"].includes(value.canonical.metadataSource));
+}
+
+function parseConcepts(value: string | null): string[] {
+  if (!value) return [];
+  try { const parsed = JSON.parse(value); return Array.isArray(parsed) && parsed.every((item) => typeof item === "string") ? parsed : []; }
+  catch { return []; }
 }

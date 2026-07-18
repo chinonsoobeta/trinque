@@ -19,7 +19,8 @@ type CatalogDish = Omit<NearbyMatch, "score" | "explanation"> & {
   profile: string;
 };
 
-export const nearbyCatalog: CatalogDish[] = [
+/** Deterministic seeded fixtures. Never use this catalog for live discovery. */
+export const demoNearbyCatalog: CatalogDish[] = [
   { id: "oca-agnolotti", name: "Brown butter agnolotti", restaurant: "Oca Pastificio", neighborhood: "Mount Pleasant", distanceKm: 0.8, price: "$24", image: "https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=1200&q=85", cuisine: "Northern Italian", ingredients: "filled pasta brown butter sage lemon parmesan hazelnut", dietary: "Vegetarian · dairy · gluten", profile: "silky buttery nutty bright citrus herb" },
   { id: "maruhachi-ramen", name: "Charred miso ramen", restaurant: "Maruhachi Ra-men", neighborhood: "West End", distanceKm: 1.7, price: "$19", image: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=1200&q=86", cuisine: "Japanese", ingredients: "wheat noodles miso broth corn scallion chile oil", dietary: "Contains gluten and soy", profile: "smoky umami charred comforting spicy" },
   { id: "kissa-cod", name: "Miso black cod", restaurant: "Kissa Tanto", neighborhood: "Chinatown", distanceKm: 1.3, price: "$31", image: "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=1200&q=85", cuisine: "Japanese Italian", ingredients: "black cod miso radish rice vinegar", dietary: "Pescatarian · likely soy", profile: "umami caramelized savory bright pickled" },
@@ -30,9 +31,9 @@ export const nearbyCatalog: CatalogDish[] = [
 
 const stopWords = new Set(["and", "with", "likely", "contains", "confirm", "appearance", "the", "from", "unknown"]);
 
-export function rankNearbyMatches(analysis: DishAnalysis, limit = 4): NearbyMatch[] {
+export function rankDemoNearbyMatches(analysis: DishAnalysis, limit = 4): NearbyMatch[] {
   const source = tokens(`${analysis.name} ${analysis.cuisine} ${analysis.ingredients} ${analysis.dietary} ${analysis.description}`);
-  return nearbyCatalog.map((dish) => {
+  return demoNearbyCatalog.map((dish) => {
     const cuisineOverlap = overlap(source, tokens(dish.cuisine));
     const ingredientOverlap = overlap(source, tokens(dish.ingredients));
     const profileOverlap = overlap(source, tokens(dish.profile));
@@ -45,7 +46,7 @@ export function rankNearbyMatches(analysis: DishAnalysis, limit = 4): NearbyMatc
       ? `Shares ${shared.join(", ")} notes, with a strong cuisine and texture fit.`
       : `A nearby alternative with a complementary flavor profile and ${dish.distanceKm.toFixed(1)} km proximity.`;
     return { ...dish, score, explanation };
-  }).sort((a, b) => b.score - a.score || a.distanceKm - b.distanceKm).slice(0, limit).map(({ cuisine: _cuisine, ingredients: _ingredients, profile: _profile, ...match }) => match);
+  }).sort((a, b) => b.score - a.score || a.distanceKm - b.distanceKm).slice(0, limit).map((dish) => ({ id: dish.id, name: dish.name, restaurant: dish.restaurant, neighborhood: dish.neighborhood, distanceKm: dish.distanceKm, price: dish.price, image: dish.image, dietary: dish.dietary, score: dish.score, explanation: dish.explanation }));
 }
 
 function tokens(value: string): Set<string> {

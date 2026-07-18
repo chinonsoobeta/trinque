@@ -1,4 +1,4 @@
-import { nearbyCatalog } from "./nearby-matches.ts";
+import { demoNearbyCatalog } from "./nearby-matches.ts";
 
 export type GroupConstraints = {
   budgetMax: number;
@@ -22,7 +22,7 @@ export type RankedGroupCandidate = {
 };
 
 export function rankGroupCandidates(constraints: GroupConstraints): RankedGroupCandidate[] {
-  return nearbyCatalog.map((candidate) => {
+  return demoNearbyCatalog.map((candidate) => {
     const price = Number(candidate.price.replace(/[^0-9]/g, ""));
     const searchable = `${candidate.name} ${candidate.ingredients} ${candidate.dietary}`.toLowerCase();
     const conflicts: string[] = [];

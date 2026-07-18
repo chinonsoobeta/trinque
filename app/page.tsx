@@ -18,7 +18,8 @@ type Analysis = {
 type AnalysisEnvelope =
   | { ok: true; mode: "live" | "demo"; requestId: string; result: Analysis; warning?: string }
   | { ok: false; mode: "unavailable"; requestId: string; error: { code: string; message: string }; demoAvailable: true };
-type NearbyMatch = { id: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; dietary: string; score: number; explanation: string };
+type MatchResult = { kind: "dish" | "restaurant_alternative"; id: string; dishName: string | null; restaurantName: string; locality: string; distanceKm: number; score: number; reasonCode: "semantic_and_distance" | "nearby_alternative" | "restaurant_only"; provenance: string; verificationStatus: string; lastConfirmedAt: string | null; dietaryCaveat: string; currentAvailabilityConfirmed: boolean; priceAmount: number | null; currencyCode: string | null; imageUrl: string | null; attribution?: "Google Maps" };
+type MatchTiers = { confirmedNearbyDishes: MatchResult[]; communityOrInferredDishes: MatchResult[]; restaurantLevelAlternatives: MatchResult[] };
 type PublishRestaurant = { provider: "google" | "community"; providerPlaceId?: string | null; name: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: NormalizedLocation["countryCode"]; address: string; currencyCode: string };
 type PublicationMetadata = { restaurant: PublishRestaurant; knowledge: { priceKnowledge: "unknown" | "exact" | "approximate"; priceAmount?: number; availabilityKnowledge: "unknown" | "recently_confirmed" | "historical"; lastConfirmedAt?: string }; reviewConfirmed: true; restaurantConfirmed: true };
 type PublishedDish = Analysis & { id: string; sourceMode: "live" | "demo"; imageUrl?: string | null; localPreview?: string; provenance?: string; verificationStatus?: string; availabilityKnowledge?: string; restaurant?: { name: string } | null };
@@ -40,6 +41,7 @@ const sample: Analysis = {
   canonical: { dishName: "agnolotti", cuisine: "northern italian", ingredients: ["filled pasta", "butter", "sage", "lemon", "parmesan"], flavours: ["nutty", "herbal", "bright"], metadataSource: "user_reviewed" },
 };
 const colors = ["#7a263a", "#c7654f", "#667449", "#b9772d"];
+const emptyMatchTiers: MatchTiers = { confirmedNearbyDishes: [], communityOrInferredDishes: [], restaurantLevelAlternatives: [] };
 
 export default function Home() {
   const [view, setView] = useState<"discover" | "groups" | "saved">("discover");
@@ -57,7 +59,9 @@ export default function Home() {
   const [guestToken, setGuestToken] = useState<string | null>(null);
   const [identityLabel, setIdentityLabel] = useState("Guest");
   const [publishedDishes, setPublishedDishes] = useState<PublishedDish[]>([]);
-  const [nearbyMatches, setNearbyMatches] = useState<NearbyMatch[]>([]);
+  const [nearbyMatches, setNearbyMatches] = useState<MatchTiers>(emptyMatchTiers);
+  const [matchProviderUnavailable, setMatchProviderUnavailable] = useState(false);
+  const [matchRecordsUnavailable, setMatchRecordsUnavailable] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [language, setLanguage] = useState<UiLanguage>("en-CA");
   const [theme, setTheme] = useState<ThemePreference>("system");
@@ -203,7 +207,7 @@ export default function Home() {
     reader.readAsDataURL(file);
   }
   function update(field: "name" | "cuisine" | "ingredients" | "dietary" | "description", value: string) {
-    setAnalysis((current) => ({ ...current, [field]: value }));
+    setAnalysis((current) => ({ ...current, [field]: value, canonical: { ...current.canonical, ...(field === "name" ? { dishName: value.trim().toLowerCase() } : {}), ...(field === "cuisine" ? { cuisine: value.trim().toLowerCase() } : {}), ...(field === "ingredients" ? { ingredients: value.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean) } : {}), metadataSource: "user_reviewed" } }));
   }
   async function publish(event: FormEvent, metadata: PublicationMetadata) {
     event.preventDefault();
@@ -216,11 +220,14 @@ export default function Home() {
     try {
       const response = await fetch("/api/dishes", { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ analysis, sourceMode: analysisMode, imageDataUrl: pendingImage, language, ...metadata }) });
       if (!response.ok) throw new Error("publish failed");
-      const payload = await response.json() as { dish: PublishedDish; matches: NearbyMatch[] };
+      const payload = await response.json() as { dish: PublishedDish; matches: MatchTiers; providerStatus: { status: "live" | "unavailable" }; matchingStatus: { status: "live" | "unavailable" } };
       setPublishedDishes((current) => [{ ...payload.dish, localPreview: preview }, ...current.filter((dish) => dish.id !== payload.dish.id)]);
       setNearbyMatches(payload.matches);
+      setMatchProviderUnavailable(payload.providerStatus.status === "unavailable");
+      setMatchRecordsUnavailable(payload.matchingStatus.status === "unavailable");
       setPhase("published");
-      flash(t("analysis.publishedBody", { count: payload.matches.length }));
+      const count = payload.matches.confirmedNearbyDishes.length + payload.matches.communityOrInferredDishes.length + payload.matches.restaurantLevelAlternatives.length;
+      flash(t("analysis.publishedBody", { count }));
     } catch {
       setAnalysisError(t("analysis.publishError"));
       setPhase("error");
@@ -294,7 +301,7 @@ export default function Home() {
         <button className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}><span>♡</span>{t("nav.saved")}</button>
         <button onClick={() => setSettingsOpen(true)}><span>○</span>{t("nav.profile")}</button>
       </nav>
-      {modal && <Analyzer key={`${pendingImage ?? "demo"}-${analysisMode ?? "pending"}`} preview={preview} phase={phase} analysis={analysis} analysisMode={analysisMode} warning={analysisWarning} error={analysisError} matches={nearbyMatches} publishing={publishing} close={() => setModal(false)} update={update} publish={publish} retry={() => void analyze(pendingImage, false)} demo={() => void analyze(undefined, true)} t={t} language={language} measurementSystem={measurementSystem} location={location} />}
+      {modal && <Analyzer key={`${pendingImage ?? "demo"}-${analysisMode ?? "pending"}`} preview={preview} phase={phase} analysis={analysis} analysisMode={analysisMode} warning={analysisWarning} error={analysisError} matches={nearbyMatches} matchProviderUnavailable={matchProviderUnavailable} matchRecordsUnavailable={matchRecordsUnavailable} publishing={publishing} close={() => setModal(false)} update={update} publish={publish} retry={() => void analyze(pendingImage, false)} demo={() => void analyze(undefined, true)} t={t} language={language} measurementSystem={measurementSystem} location={location} />}
       {settingsOpen && <SettingsPanel t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} close={() => setSettingsOpen(false)} persist={persistPreferences} />}
       {toast && <div className="toast" role="status">✓ {toast}</div>}
     </div>
@@ -323,7 +330,7 @@ function PublishedDishCard({ dish, t }: { dish: PublishedDish; t: Translator }) 
   </article>;
 }
 
-function Analyzer({ preview, phase, analysis, analysisMode, warning, error, matches, publishing, close, update, publish, retry, demo, t, language, measurementSystem, location }: { preview: string; phase: string; analysis: Analysis; analysisMode: "live" | "demo" | null; warning: string; error: string; matches: NearbyMatch[]; publishing: boolean; close: () => void; update: (field: "name" | "cuisine" | "ingredients" | "dietary" | "description", value: string) => void; publish: (event: FormEvent, metadata: PublicationMetadata) => void; retry: () => void; demo: () => void; t: Translator; language: UiLanguage; measurementSystem: MeasurementSystem; location: NormalizedLocation | null }) {
+function Analyzer({ preview, phase, analysis, analysisMode, warning, error, matches, matchProviderUnavailable, matchRecordsUnavailable, publishing, close, update, publish, retry, demo, t, language, measurementSystem, location }: { preview: string; phase: string; analysis: Analysis; analysisMode: "live" | "demo" | null; warning: string; error: string; matches: MatchTiers; matchProviderUnavailable: boolean; matchRecordsUnavailable: boolean; publishing: boolean; close: () => void; update: (field: "name" | "cuisine" | "ingredients" | "dietary" | "description", value: string) => void; publish: (event: FormEvent, metadata: PublicationMetadata) => void; retry: () => void; demo: () => void; t: Translator; language: UiLanguage; measurementSystem: MeasurementSystem; location: NormalizedLocation | null }) {
   const [restaurants, setRestaurants] = useState<RestaurantPlace[]>([]);
   const [selectedRestaurant, setSelectedRestaurant] = useState<PublishRestaurant | null>(null);
   const [restaurantStatus, setRestaurantStatus] = useState("");
@@ -372,7 +379,7 @@ function Analyzer({ preview, phase, analysis, analysisMode, warning, error, matc
     <div className="analyzer-content">
       {phase === "loading" ? <div className="loading-state"><div className="scan"><span /></div><em>{t("analysis.loadingKicker")}</em><h2 id="analyzer-title">{t("analysis.loadingTitle")}</h2><div><span>{t("analysis.field.name")}</span><span>{t("analysis.field.ingredients")}</span><span>{t("analysis.field.dietary")}</span></div></div>
       : phase === "error" ? <div className="identifier-error"><span>!</span><p className="kicker">{t("analysis.unavailableKicker")}</p><h2 id="analyzer-title">{t("analysis.unavailableTitle")}</h2><p>{error}</p><div className="modal-actions"><button type="button" className="secondary" onClick={demo}>{t("analysis.useDemo")}</button><button type="button" className="primary" onClick={retry}>{t("analysis.retry")}</button></div></div>
-      : phase === "published" ? <div className="published"><span>✓</span><h2 id="analyzer-title">{t("analysis.publishedTitle")}</h2><p>{t("analysis.publishedBody", { count: matches.length })}</p><div className="nearby-results">{matches.slice(0, 3).map((match) => <article key={match.id}><img src={match.image} alt="" /><div><b>{match.name}</b><small>{match.restaurant} · {new Intl.NumberFormat(language, { style: "unit", unit: measurementSystem === "imperial" ? "mile" : "kilometer", unitDisplay: "short", maximumFractionDigits: 1 }).format(measurementSystem === "imperial" ? match.distanceKm * .621371 : match.distanceKm)}</small><p>{match.score}% · {match.explanation}</p></div></article>)}</div><div className="modal-actions"><button className="primary" onClick={close}>{t("analysis.explore")} →</button></div></div>
+      : phase === "published" ? <div className="published"><span>✓</span><h2 id="analyzer-title">{t("analysis.publishedTitle")}</h2><p>{t("analysis.publishedBody", { count: matches.confirmedNearbyDishes.length + matches.communityOrInferredDishes.length + matches.restaurantLevelAlternatives.length })}</p>{matchRecordsUnavailable && <p className="publication-status">{t("match.recordsUnavailable")}</p>}{matchProviderUnavailable && <p className="publication-status">{t("match.providerUnavailable")}</p>}<MatchTier title={t("match.confirmedTier")} results={matches.confirmedNearbyDishes} t={t} language={language} measurementSystem={measurementSystem} /><MatchTier title={t("match.communityTier")} results={matches.communityOrInferredDishes} t={t} language={language} measurementSystem={measurementSystem} /><MatchTier title={t("match.restaurantTier")} results={matches.restaurantLevelAlternatives} t={t} language={language} measurementSystem={measurementSystem} /><div className="modal-actions"><button className="primary" onClick={close}>{t("analysis.explore")} →</button></div></div>
       : <form onSubmit={submit}><div className={`analysis-mode ${analysisMode ?? ""}`}>{analysisMode === "live" ? `● ${t("analysis.live")}` : `◇ ${t("analysis.demo")}`}</div><span className="kicker">{t("analysis.review")}</span><div className="confidence"><h2 id="analyzer-title">{t("analysis.reviewTitle")}</h2><span>{t("analysis.confident", { confidence: analysis.confidence })}</span></div>
         {warning && <p className="demo-warning">{warning}</p>}
         <p className="review-note">{t("analysis.warning")}</p>
@@ -399,6 +406,17 @@ function Analyzer({ preview, phase, analysis, analysisMode, warning, error, matc
       </form>}
     </div>
   </div></div>;
+}
+
+function MatchTier({ title, results, t, language, measurementSystem }: { title: string; results: MatchResult[]; t: Translator; language: UiLanguage; measurementSystem: MeasurementSystem }) {
+  return <section className="match-tier"><h3>{title}</h3>{results.length === 0 ? <p className="empty-tier">{t("match.noResults")}</p> : <div className="nearby-results">{results.slice(0, 4).map((match) => {
+    const distance = new Intl.NumberFormat(language, { style: "unit", unit: measurementSystem === "imperial" ? "mile" : "kilometer", unitDisplay: "short", maximumFractionDigits: 1 }).format(measurementSystem === "imperial" ? match.distanceKm * .621371 : match.distanceKm);
+    const provenance = match.provenance === "provider_place" ? t("match.providerPlace") : t(`provenance.${match.provenance}` as MessageKey);
+    const verification = match.verificationStatus === "not_applicable" ? t("match.notApplicable") : t(`verification.${match.verificationStatus}` as MessageKey);
+    const reason = t(match.reasonCode === "restaurant_only" ? "match.restaurantReason" : match.reasonCode === "semantic_and_distance" ? "match.semanticReason" : "match.nearbyReason");
+    const price = match.priceAmount != null && match.currencyCode ? new Intl.NumberFormat(language, { style: "currency", currency: match.currencyCode }).format(match.priceAmount) : null;
+    return <article key={match.id}>{match.imageUrl ? <img src={match.imageUrl} alt="" /> : <div className="match-placeholder">T</div>}<div><b>{match.dishName ?? match.restaurantName}</b><small>{match.dishName ? `${match.restaurantName} · ` : ""}{distance} · {match.score}%{price ? ` · ${price}` : ""}</small><p>{reason}</p><small>{provenance} · {verification}</small><small>{match.lastConfirmedAt ? t("match.lastConfirmed", { date: new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(new Date(match.lastConfirmedAt)) }) : t("match.neverConfirmed")}</small><small>{match.currentAvailabilityConfirmed ? t("availability.confirmed") : t("availability.unknown")}</small><p className="dietary-caveat">{match.dietaryCaveat}</p>{match.attribution && <small translate="no">Google Maps</small>}</div></article>;
+  })}</div>}</section>;
 }
 
 function SettingsPanel({ t, language, theme, measurementSystem, location, close, persist }: { t: Translator; language: UiLanguage; theme: ThemePreference; measurementSystem: MeasurementSystem; location: NormalizedLocation | null; close: () => void; persist: (next: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: NormalizedLocation | null }) => Promise<void> }) {

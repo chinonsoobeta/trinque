@@ -50,7 +50,8 @@ type AnalysisEnvelope =
   | { ok: true; mode: 'live' | 'demo'; requestId: string; result: Analysis; warning?: string }
   | { ok: false; mode: 'unavailable'; requestId: string; error: { code: string; message: string }; demoAvailable: true };
 
-type NearbyMatch = { id: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; dietary: string; score: number; explanation: string };
+type MatchResult = { kind: 'dish' | 'restaurant_alternative'; id: string; dishName: string | null; restaurantName: string; locality: string; distanceKm: number; score: number; reasonCode: 'semantic_and_distance' | 'nearby_alternative' | 'restaurant_only'; provenance: string; verificationStatus: string; lastConfirmedAt: string | null; dietaryCaveat: string; currentAvailabilityConfirmed: boolean; priceAmount: number | null; currencyCode: string | null; imageUrl: string | null; attribution?: 'Google Maps' };
+type MatchTiers = { confirmedNearbyDishes: MatchResult[]; communityOrInferredDishes: MatchResult[]; restaurantLevelAlternatives: MatchResult[] };
 type MobileGroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; explanation: string; conflicts: string[] };
 type MobileGroup = { id: string; name: string; eventTime: string; neighborhood: string; budgetMax: number; maxDistanceKm: number; vegetarianRequired: number; allergies: string[]; inviteCode: string; status: 'voting' | 'finalized'; selectedCandidateId: string | null; candidates: MobileGroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number> };
 
@@ -93,6 +94,7 @@ const sampleAnalysis: Analysis = {
   description: 'Tender filled pasta with toasted butter, herbs and a bright citrus finish.',
   canonical: { dishName: 'agnolotti', cuisine: 'northern italian', ingredients: ['filled pasta', 'butter', 'sage', 'lemon', 'parmesan'], flavours: ['nutty', 'herbal', 'bright'], metadataSource: 'user_reviewed' },
 };
+const emptyMatchTiers: MatchTiers = { confirmedNearbyDishes: [], communityOrInferredDishes: [], restaurantLevelAlternatives: [] };
 
 const dishes: Dish[] = [
   {
@@ -152,7 +154,9 @@ export default function App() {
   const [analysisWarning, setAnalysisWarning] = useState('');
   const [analysisError, setAnalysisError] = useState('');
   const [guestToken, setGuestToken] = useState<string | null>(null);
-  const [nearbyMatches, setNearbyMatches] = useState<NearbyMatch[]>([]);
+  const [nearbyMatches, setNearbyMatches] = useState<MatchTiers>(emptyMatchTiers);
+  const [matchProviderUnavailable, setMatchProviderUnavailable] = useState(false);
+  const [matchRecordsUnavailable, setMatchRecordsUnavailable] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [language, setLanguage] = useState<UiLanguage>('en-CA');
   const [theme, setTheme] = useState<ThemePreference>('system');
@@ -332,8 +336,10 @@ export default function App() {
     try {
       const response = await fetch(`${remoteApi}/api/dishes`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ analysis, sourceMode: analysisMode, imageDataUrl, language, ...metadata }) });
       if (!response.ok) throw new Error('publish failed');
-      const payload = await response.json() as { matches: NearbyMatch[] };
+      const payload = await response.json() as { matches: MatchTiers; providerStatus: { status: 'live' | 'unavailable' }; matchingStatus: { status: 'live' | 'unavailable' } };
       setNearbyMatches(payload.matches);
+      setMatchProviderUnavailable(payload.providerStatus.status === 'unavailable');
+      setMatchRecordsUnavailable(payload.matchingStatus.status === 'unavailable');
       setPhase('published');
     } catch {
       setAnalysisError(t('analysis.publishError'));
@@ -367,6 +373,8 @@ export default function App() {
           warning={analysisWarning}
           error={analysisError}
           matches={nearbyMatches}
+          matchProviderUnavailable={matchProviderUnavailable}
+          matchRecordsUnavailable={matchRecordsUnavailable}
           publishing={publishing}
           onAnalysisChange={setAnalysis}
           onChoose={choosePhoto}
@@ -644,7 +652,7 @@ function TabButton({ tab, icon, active, onPress, t }: { tab: Tab; icon: string; 
   return <Pressable style={styles.tabButton} onPress={onPress}><Text style={[styles.tabIcon, active && styles.tabActive]}>{icon}</Text><Text style={[styles.tabLabel, active && styles.tabActive]}>{t(key)}</Text></Pressable>;
 }
 
-function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analysisMode, warning, error, matches, publishing, onAnalysisChange, onChoose, onDemo, onRetry, onPublish, onClose, onReset, t, language, measurementSystem, location, apiBase }: {
+function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analysisMode, warning, error, matches, matchProviderUnavailable, matchRecordsUnavailable, publishing, onAnalysisChange, onChoose, onDemo, onRetry, onPublish, onClose, onReset, t, language, measurementSystem, location, apiBase }: {
   visible: boolean;
   phase: AnalyzerPhase;
   preview: string | null;
@@ -653,7 +661,9 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
   analysisMode: 'live' | 'demo' | null;
   warning: string;
   error: string;
-  matches: NearbyMatch[];
+  matches: MatchTiers;
+  matchProviderUnavailable: boolean;
+  matchRecordsUnavailable: boolean;
   publishing: boolean;
   onAnalysisChange: (value: Analysis) => void;
   onChoose: (camera: boolean) => void;
@@ -708,6 +718,9 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
     if (!ready || !selectedRestaurant || !priceKnowledge || !availabilityKnowledge) { setRestaurantStatus(t('publish.requirements')); return; }
     onPublish({ restaurant: selectedRestaurant, knowledge: { priceKnowledge, priceAmount: priceKnowledge === 'unknown' ? undefined : Number(priceAmount), availabilityKnowledge, lastConfirmedAt: availabilityKnowledge === 'historical' ? lastConfirmedAt : undefined }, reviewConfirmed: true, restaurantConfirmed: true });
   }
+  function editAnalysis(field: 'name' | 'cuisine' | 'ingredients' | 'dietary' | 'description', value: string) {
+    onAnalysisChange({ ...analysis, [field]: value, canonical: { ...analysis.canonical, ...(field === 'name' ? { dishName: value.trim().toLowerCase() } : {}), ...(field === 'cuisine' ? { cuisine: value.trim().toLowerCase() } : {}), ...(field === 'ingredients' ? { ingredients: value.split(',').map((item) => item.trim().toLowerCase()).filter(Boolean) } : {}), metadataSource: 'user_reviewed' } });
+  }
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
@@ -743,11 +756,11 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
               <View style={styles.confidenceLine}><Text style={styles.reviewTitle}>{t('analysis.reviewTitle')}</Text><Text style={styles.confidenceBadge}>{t('analysis.confident', { confidence: analysis.confidence })}</Text></View>
               <View style={styles.warningBox}><Text style={styles.warningIcon}>!</Text><Text style={styles.warningText}>{t('analysis.warning')}</Text></View>
               {warning ? <View style={styles.demoWarning}><Text style={styles.demoWarningText}>{warning}</Text></View> : null}
-              <Field label={t('analysis.field.name')} value={analysis.name} onChangeText={(name) => onAnalysisChange({ ...analysis, name })} />
-              <Field label={t('analysis.field.cuisine')} value={analysis.cuisine} onChangeText={(cuisine) => onAnalysisChange({ ...analysis, cuisine })} />
-              <Field label={t('analysis.field.dietary')} value={analysis.dietary} onChangeText={(dietary) => onAnalysisChange({ ...analysis, dietary })} />
-              <Field label={t('analysis.field.ingredients')} value={analysis.ingredients} onChangeText={(ingredients) => onAnalysisChange({ ...analysis, ingredients })} multiline />
-              <Field label={t('analysis.field.description')} value={analysis.description} onChangeText={(description) => onAnalysisChange({ ...analysis, description })} multiline />
+              <Field label={t('analysis.field.name')} value={analysis.name} onChangeText={(value) => editAnalysis('name', value)} />
+              <Field label={t('analysis.field.cuisine')} value={analysis.cuisine} onChangeText={(value) => editAnalysis('cuisine', value)} />
+              <Field label={t('analysis.field.dietary')} value={analysis.dietary} onChangeText={(value) => editAnalysis('dietary', value)} />
+              <Field label={t('analysis.field.ingredients')} value={analysis.ingredients} onChangeText={(value) => editAnalysis('ingredients', value)} multiline />
+              <Field label={t('analysis.field.description')} value={analysis.description} onChangeText={(value) => editAnalysis('description', value)} multiline />
               <Text style={styles.canonicalNotice}>{t('analysis.canonicalNotice')}</Text>
               <View style={styles.publicationSection}><Text style={styles.publicationTitle}>{t('publish.restaurantTitle')}</Text><Text style={styles.publicationHelp}>{t('publish.restaurantHelp')}</Text>
                 <Pressable style={styles.secondaryButton} onPress={() => void findRestaurants()}><Text style={styles.secondaryButtonText}>{t('publish.findRestaurants')}</Text></Pressable>
@@ -770,8 +783,10 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
           )}
           {phase === 'published' && (
             <View style={styles.publishedPanel}>
-              <View style={styles.successMark}><Text style={styles.successMarkText}>✓</Text></View><Text style={styles.modalKicker}>{t('analysis.publishedTitle').toUpperCase()}</Text><Text style={styles.modalTitle}>{analysis.name}</Text><Text style={styles.modalBody}>{t('analysis.publishedBody', { count: matches.length })}</Text>
-              <ScrollView style={styles.mobileMatches}>{matches.slice(0, 3).map((match) => <View key={match.id} style={styles.mobileMatch}><Image source={{ uri: match.image }} style={styles.mobileMatchImage} /><View style={styles.mobileMatchCopy}><View style={styles.mobileMatchTitle}><Text style={styles.mobileMatchName}>{match.name}</Text><Text style={styles.mobileMatchScore}>{match.score}%</Text></View><Text style={styles.mobileMatchPlace}>{match.restaurant} · {new Intl.NumberFormat(language, { style: 'unit', unit: measurementSystem === 'imperial' ? 'mile' : 'kilometer', unitDisplay: 'short', maximumFractionDigits: 1 }).format(measurementSystem === 'imperial' ? match.distanceKm * .621371 : match.distanceKm)}</Text><Text style={styles.mobileMatchReason} numberOfLines={2}>{match.explanation}</Text></View></View>)}</ScrollView>
+              <View style={styles.successMark}><Text style={styles.successMarkText}>✓</Text></View><Text style={styles.modalKicker}>{t('analysis.publishedTitle').toUpperCase()}</Text><Text style={styles.modalTitle}>{analysis.name}</Text><Text style={styles.modalBody}>{t('analysis.publishedBody', { count: matches.confirmedNearbyDishes.length + matches.communityOrInferredDishes.length + matches.restaurantLevelAlternatives.length })}</Text>
+              {matchProviderUnavailable ? <Text style={styles.publicationStatus}>{t('match.providerUnavailable')}</Text> : null}
+              {matchRecordsUnavailable ? <Text style={styles.publicationStatus}>{t('match.recordsUnavailable')}</Text> : null}
+              <ScrollView style={styles.mobileMatches}><MobileMatchTier title={t('match.confirmedTier')} results={matches.confirmedNearbyDishes} t={t} language={language} measurementSystem={measurementSystem} /><MobileMatchTier title={t('match.communityTier')} results={matches.communityOrInferredDishes} t={t} language={language} measurementSystem={measurementSystem} /><MobileMatchTier title={t('match.restaurantTier')} results={matches.restaurantLevelAlternatives} t={t} language={language} measurementSystem={measurementSystem} /></ScrollView>
               <Pressable style={({ pressed }) => [styles.primaryButton, styles.modalButton, pressed && styles.pressed]} onPress={onClose}><Text style={styles.primaryButtonText}>{t('analysis.explore')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable>
               <Pressable onPress={onReset}><Text style={styles.demoLink}>{t('analysis.another')}</Text></Pressable>
             </View>
@@ -780,6 +795,17 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
       </SafeAreaView>
     </Modal>
   );
+}
+
+function MobileMatchTier({ title, results, t, language, measurementSystem }: { title: string; results: MatchResult[]; t: Translator; language: UiLanguage; measurementSystem: MeasurementSystem }) {
+  return <View style={styles.mobileMatchTier}><Text style={styles.mobileMatchTierTitle}>{title}</Text>{results.length === 0 ? <Text style={styles.mobileMatchEmpty}>{t('match.noResults')}</Text> : results.slice(0, 4).map((match) => {
+    const distance = new Intl.NumberFormat(language, { style: 'unit', unit: measurementSystem === 'imperial' ? 'mile' : 'kilometer', unitDisplay: 'short', maximumFractionDigits: 1 }).format(measurementSystem === 'imperial' ? match.distanceKm * .621371 : match.distanceKm);
+    const provenance = match.provenance === 'provider_place' ? t('match.providerPlace') : t(`provenance.${match.provenance}` as MessageKey);
+    const verification = match.verificationStatus === 'not_applicable' ? t('match.notApplicable') : t(`verification.${match.verificationStatus}` as MessageKey);
+    const reason = t(match.reasonCode === 'restaurant_only' ? 'match.restaurantReason' : match.reasonCode === 'semantic_and_distance' ? 'match.semanticReason' : 'match.nearbyReason');
+    const price = match.priceAmount != null && match.currencyCode ? new Intl.NumberFormat(language, { style: 'currency', currency: match.currencyCode }).format(match.priceAmount) : null;
+    return <View key={match.id} style={styles.mobileMatch}>{match.imageUrl ? <Image source={{ uri: match.imageUrl }} style={styles.mobileMatchImage} /> : <View style={[styles.mobileMatchImage, styles.mobileMatchPlaceholder]}><Text style={styles.mobileMatchPlaceholderText}>T</Text></View>}<View style={styles.mobileMatchCopy}><View style={styles.mobileMatchTitle}><Text style={styles.mobileMatchName}>{match.dishName ?? match.restaurantName}</Text><Text style={styles.mobileMatchScore}>{match.score}%</Text></View><Text style={styles.mobileMatchPlace}>{match.dishName ? `${match.restaurantName} · ` : ''}{distance}{price ? ` · ${price}` : ''}</Text><Text style={styles.mobileMatchReason}>{reason}</Text><Text style={styles.mobileMatchMeta}>{provenance} · {verification}</Text><Text style={styles.mobileMatchMeta}>{match.lastConfirmedAt ? t('match.lastConfirmed', { date: new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(match.lastConfirmedAt)) }) : t('match.neverConfirmed')}</Text><Text style={styles.mobileMatchMeta}>{match.currentAvailabilityConfirmed ? t('availability.confirmed') : t('availability.unknown')}</Text><Text style={styles.mobileMatchCaveat}>{match.dietaryCaveat}</Text>{match.attribution ? <Text style={styles.googleAttribution}>Google Maps</Text> : null}</View></View>;
+  })}</View>;
 }
 
 function Field({ label, value, onChangeText, multiline = false }: { label: string; value: string; onChangeText: (value: string) => void; multiline?: boolean }) {
@@ -997,13 +1023,20 @@ const styles = StyleSheet.create({
   modeBadgeTextDemo: { color: palette.terracotta },
   demoWarning: { backgroundColor: palette.blush, borderRadius: 14, padding: 12, marginTop: -6, marginBottom: 15 },
   demoWarningText: { color: palette.burgundy, fontSize: 11, lineHeight: 16 },
-  mobileMatches: { maxHeight: 260, marginBottom: 8 },
+  mobileMatches: { maxHeight: 350, marginBottom: 8 },
+  mobileMatchTier: { marginBottom: 14 },
+  mobileMatchTierTitle: { color: palette.ink, fontFamily: Platform.select({ ios: 'Georgia-Bold', default: 'serif' }), fontSize: 16, marginBottom: 7 },
+  mobileMatchEmpty: { color: palette.muted, fontSize: 10, padding: 10, borderWidth: 1, borderColor: palette.line, borderStyle: 'dashed', borderRadius: 11 },
   mobileMatch: { flexDirection: 'row', gap: 11, padding: 9, marginBottom: 8, backgroundColor: palette.paper, borderWidth: 1, borderColor: palette.line, borderRadius: 15 },
   mobileMatchImage: { width: 72, height: 72, borderRadius: 11, backgroundColor: palette.blush },
+  mobileMatchPlaceholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: palette.burgundy },
+  mobileMatchPlaceholderText: { color: palette.cream, fontFamily: Platform.select({ ios: 'Georgia-Bold', default: 'serif' }), fontSize: 24 },
   mobileMatchCopy: { flex: 1, justifyContent: 'center' },
   mobileMatchTitle: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
   mobileMatchName: { flex: 1, color: palette.ink, fontFamily: Platform.select({ ios: 'Georgia-Bold', default: 'serif' }), fontSize: 14 },
   mobileMatchScore: { color: palette.olive, fontWeight: '900', fontSize: 11 },
   mobileMatchPlace: { color: palette.terracotta, fontWeight: '800', fontSize: 9, marginTop: 3 },
   mobileMatchReason: { color: palette.muted, fontSize: 9, lineHeight: 13, marginTop: 4 },
+  mobileMatchMeta: { color: palette.terracotta, fontSize: 8, lineHeight: 12, marginTop: 2 },
+  mobileMatchCaveat: { color: palette.warning, fontSize: 8, lineHeight: 12, marginTop: 3 },
 });

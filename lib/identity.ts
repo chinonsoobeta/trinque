@@ -2,10 +2,11 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { users } from "@/db/schema";
 import { guestTokenFromRequest } from "@/lib/guest-token";
+import { supabaseUserFromRequest } from "@/lib/supabase-auth";
 
 export type TrinqueIdentity = {
   id: string;
-  authType: "guest" | "chatgpt";
+  authType: "guest" | "chatgpt" | "supabase";
   displayName: string;
   email: string | null;
 };
@@ -13,6 +14,9 @@ export type TrinqueIdentity = {
 export async function getOrCreateIdentity(request: Request): Promise<{ identity: TrinqueIdentity; guestToken?: string }> {
   const email = request.headers.get("oai-authenticated-user-email")?.trim().toLowerCase();
   if (email) return { identity: await upsertChatGPTIdentity(request, email) };
+
+  const supabaseUser = await supabaseUserFromRequest(request);
+  if (supabaseUser) return issueSupabaseSession(supabaseUser);
 
   const suppliedToken = guestTokenFromRequest(request);
   if (suppliedToken) {
@@ -35,6 +39,8 @@ export async function getOrCreateIdentity(request: Request): Promise<{ identity:
 export async function requireIdentity(request: Request): Promise<TrinqueIdentity | null> {
   const email = request.headers.get("oai-authenticated-user-email")?.trim().toLowerCase();
   if (email) return upsertChatGPTIdentity(request, email);
+  const supabaseUser = await supabaseUserFromRequest(request);
+  if (supabaseUser) return upsertSupabaseIdentity(supabaseUser);
   const token = guestTokenFromRequest(request);
   return token ? findGuestByToken(token) : null;
 }
@@ -42,7 +48,24 @@ export async function requireIdentity(request: Request): Promise<TrinqueIdentity
 async function findGuestByToken(token: string): Promise<TrinqueIdentity | null> {
   const db = await getDb();
   const [row] = await db.select({ id: users.id, authType: users.authType, displayName: users.displayName, email: users.email }).from(users).where(eq(users.guestTokenHash, await hashToken(token))).limit(1);
-  return row ? { ...row, authType: row.authType as "guest" | "chatgpt" } : null;
+  return row ? { ...row, authType: row.authType as TrinqueIdentity["authType"] } : null;
+}
+
+async function issueSupabaseSession(user: NonNullable<Awaited<ReturnType<typeof supabaseUserFromRequest>>>) {
+  const identity = await upsertSupabaseIdentity(user);
+  const guestToken = randomToken();
+  const db = await getDb();
+  await db.update(users).set({ guestTokenHash: await hashToken(guestToken), updatedAt: new Date().toISOString() }).where(eq(users.id, identity.id));
+  return { identity, guestToken };
+}
+
+async function upsertSupabaseIdentity(user: NonNullable<Awaited<ReturnType<typeof supabaseUserFromRequest>>>): Promise<TrinqueIdentity> {
+  const email = user.email?.trim().toLowerCase() ?? null;
+  const displayName = user.user_metadata?.full_name?.trim() || user.user_metadata?.name?.trim() || email || "Trinque member";
+  const identity: TrinqueIdentity = { id: `supabase_${user.id}`, authType: "supabase", displayName, email };
+  const db = await getDb();
+  await db.insert(users).values(identity).onConflictDoUpdate({ target: users.id, set: { displayName, email, authType: "supabase", updatedAt: new Date().toISOString() } });
+  return identity;
 }
 
 async function upsertChatGPTIdentity(request: Request, email: string): Promise<TrinqueIdentity> {

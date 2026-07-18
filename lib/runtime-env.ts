@@ -1,6 +1,8 @@
 export type TrinqueRuntimeEnv = {
   OPENAI_API_KEY?: string;
   GOOGLE_PLACES_API_KEY?: string;
+  SUPABASE_URL?: string;
+  SUPABASE_PUBLISHABLE_KEY?: string;
   DB?: unknown;
   UPLOADS?: unknown;
   APPLE_DEVELOPER_TEAM_ID?: string;

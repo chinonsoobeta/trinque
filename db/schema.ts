@@ -3,7 +3,7 @@ import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
-  authType: text("auth_type", { enum: ["guest", "chatgpt"] }).notNull(),
+  authType: text("auth_type", { enum: ["guest", "chatgpt", "supabase"] }).notNull(),
   displayName: text("display_name").notNull(),
   email: text("email"),
   guestTokenHash: text("guest_token_hash"),

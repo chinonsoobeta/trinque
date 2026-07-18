@@ -419,7 +419,7 @@ export default function App() {
       <SafeAreaView style={styles.safeArea}>
         <StatusBar style={effectiveTheme === 'dark' ? 'light' : 'dark'} />
         <View style={styles.appShell}>
-          {tab === 'Discover' && <DiscoverScreen savedIds={savedIds} onSave={toggleSaved} onAnalyze={openAnalyzer} t={t} location={location} feed={communityFeed} />}
+          {tab === 'Discover' && <DiscoverScreen onAnalyze={openAnalyzer} t={t} location={location} feed={communityFeed} />}
           {tab === 'Groups' && <GroupsScreen guestToken={guestToken} t={t} location={location} language={language} inviteCode={pendingInvite} inviteHandled={inviteHandled} track={trackAnalytics} />}
           {tab === 'Saved' && <SavedScreen dishes={savedDishes} onSave={toggleSaved} onDiscover={() => setTab('Discover')} t={t} />}
           {tab === 'Profile' && <ProfileScreen guestToken={guestToken} t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} persist={persistPreferences} />}
@@ -464,7 +464,7 @@ export default function App() {
   );
 }
 
-function DiscoverScreen({ savedIds, onSave, onAnalyze, t, location, feed }: { savedIds: number[]; onSave: (id: number) => void; onAnalyze: () => void; t: Translator; location: MobileLocation | null; feed: CommunityDish[] }) {
+function DiscoverScreen({ onAnalyze, t, location, feed }: { onAnalyze: () => void; t: Translator; location: MobileLocation | null; feed: CommunityDish[] }) {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
       <Header eyebrow={location ? `${location.locality} · ${location.countryCode}` : t('location.change')} />
@@ -748,6 +748,8 @@ function SectionHeading({ kicker, title, action }: { kicker: string; title: stri
   return <View style={styles.sectionHeading}><View><Text style={styles.sectionKicker}>{kicker}</Text><Text style={styles.sectionTitle}>{title}</Text></View>{action ? <Text style={styles.sectionAction}>{action} →</Text> : null}</View>;
 }
 
+// Kept as the saved-dish visual primitive while the iOS feed uses published records.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function DishCard({ dish, saved, onSave }: { dish: Dish; saved: boolean; onSave: () => void }) {
   return (
     <View style={styles.dishCard}>

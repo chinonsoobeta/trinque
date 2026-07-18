@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -26,6 +26,18 @@ export const preferences = sqliteTable("preferences", {
   avoid: text("avoid").notNull().default(""),
   budgetMax: integer("budget_max").notNull().default(40),
   radiusMinutes: integer("radius_minutes").notNull().default(25),
+  language: text("language", { enum: ["en-CA", "en-US", "en-GB", "fr", "es"] }).notNull().default("en-CA"),
+  theme: text("theme", { enum: ["system", "light", "dark"] }).notNull().default("system"),
+  measurementSystem: text("measurement_system", { enum: ["metric", "imperial"] }).notNull().default("metric"),
+  locationLatitude: real("location_latitude"),
+  locationLongitude: real("location_longitude"),
+  locationLocality: text("location_locality"),
+  locationAdministrativeRegion: text("location_administrative_region"),
+  locationCountryCode: text("location_country_code", { enum: ["US", "CA", "MX", "GB", "FR"] }),
+  locationTimeZone: text("location_time_zone"),
+  locationCurrencyCode: text("location_currency_code"),
+  locationLocale: text("location_locale"),
+  locationUpdatedAt: text("location_updated_at"),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 

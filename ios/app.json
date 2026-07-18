@@ -6,12 +6,13 @@
     "orientation": "portrait",
     "icon": "./assets/trinque-icon.png",
     "scheme": "trinque",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.chinonsoobeta.trinque",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "Trinque uses your location only after you consent to find nearby restaurants. It stores only a coarse current location, not precise location history."
       }
     },
     "android": {
@@ -24,6 +25,12 @@
       "predictiveBackGestureEnabled": false
     },
     "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Trinque uses your location only after you consent to find nearby restaurants. It stores only a coarse current location, not precise location history."
+        }
+      ],
       [
         "expo-image-picker",
         {

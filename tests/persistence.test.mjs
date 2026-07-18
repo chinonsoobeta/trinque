@@ -7,11 +7,13 @@ test("D1 migration creates guest identity and durable save tables", async () => 
   const sql = await readFile(new URL("../drizzle/0000_useful_maria_hill.sql", import.meta.url), "utf8");
   const publishSql = await readFile(new URL("../drizzle/0001_fair_the_hunter.sql", import.meta.url), "utf8");
   const groupSql = await readFile(new URL("../drizzle/0002_unusual_lady_mastermind.sql", import.meta.url), "utf8");
+  const regionalPreferencesSql = await readFile(new URL("../drizzle/0003_unknown_mattie_franklin.sql", import.meta.url), "utf8");
   const db = new DatabaseSync(":memory:");
   db.exec("PRAGMA foreign_keys = ON");
   for (const statement of sql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
   for (const statement of publishSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
   for (const statement of groupSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
+  for (const statement of regionalPreferencesSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
 
   db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("guest-1", "guest", "Guest explorer", "hash-1");
   db.prepare("INSERT INTO saves (user_id, dish_id) VALUES (?, ?)").run("guest-1", 2);
@@ -23,10 +25,15 @@ test("D1 migration creates guest identity and durable save tables", async () => 
   db.prepare("INSERT INTO group_rsvps (group_id, user_id, status) VALUES (?, ?, ?)").run("group-1", "guest-1", "yes");
 
   const saved = db.prepare("SELECT dish_id FROM saves WHERE user_id = ?").get("guest-1");
-  const preference = db.prepare("SELECT dietary, budget_max FROM preferences WHERE user_id = ?").get("guest-1");
+  db.prepare("UPDATE preferences SET language = ?, theme = ?, measurement_system = ?, location_latitude = ?, location_longitude = ?, location_locality = ?, location_administrative_region = ?, location_country_code = ?, location_time_zone = ?, location_currency_code = ?, location_locale = ? WHERE user_id = ?").run("en-GB", "dark", "imperial", 51.51, -0.13, "London", "England", "GB", "Europe/London", "GBP", "en-GB", "guest-1");
+  const preference = db.prepare("SELECT dietary, budget_max, language, theme, measurement_system, location_country_code FROM preferences WHERE user_id = ?").get("guest-1");
   assert.equal(saved.dish_id, 2);
   assert.equal(preference.dietary, "Flexible");
   assert.equal(preference.budget_max, 40);
+  assert.equal(preference.language, "en-GB");
+  assert.equal(preference.theme, "dark");
+  assert.equal(preference.measurement_system, "imperial");
+  assert.equal(preference.location_country_code, "GB");
   assert.equal(db.prepare("SELECT name FROM published_dishes WHERE owner_id = ?").get("guest-1").name, "Jollof rice");
   assert.equal(db.prepare("SELECT candidate_id FROM group_votes WHERE group_id = ?").get("group-1").candidate_id, "oca-agnolotti");
   assert.equal(db.prepare("SELECT status FROM group_rsvps WHERE group_id = ?").get("group-1").status, "yes");

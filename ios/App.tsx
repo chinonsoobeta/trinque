@@ -1,11 +1,15 @@
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
+import * as ExpoLocation from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useEffect, useMemo, useState } from 'react';
+import { LANGUAGE_LABEL_KEYS, resolveUiLanguage, translate, UI_LANGUAGES, type MessageKey, type UiLanguage } from './i18n';
 import {
   ActivityIndicator,
   Alert,
+  Appearance,
+  DynamicColorIOS,
   Image,
   ImageSourcePropType,
   KeyboardAvoidingView,
@@ -18,10 +22,16 @@ import {
   Text,
   TextInput,
   View,
+  useColorScheme,
 } from 'react-native';
 
 type Tab = 'Discover' | 'Groups' | 'Saved' | 'Profile';
 type AnalyzerPhase = 'choose' | 'analyzing' | 'review' | 'error' | 'published';
+type ThemePreference = 'system' | 'light' | 'dark';
+type MeasurementSystem = 'metric' | 'imperial';
+type Translator = (key: MessageKey, values?: Record<string, string | number>) => string;
+type MobileLocation = { latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: 'US' | 'CA' | 'MX' | 'GB' | 'FR'; timeZone: string; currencyCode: string; locale: string; language: UiLanguage; measurementSystem: MeasurementSystem; source: 'device' | 'manual' };
+type MobileLocationSuggestion = { id: string; provider: 'google'; providerPlaceId: string; label: string; secondaryLabel: string; attribution: 'Google Maps' };
 
 type Analysis = {
   name: string;
@@ -52,18 +62,22 @@ type Dish = {
   tags: string[];
 };
 
+const adaptive = (light: string, dark: string) => Platform.OS === 'ios' ? DynamicColorIOS({ light, dark }) : light;
 const palette = {
-  cream: '#FFF8EF',
-  paper: '#FFFCF7',
-  burgundy: '#7A263A',
-  burgundyDark: '#4C1725',
-  terracotta: '#C7654F',
-  olive: '#777B45',
-  ink: '#241B1D',
-  muted: '#75686A',
-  line: '#E8D9CE',
-  blush: '#F6E1DC',
-  sage: '#E9E9D7',
+  cream: adaptive('#FFF8EF', '#181315'),
+  paper: adaptive('#FFFCF7', '#241C1F'),
+  burgundy: adaptive('#7A263A', '#D8909F'),
+  burgundyDark: adaptive('#4C1725', '#32131D'),
+  terracotta: adaptive('#C7654F', '#DF806A'),
+  olive: adaptive('#777B45', '#AAB77C'),
+  ink: adaptive('#241B1D', '#FFF5EF'),
+  muted: adaptive('#75686A', '#C9B8B1'),
+  line: adaptive('#E8D9CE', '#49383D'),
+  blush: adaptive('#F6E1DC', '#442B32'),
+  sage: adaptive('#E9E9D7', '#303526'),
+  success: adaptive('#667449', '#AAB77C'),
+  warning: adaptive('#9A641F', '#E4A65D'),
+  danger: adaptive('#A7343F', '#F07F8D'),
 };
 
 const sampleAnalysis: Analysis = {
@@ -121,6 +135,7 @@ const navItems: Array<{ tab: Tab; icon: string }> = [
 const remoteApi = process.env.EXPO_PUBLIC_TRINQUE_API_URL?.replace(/\/$/, '');
 
 export default function App() {
+  const systemScheme = useColorScheme();
   const [tab, setTab] = useState<Tab>('Discover');
   const [savedIds, setSavedIds] = useState<number[]>([2]);
   const [analyzerOpen, setAnalyzerOpen] = useState(false);
@@ -134,6 +149,36 @@ export default function App() {
   const [guestToken, setGuestToken] = useState<string | null>(null);
   const [nearbyMatches, setNearbyMatches] = useState<NearbyMatch[]>([]);
   const [publishing, setPublishing] = useState(false);
+  const [language, setLanguage] = useState<UiLanguage>('en-CA');
+  const [theme, setTheme] = useState<ThemePreference>('system');
+  const [measurementSystem, setMeasurementSystem] = useState<MeasurementSystem>('metric');
+  const [location, setLocation] = useState<MobileLocation | null>(null);
+  const [preferencesReady, setPreferencesReady] = useState(false);
+  const t: Translator = (key, values) => translate(language, key, values);
+  const effectiveTheme = theme === 'system' ? (systemScheme ?? 'light') : theme;
+
+  useEffect(() => {
+    Appearance.setColorScheme(theme === 'system' ? 'unspecified' : theme);
+  }, [theme]);
+
+  useEffect(() => {
+    async function restoreLocalPreferences() {
+      try {
+        const [[, savedLanguage], [, savedTheme], [, savedMeasurement], [, savedLocation]] = await AsyncStorage.multiGet(['trinque.language', 'trinque.theme', 'trinque.measurement', 'trinque.location']);
+        if (savedLanguage && UI_LANGUAGES.includes(savedLanguage as UiLanguage)) setLanguage(savedLanguage as UiLanguage);
+        else setLanguage(resolveUiLanguage([Intl.DateTimeFormat().resolvedOptions().locale]));
+        if (savedTheme && ['system', 'light', 'dark'].includes(savedTheme)) {
+          Appearance.setColorScheme(savedTheme === 'system' ? 'unspecified' : savedTheme as 'light' | 'dark');
+          setTheme(savedTheme as ThemePreference);
+        }
+        if (savedMeasurement && ['metric', 'imperial'].includes(savedMeasurement)) setMeasurementSystem(savedMeasurement as MeasurementSystem);
+        if (savedLocation) { try { setLocation(JSON.parse(savedLocation) as MobileLocation); } catch { await AsyncStorage.removeItem('trinque.location'); } }
+      } finally {
+        setPreferencesReady(true);
+      }
+    }
+    void restoreLocalPreferences();
+  }, []);
 
   useEffect(() => {
     if (!remoteApi) return;
@@ -148,6 +193,16 @@ export default function App() {
         if (!active || !token) return;
         if (session.guestToken) await AsyncStorage.setItem('trinque.guestToken', session.guestToken);
         setGuestToken(token);
+        const preferencesResponse = await fetch(`${remoteApi}/api/preferences`, { headers: { Authorization: `Guest ${token}` } });
+        if (preferencesResponse.ok) {
+          const payload = await preferencesResponse.json() as { preferences: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: MobileLocation | null } | null };
+          if (active && payload.preferences) {
+            if (payload.preferences.language) setLanguage(payload.preferences.language);
+            if (payload.preferences.theme) setTheme(payload.preferences.theme);
+            if (payload.preferences.measurementSystem) setMeasurementSystem(payload.preferences.measurementSystem);
+            if (payload.preferences.location) setLocation(payload.preferences.location);
+          }
+        }
         const savesResponse = await fetch(`${remoteApi}/api/saves`, { headers: { Authorization: `Guest ${token}` } });
         if (savesResponse.ok) {
           const payload = await savesResponse.json() as { savedDishIds: number[] };
@@ -160,6 +215,24 @@ export default function App() {
     void restoreGuest();
     return () => { active = false; };
   }, []);
+
+  const persistPreferences = async (next: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: MobileLocation | null }) => {
+    const nextLanguage = next.language ?? language;
+    const nextTheme = next.theme ?? theme;
+    const nextMeasurement = next.measurementSystem ?? measurementSystem;
+    const storedLocation = next.location === undefined ? location : next.location;
+    const nextLocation = storedLocation ? { ...storedLocation, language: nextLanguage, measurementSystem: nextMeasurement } : null;
+    setLanguage(nextLanguage); setTheme(nextTheme); setMeasurementSystem(nextMeasurement); setLocation(nextLocation);
+    await AsyncStorage.multiSet([
+      ['trinque.language', nextLanguage],
+      ['trinque.theme', nextTheme],
+      ['trinque.measurement', nextMeasurement],
+      ['trinque.location', nextLocation ? JSON.stringify({ ...nextLocation, latitude: Math.round(nextLocation.latitude * 100) / 100, longitude: Math.round(nextLocation.longitude * 100) / 100 }) : ''],
+    ]);
+    if (remoteApi && guestToken) {
+      await fetch(`${remoteApi}/api/preferences`, { method: 'PUT', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ language: nextLanguage, theme: nextTheme, measurementSystem: nextMeasurement, location: nextLocation }) }).catch(() => undefined);
+    }
+  };
 
   const savedDishes = useMemo(
     () => dishes.filter((dish) => savedIds.includes(dish.id)),
@@ -181,7 +254,7 @@ export default function App() {
     if (camera) {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('Camera access needed', 'Allow camera access to identify a dish you are looking at.');
+        Alert.alert(t('analysis.cameraTitle'), t('analysis.cameraBody'));
         return;
       }
     }
@@ -206,7 +279,7 @@ export default function App() {
       if (!remoteApi) {
         await new Promise((resolve) => setTimeout(resolve, 650));
         if (!demo) {
-          setAnalysisError('Live identification needs EXPO_PUBLIC_TRINQUE_API_URL. Configure the server URL, retry, or use the labeled demo.');
+          setAnalysisError(t('analysis.networkError'));
           setPhase('error');
           return;
         }
@@ -231,7 +304,7 @@ export default function App() {
       }
       setPhase('review');
     } catch {
-      setAnalysisError('The live identifier could not be reached. Check your connection and retry, or use the labeled demo.');
+      setAnalysisError(t('analysis.networkError'));
       setPhase('error');
     }
   };
@@ -246,7 +319,7 @@ export default function App() {
 
   const publishDish = async () => {
     if (!remoteApi || !guestToken || !analysisMode) {
-      setAnalysisError('Your persistent guest session is not connected yet. Configure the API URL, wait for the session, and retry.');
+      setAnalysisError(t('analysis.sessionError'));
       setPhase('error');
       return;
     }
@@ -258,21 +331,25 @@ export default function App() {
       setNearbyMatches(payload.matches);
       setPhase('published');
     } catch {
-      setAnalysisError('Trinque couldn’t save this dish. Your reviewed fields are still here; retry when the connection returns.');
+      setAnalysisError(t('analysis.publishError'));
       setPhase('error');
     } finally { setPublishing(false); }
   };
 
+  if (!preferencesReady) {
+    return <SafeAreaProvider><SafeAreaView style={styles.safeArea}><StatusBar style={effectiveTheme === 'dark' ? 'light' : 'dark'} /></SafeAreaView></SafeAreaProvider>;
+  }
+
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar style="dark" />
+        <StatusBar style={effectiveTheme === 'dark' ? 'light' : 'dark'} />
         <View style={styles.appShell}>
-          {tab === 'Discover' && <DiscoverScreen savedIds={savedIds} onSave={toggleSaved} onAnalyze={openAnalyzer} />}
-          {tab === 'Groups' && <GroupsScreen guestToken={guestToken} />}
-          {tab === 'Saved' && <SavedScreen dishes={savedDishes} onSave={toggleSaved} onDiscover={() => setTab('Discover')} />}
-          {tab === 'Profile' && <ProfileScreen />}
-          <TabBar active={tab} onSelect={setTab} onAnalyze={openAnalyzer} />
+          {tab === 'Discover' && <DiscoverScreen savedIds={savedIds} onSave={toggleSaved} onAnalyze={openAnalyzer} t={t} location={location} />}
+          {tab === 'Groups' && <GroupsScreen guestToken={guestToken} t={t} location={location} language={language} />}
+          {tab === 'Saved' && <SavedScreen dishes={savedDishes} onSave={toggleSaved} onDiscover={() => setTab('Discover')} t={t} />}
+          {tab === 'Profile' && <ProfileScreen t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} persist={persistPreferences} />}
+          <TabBar active={tab} onSelect={setTab} onAnalyze={openAnalyzer} t={t} />
         </View>
         <AnalyzerModal
           visible={analyzerOpen}
@@ -296,54 +373,58 @@ export default function App() {
             setPreview(null);
             setImageDataUrl(null);
           }}
+          t={t}
+          language={language}
+          measurementSystem={measurementSystem}
         />
       </SafeAreaView>
     </SafeAreaProvider>
   );
 }
 
-function DiscoverScreen({ savedIds, onSave, onAnalyze }: { savedIds: number[]; onSave: (id: number) => void; onAnalyze: () => void }) {
+function DiscoverScreen({ savedIds, onSave, onAnalyze, t, location }: { savedIds: number[]; onSave: (id: number) => void; onAnalyze: () => void; t: Translator; location: MobileLocation | null }) {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
-      <Header eyebrow="Vancouver · Friday evening" />
+      <Header eyebrow={location ? `${location.locality} · ${location.countryCode}` : t('location.change')} />
       <View style={styles.hero}>
-        <Text style={styles.heroKicker}>DISHES, NOT LISTS</Text>
-        <Text style={styles.heroTitle}>Find the bite you’re craving.</Text>
-        <Text style={styles.heroBody}>Discover individual dishes, understand why they fit your taste, and make dinner plans your whole table can enjoy.</Text>
+        <Text style={styles.heroKicker}>{t('home.eyebrow').toUpperCase()}</Text>
+        <Text style={styles.heroTitle}>{t('home.title')}</Text>
+        <Text style={styles.heroBody}>{t('home.body')}</Text>
         <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]} onPress={onAnalyze}>
           <Text style={styles.primaryButtonIcon}>⌁</Text>
           <View>
-            <Text style={styles.primaryButtonText}>Identify a dish</Text>
-            <Text style={styles.primaryButtonSubtext}>Take or choose a photo</Text>
+            <Text style={styles.primaryButtonText}>{t('home.analyze')}</Text>
+            <Text style={styles.primaryButtonSubtext}>{t('analysis.review')}</Text>
           </View>
           <Text style={styles.primaryArrow}>→</Text>
         </Pressable>
       </View>
 
-      <SectionHeading kicker="FOR YOUR TASTE" title="Worth crossing town for" action="See all" />
+      <SectionHeading kicker={t('home.curated', { location: location?.locality ?? '—' }).toUpperCase()} title={t('home.gather')} action="" />
+      <View style={styles.seededNotice}><Text style={styles.seededNoticeText}>{t('home.seededNotice')}</Text></View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cardRow}>
         {dishes.map((dish) => <DishCard key={dish.id} dish={dish} saved={savedIds.includes(dish.id)} onSave={() => onSave(dish.id)} />)}
       </ScrollView>
 
       <View style={styles.tasteCard}>
         <View style={styles.tasteTopLine}>
-          <Text style={styles.tasteKicker}>YOUR TASTEPRINT</Text>
+          <Text style={styles.tasteKicker}>{t('home.tasteprint').toUpperCase()}</Text>
           <Text style={styles.tastePercent}>82%</Text>
         </View>
-        <Text style={styles.tasteTitle}>Bright, savory, a little smoky.</Text>
-        <Text style={styles.tasteBody}>You linger on dishes with citrus, toasted edges and deep umami. Trinque learns from every save.</Text>
+        <Text style={styles.tasteTitle}>{t('home.tasteTitle')}</Text>
+        <Text style={styles.tasteBody}>{t('home.tasteBody')}</Text>
         <View style={styles.tasteTags}>
           {['Umami', 'Citrus', 'Char', 'Herby'].map((tag, index) => (
             <View key={tag} style={[styles.tasteTag, index === 0 && styles.tasteTagStrong]}><Text style={[styles.tasteTagText, index === 0 && styles.tasteTagTextStrong]}>{tag}</Text></View>
           ))}
         </View>
       </View>
-      <Text style={styles.editorialNote}>“A restaurant is a place. A dish is a reason to go.”</Text>
+      <Text style={styles.editorialNote}>“{t('home.editorial')}”</Text>
     </ScrollView>
   );
 }
 
-function GroupsScreen({ guestToken }: { guestToken: string | null }) {
+function GroupsScreen({ guestToken, t, location, language }: { guestToken: string | null; t: Translator; location: MobileLocation | null; language: UiLanguage }) {
   const [group, setGroup] = useState<MobileGroup | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -355,14 +436,15 @@ function GroupsScreen({ guestToken }: { guestToken: string | null }) {
   }, [guestToken]);
 
   const createGroup = async () => {
-    if (!remoteApi || !guestToken) { Alert.alert('Guest session required', 'Connect the Trinque API to create a persistent decision room.'); return; }
+    if (!remoteApi || !guestToken) { Alert.alert(t('auth.connecting'), t('analysis.sessionError')); return; }
+    if (!location) { Alert.alert(t('location.change'), t('location.privacy')); return; }
     setBusy(true);
     try {
       const eventTime = new Date(Date.now() + 86400000); eventTime.setHours(19, 30, 0, 0);
-      const response = await fetch(`${remoteApi}/api/groups`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Friday supper', eventTime: eventTime.toISOString(), neighborhood: 'Mount Pleasant', budgetMax: 35, maxDistanceKm: 4, vegetarianRequired: 1, allergies: ['sesame'] }) });
+      const response = await fetch(`${remoteApi}/api/groups`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: t('group.name'), eventTime: eventTime.toISOString(), neighborhood: location.locality, budgetMax: 35, maxDistanceKm: 4, vegetarianRequired: 1, allergies: ['sesame'] }) });
       if (!response.ok) throw new Error();
       setGroup(((await response.json()) as { group: MobileGroup }).group);
-    } catch { Alert.alert('Couldn’t create the group', 'Try again when the connection returns.'); } finally { setBusy(false); }
+    } catch { Alert.alert(t('error.generic')); } finally { setBusy(false); }
   };
 
   const groupAction = async (path: string, body: object = {}) => {
@@ -372,13 +454,13 @@ function GroupsScreen({ guestToken }: { guestToken: string | null }) {
       const response = await fetch(`${remoteApi}/api/groups/${group.id}/${path}`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!response.ok) throw new Error(((await response.json()) as { error?: string }).error);
       setGroup(((await response.json()) as { group: MobileGroup }).group);
-    } catch (error) { Alert.alert('Plan not updated', error instanceof Error ? error.message : 'Try again.'); } finally { setBusy(false); }
+    } catch { Alert.alert(t('error.generic')); } finally { setBusy(false); }
   };
 
   const shareCalendar = async () => {
     if (!remoteApi || !guestToken || !group) return;
     const response = await fetch(`${remoteApi}/api/groups/${group.id}/calendar`, { headers: { Authorization: `Guest ${guestToken}` } });
-    if (!response.ok) { Alert.alert('Calendar not ready'); return; }
+    if (!response.ok) { Alert.alert(t('error.generic')); return; }
     await Share.share({ title: 'Trinque dining plan', message: await response.text() });
   };
 
@@ -386,52 +468,52 @@ function GroupsScreen({ guestToken }: { guestToken: string | null }) {
   const winner = group?.candidates.find((candidate) => candidate.candidateId === group.selectedCandidateId);
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
-      <Header eyebrow="The decision room" />
+      <Header eyebrow={t('group.eyebrow')} />
       <View style={styles.pageIntro}>
-        <Text style={styles.heroKicker}>GROUP FIT</Text>
-        <Text style={styles.pageTitle}>Dinner without the group-chat spiral.</Text>
-        <Text style={styles.pageBody}>Trinque enforces the hard constraints, explains every tradeoff, records your vote, and turns the winner into a plan.</Text>
+        <Text style={styles.heroKicker}>{t('group.ranking').toUpperCase()}</Text>
+        <Text style={styles.pageTitle}>{group?.status === 'finalized' ? t('group.finalTitle') : t('group.createTitle')}</Text>
+        <Text style={styles.pageBody}>{t('group.constraints')}</Text>
       </View>
 
       <View style={styles.planCard}>
         <View style={styles.planHeader}>
           <View>
-            <Text style={styles.planEyebrow}>{group ? new Date(group.eventTime).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }).toUpperCase() : 'READY WHEN YOU ARE'}</Text>
-            <Text style={styles.planTitle}>{group?.name ?? 'Friday supper'}</Text>
+            <Text style={styles.planEyebrow}>{group ? new Intl.DateTimeFormat(language, { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: location?.timeZone }).format(new Date(group.eventTime)).toUpperCase() : t('group.start').toUpperCase()}</Text>
+            <Text style={styles.planTitle}>{group?.name ?? t('group.name')}</Text>
           </View>
           <View style={styles.avatarStack}><Text style={styles.avatar}>NK</Text><Text style={[styles.avatar, styles.avatarTwo]}>AM</Text><Text style={[styles.avatar, styles.avatarThree]}>+2</Text></View>
         </View>
         <View style={styles.constraintRow}>
-          {(group ? [`Under $${group.budgetMax}`, `${group.vegetarianRequired} vegetarian`, `Avoid ${group.allergies.join(', ')}`, `< ${group.maxDistanceKm} km`] : ['Under $35', '1 vegetarian', 'Avoid sesame', '< 4 km']).map((item) => <View key={item} style={styles.constraint}><Text style={styles.constraintText}>✓ {item}</Text></View>)}
+          {(group ? [t('group.underBudget', { amount: new Intl.NumberFormat(location?.locale ?? language, { style: 'currency', currency: location?.currencyCode ?? 'CAD', maximumFractionDigits: 0 }).format(group.budgetMax) }), t('group.vegetarianCount', { count: group.vegetarianRequired }), t('group.avoid', { allergens: group.allergies.join(', ') }), t('group.withinRadius', { distance: `${group.maxDistanceKm} km` })] : [t('group.budget'), t('group.vegetarian'), t('group.allergies'), t('group.radius')]).map((item) => <View key={item} style={styles.constraint}><Text style={styles.constraintText}>✓ {item}</Text></View>)}
         </View>
       </View>
 
-      <SectionHeading kicker="BALANCED FOR EVERYONE" title={group ? 'Ranked with hard stops' : 'Build the real shortlist'} action="" />
-      {!group ? <View style={styles.emptyCard}><Text style={styles.emptyIcon}>♢</Text><Text style={styles.emptyTitle}>One tap to open the room</Text><Text style={styles.emptyBody}>This demo plan uses a $35 budget, 4 km radius, one vegetarian guest, and a hard sesame exclusion.</Text><Pressable disabled={busy} style={styles.primaryButton} onPress={createGroup}><Text style={styles.primaryButtonText}>{busy ? 'Ranking…' : 'Create decision room'}</Text><Text style={styles.primaryArrow}>→</Text></Pressable></View> : candidates.map((candidate, index) => (
+      <SectionHeading kicker={t('group.ranking').toUpperCase()} title={group ? t('group.bestFits') : t('group.start')} action="" />
+      {!group ? <View style={styles.emptyCard}><Text style={styles.emptyIcon}>♢</Text><Text style={styles.emptyTitle}>{t('group.start')}</Text><Text style={styles.emptyBody}>{t('group.createBody')}</Text><Pressable disabled={busy || !location} style={styles.primaryButton} onPress={createGroup}><Text style={styles.primaryButtonText}>{busy ? t('group.building') : t('group.rank')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable></View> : candidates.map((candidate) => (
         <View key={candidate.candidateId} style={[styles.voteCard, !candidate.eligible && styles.ineligibleCard]}>
           <Image source={{ uri: candidate.image }} style={styles.voteImage} />
           <View style={styles.voteInfo}>
-            <View style={styles.voteMeta}><Text style={styles.fitBadge}>{candidate.eligible ? `${candidate.score}% fit` : 'Hard conflict'}</Text><Text style={styles.votePrice}>{candidate.price}</Text></View>
+            <View style={styles.voteMeta}><Text style={styles.fitBadge}>{candidate.eligible ? t('group.groupFit', { score: candidate.score }) : t('group.hardConflict')}</Text><Text style={styles.votePrice}>{candidate.price}</Text></View>
             <Text style={styles.voteName}>{candidate.name}</Text>
             <Text style={styles.voteReason}>{candidate.restaurant} · {candidate.distanceKm} km{`\n`}{candidate.explanation}</Text>
             <Pressable disabled={busy || !candidate.eligible || group.status === 'finalized'} style={({ pressed }) => [styles.voteButton, pressed && styles.pressed, (busy || !candidate.eligible || group.status === 'finalized') && styles.disabledButton]} onPress={() => groupAction('vote', { candidateId: candidate.candidateId })}>
-              <Text style={styles.voteButtonText}>{group.status === 'finalized' ? 'Voting closed' : `♡  Vote · ${group.votes[candidate.candidateId] ?? 0}`}</Text>
+              <Text style={styles.voteButtonText}>{group.status === 'finalized' ? t('group.votingClosed') : `♡  ${t('group.vote')} · ${group.votes[candidate.candidateId] ?? 0}`}</Text>
             </Pressable>
           </View>
         </View>
       ))}
-      {group?.status === 'voting' ? <Pressable disabled={busy} style={({ pressed }) => [styles.primaryButton, styles.lockButton, pressed && styles.pressed, busy && styles.disabledButton]} onPress={() => groupAction('finalize')}><Text style={styles.primaryButtonText}>{busy ? 'Locking…' : 'Lock the eligible winner'}</Text><Text style={styles.primaryArrow}>→</Text></Pressable> : winner ? <View style={styles.mobileFinalPlan}><Text style={styles.planEyebrow}>YOUR BEST TABLE</Text><Text style={styles.mobileFinalTitle}>{winner.restaurant}</Text><Text style={styles.mobileFinalBody}>{winner.name}. {winner.explanation}</Text><View style={styles.mobileFinalActions}><Pressable style={styles.finalAction} onPress={() => groupAction('rsvp', { status: 'yes' })}><Text style={styles.finalActionText}>I’m in · {group?.rsvps.yes ?? 0}</Text></Pressable><Pressable style={styles.finalAction} onPress={shareCalendar}><Text style={styles.finalActionText}>Share calendar</Text></Pressable></View></View> : null}
+      {group?.status === 'voting' ? <Pressable disabled={busy} style={({ pressed }) => [styles.primaryButton, styles.lockButton, pressed && styles.pressed, busy && styles.disabledButton]} onPress={() => groupAction('finalize')}><Text style={styles.primaryButtonText}>{t('group.lock')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable> : winner ? <View style={styles.mobileFinalPlan}><Text style={styles.planEyebrow}>{t('group.bestTable').toUpperCase()}</Text><Text style={styles.mobileFinalTitle}>{winner.restaurant}</Text><Text style={styles.mobileFinalBody}>{winner.name}. {winner.explanation}</Text><View style={styles.mobileFinalActions}><Pressable style={styles.finalAction} onPress={() => groupAction('rsvp', { status: 'yes' })}><Text style={styles.finalActionText}>{t('group.rsvpYes')} · {group?.rsvps.yes ?? 0}</Text></Pressable><Pressable style={styles.finalAction} onPress={shareCalendar}><Text style={styles.finalActionText}>{t('group.calendar')}</Text></Pressable></View></View> : null}
     </ScrollView>
   );
 }
 
-function SavedScreen({ dishes: saved, onSave, onDiscover }: { dishes: Dish[]; onSave: (id: number) => void; onDiscover: () => void }) {
+function SavedScreen({ dishes: saved, onSave, onDiscover, t }: { dishes: Dish[]; onSave: (id: number) => void; onDiscover: () => void; t: Translator }) {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
-      <Header eyebrow="Your shortlist" />
+      <Header eyebrow={t('nav.saved')} />
       <View style={styles.pageIntro}>
-        <Text style={styles.heroKicker}>SAVED DISHES</Text>
-        <Text style={styles.pageTitle}>A memory for every craving.</Text>
+        <Text style={styles.heroKicker}>{t('home.savedHeading').toUpperCase()}</Text>
+        <Text style={styles.pageTitle}>{t('home.savedTitle')}</Text>
       </View>
       {saved.length ? saved.map((dish) => (
         <View key={dish.id} style={styles.savedCard}>
@@ -441,33 +523,74 @@ function SavedScreen({ dishes: saved, onSave, onDiscover }: { dishes: Dish[]; on
         </View>
       )) : (
         <View style={styles.emptyCard}>
-          <Text style={styles.emptyIcon}>♡</Text><Text style={styles.emptyTitle}>Nothing saved yet</Text><Text style={styles.emptyBody}>Save dishes that spark something. We’ll use them to sharpen your tasteprint.</Text>
-          <Pressable style={styles.secondaryButton} onPress={onDiscover}><Text style={styles.secondaryButtonText}>Start discovering</Text></Pressable>
+          <Text style={styles.emptyIcon}>♡</Text><Text style={styles.emptyTitle}>{t('home.emptyTitle')}</Text><Text style={styles.emptyBody}>{t('home.emptyBody')}</Text>
+          <Pressable style={styles.secondaryButton} onPress={onDiscover}><Text style={styles.secondaryButtonText}>{t('home.explore')}</Text></Pressable>
         </View>
       )}
     </ScrollView>
   );
 }
 
-function ProfileScreen() {
+function ProfileScreen({ t, language, theme, measurementSystem, location, persist }: { t: Translator; language: UiLanguage; theme: ThemePreference; measurementSystem: MeasurementSystem; location: MobileLocation | null; persist: (next: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: MobileLocation | null }) => Promise<void> }) {
+  const [query, setQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<MobileLocationSuggestion[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const lookup = async (payload: { input?: string; latitude?: number; longitude?: number; providerPlaceId?: string }) => {
+    if (!remoteApi) { Alert.alert(t('health.placesUnavailable'), t('location.unavailable')); return; }
+    setBusy(true); setSuggestions([]);
+    try {
+      const response = await fetch(`${remoteApi}/api/locations/autocomplete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, language, location }) });
+      const body = await response.json() as { suggestions?: MobileLocationSuggestion[]; location?: MobileLocation; error?: { code?: string } };
+      if (!response.ok) {
+        const message = body.error?.code === 'unsupported_country' ? t('location.unsupported') : body.error?.code === 'credentials' ? t('location.unavailable') : t('location.providerError');
+        Alert.alert(t('health.placesUnavailable'), message);
+        return;
+      }
+      if (body.location) {
+        setSuggestions([]);
+        await persist({ location: body.location, measurementSystem: body.location.measurementSystem });
+        return;
+      }
+      setSuggestions(body.suggestions ?? []);
+    } catch { Alert.alert(t('health.placesUnavailable'), t('location.unavailable')); }
+    finally { setBusy(false); }
+  };
+
+  const useDeviceLocation = async () => {
+    const permission = await ExpoLocation.requestForegroundPermissionsAsync();
+    if (!permission.granted) { Alert.alert(t('location.permissionDenied'), t('location.search')); return; }
+    const position = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.Balanced });
+    await lookup({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+  };
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
-      <Header eyebrow="Taste profile" />
+      <Header eyebrow={t('settings.title')} />
       <View style={styles.profileHero}>
         <View style={styles.profileAvatar}><Text style={styles.profileInitials}>CO</Text></View>
-        <Text style={styles.profileName}>Chinonso</Text><Text style={styles.profileHandle}>Vancouver · exploring one dish at a time</Text>
+        <Text style={styles.profileName}>{t('auth.guest')}</Text><Text style={styles.profileHandle}>{location ? `${location.locality} · ${location.countryCode}` : t('location.change')}</Text>
       </View>
       <View style={styles.profileStats}>
-        {[['18', 'Dishes'], ['7', 'Lists'], ['12', 'Friends']].map(([value, label]) => <View key={label} style={styles.profileStat}><Text style={styles.profileStatValue}>{value}</Text><Text style={styles.profileStatLabel}>{label}</Text></View>)}
+        {[['18', t('profile.dishes')], ['7', t('profile.lists')], ['12', t('profile.friends')]].map(([value, label]) => <View key={label} style={styles.profileStat}><Text style={styles.profileStatValue}>{value}</Text><Text style={styles.profileStatLabel}>{label}</Text></View>)}
       </View>
       <View style={styles.preferenceCard}>
-        <Text style={styles.preferenceKicker}>YOUR PREFERENCES</Text>
-        <Text style={styles.preferenceTitle}>What Trinque keeps in mind</Text>
-        {[['Dietary', 'Flexible, vegetarian-curious'], ['Avoid', 'Peanuts'], ['Budget', 'Usually under $40'], ['Radius', 'Up to 25 minutes']].map(([label, value]) => (
-          <View key={label} style={styles.preferenceRow}><Text style={styles.preferenceLabel}>{label}</Text><Text style={styles.preferenceValue}>{value}  ›</Text></View>
-        ))}
+        <Text style={styles.preferenceKicker}>{t('settings.title').toUpperCase()}</Text>
+        <Text style={styles.preferenceTitle}>{t('settings.language')}</Text>
+        <View style={styles.settingsChoices}>{UI_LANGUAGES.map((item) => <Pressable key={item} style={[styles.settingsChoice, language === item && styles.settingsChoiceActive]} onPress={() => persist({ language: item })}><Text style={[styles.settingsChoiceText, language === item && styles.settingsChoiceTextActive]}>{t(LANGUAGE_LABEL_KEYS[item])}</Text></Pressable>)}</View>
+        <Text style={styles.preferenceTitle}>{t('settings.theme')}</Text>
+        <View style={styles.settingsChoices}>{(['system', 'light', 'dark'] as const).map((item) => <Pressable key={item} style={[styles.settingsChoice, theme === item && styles.settingsChoiceActive]} onPress={() => persist({ theme: item })}><Text style={[styles.settingsChoiceText, theme === item && styles.settingsChoiceTextActive]}>{t(`settings.theme.${item}`)}</Text></Pressable>)}</View>
+        <Text style={styles.preferenceTitle}>{t('settings.measurement')}</Text>
+        <View style={styles.settingsChoices}>{(['metric', 'imperial'] as const).map((item) => <Pressable key={item} style={[styles.settingsChoice, measurementSystem === item && styles.settingsChoiceActive]} onPress={() => persist({ measurementSystem: item })}><Text style={[styles.settingsChoiceText, measurementSystem === item && styles.settingsChoiceTextActive]}>{t(item === 'metric' ? 'location.metric' : 'location.imperial')}</Text></Pressable>)}</View>
+        <Text style={styles.preferenceTitle}>{t('settings.location')}</Text>
+        <Pressable disabled={busy} style={styles.secondaryButton} onPress={useDeviceLocation}><Text style={styles.secondaryButtonText}>{t('location.useDevice')}</Text></Pressable>
+        <TextInput style={styles.locationInput} value={query} onChangeText={setQuery} placeholder={t('location.search')} placeholderTextColor={palette.muted} />
+        <Pressable disabled={busy || !query.trim()} style={styles.secondaryButton} onPress={() => lookup({ input: query.trim() })}><Text style={styles.secondaryButtonText}>{t('location.searchAction')}</Text></Pressable>
+        {suggestions.map((suggestion) => <Pressable key={suggestion.id} style={styles.locationSuggestion} onPress={() => lookup({ providerPlaceId: suggestion.providerPlaceId })}><Text style={styles.safetyTitle}>{suggestion.label}</Text><Text style={styles.safetyBody}>{suggestion.secondaryLabel}</Text></Pressable>)}
+        {suggestions.length > 0 ? <Text accessibilityLabel="Google Maps" style={styles.googleAttribution}>Google Maps</Text> : null}
+        <Text style={styles.privacyText}>{t('location.privacy')}</Text>
       </View>
-      <View style={styles.safetyCard}><Text style={styles.safetyIcon}>i</Text><View style={styles.safetyCopy}><Text style={styles.safetyTitle}>Taste guidance, not safety advice</Text><Text style={styles.safetyBody}>Dish details are estimates. Always confirm allergens and dietary needs with the restaurant.</Text></View></View>
+      <View style={styles.safetyCard}><Text style={styles.safetyIcon}>i</Text><View style={styles.safetyCopy}><Text style={styles.safetyTitle}>{t('privacy.title')}</Text><Text style={styles.safetyBody}>{t('analysis.warning')}</Text></View></View>
     </ScrollView>
   );
 }
@@ -488,7 +611,7 @@ function SectionHeading({ kicker, title, action }: { kicker: string; title: stri
 function DishCard({ dish, saved, onSave }: { dish: Dish; saved: boolean; onSave: () => void }) {
   return (
     <View style={styles.dishCard}>
-      <View><Image source={{ uri: dish.image } as ImageSourcePropType} style={styles.dishImage} /><Text style={styles.matchBadge}>{dish.match}% match</Text><Pressable style={styles.heartButton} onPress={onSave}><Text style={[styles.heartText, saved && styles.heartTextSaved]}>{saved ? '♥' : '♡'}</Text></Pressable></View>
+      <View><Image source={{ uri: dish.image } as ImageSourcePropType} style={styles.dishImage} /><Text style={styles.matchBadge}>{dish.match}%</Text><Pressable style={styles.heartButton} onPress={onSave}><Text style={[styles.heartText, saved && styles.heartTextSaved]}>{saved ? '♥' : '♡'}</Text></Pressable></View>
       <View style={styles.dishBody}>
         <View style={styles.dishTitleLine}><Text style={styles.dishName}>{dish.name}</Text><Text style={styles.dishPrice}>{dish.price}</Text></View>
         <Text style={styles.dishRestaurant}>{dish.restaurant} · {dish.neighborhood}</Text><Text style={styles.dishNote}>{dish.note}</Text>
@@ -498,21 +621,22 @@ function DishCard({ dish, saved, onSave }: { dish: Dish; saved: boolean; onSave:
   );
 }
 
-function TabBar({ active, onSelect, onAnalyze }: { active: Tab; onSelect: (tab: Tab) => void; onAnalyze: () => void }) {
+function TabBar({ active, onSelect, onAnalyze, t }: { active: Tab; onSelect: (tab: Tab) => void; onAnalyze: () => void; t: Translator }) {
   return (
     <View style={styles.tabBar}>
-      {navItems.slice(0, 2).map((item) => <TabButton key={item.tab} {...item} active={active === item.tab} onPress={() => onSelect(item.tab)} />)}
-      <Pressable accessibilityLabel="Identify a dish" style={({ pressed }) => [styles.cameraButton, pressed && styles.pressed]} onPress={onAnalyze}><Text style={styles.cameraButtonIcon}>⌁</Text></Pressable>
-      {navItems.slice(2).map((item) => <TabButton key={item.tab} {...item} active={active === item.tab} onPress={() => onSelect(item.tab)} />)}
+      {navItems.slice(0, 2).map((item) => <TabButton key={item.tab} {...item} active={active === item.tab} onPress={() => onSelect(item.tab)} t={t} />)}
+      <Pressable accessibilityLabel={t('home.analyze')} style={({ pressed }) => [styles.cameraButton, pressed && styles.pressed]} onPress={onAnalyze}><Text style={styles.cameraButtonIcon}>⌁</Text></Pressable>
+      {navItems.slice(2).map((item) => <TabButton key={item.tab} {...item} active={active === item.tab} onPress={() => onSelect(item.tab)} t={t} />)}
     </View>
   );
 }
 
-function TabButton({ tab, icon, active, onPress }: { tab: Tab; icon: string; active: boolean; onPress: () => void }) {
-  return <Pressable style={styles.tabButton} onPress={onPress}><Text style={[styles.tabIcon, active && styles.tabActive]}>{icon}</Text><Text style={[styles.tabLabel, active && styles.tabActive]}>{tab}</Text></Pressable>;
+function TabButton({ tab, icon, active, onPress, t }: { tab: Tab; icon: string; active: boolean; onPress: () => void; t: Translator }) {
+  const key = `nav.${tab.toLowerCase()}` as MessageKey;
+  return <Pressable style={styles.tabButton} onPress={onPress}><Text style={[styles.tabIcon, active && styles.tabActive]}>{icon}</Text><Text style={[styles.tabLabel, active && styles.tabActive]}>{t(key)}</Text></Pressable>;
 }
 
-function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analysisMode, warning, error, matches, publishing, onAnalysisChange, onChoose, onDemo, onRetry, onPublish, onClose, onReset }: {
+function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analysisMode, warning, error, matches, publishing, onAnalysisChange, onChoose, onDemo, onRetry, onPublish, onClose, onReset, t, language, measurementSystem }: {
   visible: boolean;
   phase: AnalyzerPhase;
   preview: string | null;
@@ -530,56 +654,59 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
   onPublish: () => void;
   onClose: () => void;
   onReset: () => void;
+  t: Translator;
+  language: UiLanguage;
+  measurementSystem: MeasurementSystem;
 }) {
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
         <KeyboardAvoidingView style={styles.modalKeyboard} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.modalHeader}><View><Text style={styles.wordmark}>Trinque</Text><Text style={styles.headerEyebrow}>Dish identification</Text></View><Pressable style={styles.closeButton} onPress={onClose}><Text style={styles.closeButtonText}>×</Text></Pressable></View>
+          <View style={styles.modalHeader}><View><Text style={styles.wordmark}>Trinque</Text><Text style={styles.headerEyebrow}>{t('home.analyze')}</Text></View><Pressable accessibilityLabel={t('settings.close')} style={styles.closeButton} onPress={onClose}><Text style={styles.closeButtonText}>×</Text></Pressable></View>
           {phase === 'choose' && (
             <View style={styles.choosePanel}>
               <View style={styles.scanMark}><Text style={styles.scanMarkText}>⌁</Text></View>
-              <Text style={styles.modalKicker}>START WITH A DISH</Text><Text style={styles.modalTitle}>What caught your eye?</Text><Text style={styles.modalBody}>Take a photo or choose one from your library. Trinque will suggest details for you to review.</Text>
-              <Pressable style={({ pressed }) => [styles.primaryButton, styles.modalButton, pressed && styles.pressed]} onPress={() => onChoose(true)}><Text style={styles.primaryButtonText}>Open camera</Text><Text style={styles.primaryArrow}>→</Text></Pressable>
-              <Pressable style={({ pressed }) => [styles.secondaryButton, styles.modalButton, pressed && styles.pressed]} onPress={() => onChoose(false)}><Text style={styles.secondaryButtonText}>Choose from library</Text></Pressable>
-              <Pressable onPress={onDemo}><Text style={styles.demoLink}>No photo? Try the judge-safe demo</Text></Pressable>
+              <Text style={styles.modalKicker}>{t('home.analyze').toUpperCase()}</Text><Text style={styles.modalTitle}>{t('analysis.reviewTitle')}</Text><Text style={styles.modalBody}>{t('analysis.warning')}</Text>
+              <Pressable style={({ pressed }) => [styles.primaryButton, styles.modalButton, pressed && styles.pressed]} onPress={() => onChoose(true)}><Text style={styles.primaryButtonText}>{t('analysis.openCamera')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable>
+              <Pressable style={({ pressed }) => [styles.secondaryButton, styles.modalButton, pressed && styles.pressed]} onPress={() => onChoose(false)}><Text style={styles.secondaryButtonText}>{t('analysis.chooseLibrary')}</Text></Pressable>
+              <Pressable onPress={onDemo}><Text style={styles.demoLink}>{t('home.demo')}</Text></Pressable>
             </View>
           )}
           {phase === 'analyzing' && (
-            <View style={styles.analyzingPanel}>{preview ? <Image source={{ uri: preview }} style={styles.analysisPreview} /> : <View style={[styles.analysisPreview, styles.demoPreview]}><Text style={styles.demoPreviewText}>T</Text></View>}<View style={styles.analysisScrim}><ActivityIndicator color={palette.cream} size="large" /><Text style={styles.analyzingTitle}>Reading the dish…</Text><Text style={styles.analyzingBody}>Looking at texture, preparation and likely ingredients</Text></View></View>
+            <View style={styles.analyzingPanel}>{preview ? <Image source={{ uri: preview }} style={styles.analysisPreview} /> : <View style={[styles.analysisPreview, styles.demoPreview]}><Text style={styles.demoPreviewText}>T</Text></View>}<View style={styles.analysisScrim}><ActivityIndicator color={palette.cream} size="large" /><Text style={styles.analyzingTitle}>{t('analysis.loadingKicker')}</Text><Text style={styles.analyzingBody}>{t('analysis.loadingTitle')}</Text></View></View>
           )}
           {phase === 'error' && (
             <View style={styles.publishedPanel}>
               <View style={styles.errorMark}><Text style={styles.successMarkText}>!</Text></View>
-              <Text style={styles.modalKicker}>LIVE IDENTIFIER UNAVAILABLE</Text>
-              <Text style={styles.modalTitle}>We didn’t identify this photo.</Text>
+              <Text style={styles.modalKicker}>{t('analysis.unavailableKicker').toUpperCase()}</Text>
+              <Text style={styles.modalTitle}>{t('analysis.unavailableTitle')}</Text>
               <Text style={styles.modalBody}>{error}</Text>
-              <Pressable disabled={!imageDataUrl} style={({ pressed }) => [styles.primaryButton, styles.modalButton, pressed && styles.pressed, !imageDataUrl && styles.disabledButton]} onPress={onRetry}><Text style={styles.primaryButtonText}>Retry photo</Text><Text style={styles.primaryArrow}>→</Text></Pressable>
-              <Pressable style={({ pressed }) => [styles.secondaryButton, styles.modalButton, pressed && styles.pressed]} onPress={onDemo}><Text style={styles.secondaryButtonText}>Use labeled demo</Text></Pressable>
+              <Pressable disabled={!imageDataUrl} style={({ pressed }) => [styles.primaryButton, styles.modalButton, pressed && styles.pressed, !imageDataUrl && styles.disabledButton]} onPress={onRetry}><Text style={styles.primaryButtonText}>{t('analysis.retry')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable>
+              <Pressable style={({ pressed }) => [styles.secondaryButton, styles.modalButton, pressed && styles.pressed]} onPress={onDemo}><Text style={styles.secondaryButtonText}>{t('analysis.useDemo')}</Text></Pressable>
             </View>
           )}
           {phase === 'review' && (
             <ScrollView style={styles.reviewScroll} contentContainerStyle={styles.reviewContent} keyboardShouldPersistTaps="handled">
               {preview ? <Image source={{ uri: preview }} style={styles.reviewImage} /> : null}
-              <View style={[styles.modeBadge, analysisMode === 'demo' && styles.modeBadgeDemo]}><Text style={[styles.modeBadgeText, analysisMode === 'demo' && styles.modeBadgeTextDemo]}>{analysisMode === 'live' ? '● LIVE GPT-5.6 ANALYSIS' : '◇ SEEDED DEMO RESULT'}</Text></View>
-              <Text style={styles.modalKicker}>REVIEW BEFORE PUBLISHING</Text>
-              <View style={styles.confidenceLine}><Text style={styles.reviewTitle}>Trinque thinks it knows this dish.</Text><Text style={styles.confidenceBadge}>{analysis.confidence}%</Text></View>
-              <View style={styles.warningBox}><Text style={styles.warningIcon}>!</Text><Text style={styles.warningText}>AI can miss ingredients. Confirm the details—especially allergens—before sharing.</Text></View>
+              <View style={[styles.modeBadge, analysisMode === 'demo' && styles.modeBadgeDemo]}><Text style={[styles.modeBadgeText, analysisMode === 'demo' && styles.modeBadgeTextDemo]}>{analysisMode === 'live' ? `● ${t('analysis.live').toUpperCase()}` : `◇ ${t('analysis.demo').toUpperCase()}`}</Text></View>
+              <Text style={styles.modalKicker}>{t('analysis.review').toUpperCase()}</Text>
+              <View style={styles.confidenceLine}><Text style={styles.reviewTitle}>{t('analysis.reviewTitle')}</Text><Text style={styles.confidenceBadge}>{t('analysis.confident', { confidence: analysis.confidence })}</Text></View>
+              <View style={styles.warningBox}><Text style={styles.warningIcon}>!</Text><Text style={styles.warningText}>{t('analysis.warning')}</Text></View>
               {warning ? <View style={styles.demoWarning}><Text style={styles.demoWarningText}>{warning}</Text></View> : null}
-              <Field label="Dish name" value={analysis.name} onChangeText={(name) => onAnalysisChange({ ...analysis, name })} />
-              <Field label="Cuisine" value={analysis.cuisine} onChangeText={(cuisine) => onAnalysisChange({ ...analysis, cuisine })} />
-              <Field label="Dietary notes" value={analysis.dietary} onChangeText={(dietary) => onAnalysisChange({ ...analysis, dietary })} />
-              <Field label="Likely ingredients" value={analysis.ingredients} onChangeText={(ingredients) => onAnalysisChange({ ...analysis, ingredients })} multiline />
-              <Field label="What makes it special" value={analysis.description} onChangeText={(description) => onAnalysisChange({ ...analysis, description })} multiline />
-              <Pressable disabled={publishing} style={({ pressed }) => [styles.primaryButton, styles.publishButton, pressed && styles.pressed, publishing && styles.disabledButton]} onPress={onPublish}><Text style={styles.primaryButtonText}>{publishing ? 'Publishing…' : 'Publish & find matches'}</Text><Text style={styles.primaryArrow}>→</Text></Pressable>
+              <Field label={t('analysis.field.name')} value={analysis.name} onChangeText={(name) => onAnalysisChange({ ...analysis, name })} />
+              <Field label={t('analysis.field.cuisine')} value={analysis.cuisine} onChangeText={(cuisine) => onAnalysisChange({ ...analysis, cuisine })} />
+              <Field label={t('analysis.field.dietary')} value={analysis.dietary} onChangeText={(dietary) => onAnalysisChange({ ...analysis, dietary })} />
+              <Field label={t('analysis.field.ingredients')} value={analysis.ingredients} onChangeText={(ingredients) => onAnalysisChange({ ...analysis, ingredients })} multiline />
+              <Field label={t('analysis.field.description')} value={analysis.description} onChangeText={(description) => onAnalysisChange({ ...analysis, description })} multiline />
+              <Pressable disabled={publishing} style={({ pressed }) => [styles.primaryButton, styles.publishButton, pressed && styles.pressed, publishing && styles.disabledButton]} onPress={onPublish}><Text style={styles.primaryButtonText}>{publishing ? t('analysis.publishing') : t('analysis.publish')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable>
             </ScrollView>
           )}
           {phase === 'published' && (
             <View style={styles.publishedPanel}>
-              <View style={styles.successMark}><Text style={styles.successMarkText}>✓</Text></View><Text style={styles.modalKicker}>ADDED TO TRINQUE</Text><Text style={styles.modalTitle}>{analysis.name}</Text><Text style={styles.modalBody}>{matches.length} nearby dishes were ranked from your reviewed taste profile.</Text>
-              <ScrollView style={styles.mobileMatches}>{matches.slice(0, 3).map((match) => <View key={match.id} style={styles.mobileMatch}><Image source={{ uri: match.image }} style={styles.mobileMatchImage} /><View style={styles.mobileMatchCopy}><View style={styles.mobileMatchTitle}><Text style={styles.mobileMatchName}>{match.name}</Text><Text style={styles.mobileMatchScore}>{match.score}%</Text></View><Text style={styles.mobileMatchPlace}>{match.restaurant} · {match.distanceKm.toFixed(1)} km</Text><Text style={styles.mobileMatchReason} numberOfLines={2}>{match.explanation}</Text></View></View>)}</ScrollView>
-              <Pressable style={({ pressed }) => [styles.primaryButton, styles.modalButton, pressed && styles.pressed]} onPress={onClose}><Text style={styles.primaryButtonText}>Explore similar dishes</Text><Text style={styles.primaryArrow}>→</Text></Pressable>
-              <Pressable onPress={onReset}><Text style={styles.demoLink}>Identify another dish</Text></Pressable>
+              <View style={styles.successMark}><Text style={styles.successMarkText}>✓</Text></View><Text style={styles.modalKicker}>{t('analysis.publishedTitle').toUpperCase()}</Text><Text style={styles.modalTitle}>{analysis.name}</Text><Text style={styles.modalBody}>{t('analysis.publishedBody', { count: matches.length })}</Text>
+              <ScrollView style={styles.mobileMatches}>{matches.slice(0, 3).map((match) => <View key={match.id} style={styles.mobileMatch}><Image source={{ uri: match.image }} style={styles.mobileMatchImage} /><View style={styles.mobileMatchCopy}><View style={styles.mobileMatchTitle}><Text style={styles.mobileMatchName}>{match.name}</Text><Text style={styles.mobileMatchScore}>{match.score}%</Text></View><Text style={styles.mobileMatchPlace}>{match.restaurant} · {new Intl.NumberFormat(language, { style: 'unit', unit: measurementSystem === 'imperial' ? 'mile' : 'kilometer', unitDisplay: 'short', maximumFractionDigits: 1 }).format(measurementSystem === 'imperial' ? match.distanceKm * .621371 : match.distanceKm)}</Text><Text style={styles.mobileMatchReason} numberOfLines={2}>{match.explanation}</Text></View></View>)}</ScrollView>
+              <Pressable style={({ pressed }) => [styles.primaryButton, styles.modalButton, pressed && styles.pressed]} onPress={onClose}><Text style={styles.primaryButtonText}>{t('analysis.explore')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable>
+              <Pressable onPress={onReset}><Text style={styles.demoLink}>{t('analysis.another')}</Text></Pressable>
             </View>
           )}
         </KeyboardAvoidingView>
@@ -616,11 +743,13 @@ const styles = StyleSheet.create({
   sectionKicker: { color: palette.terracotta, fontSize: 10, fontWeight: '900', letterSpacing: 1.4, marginBottom: 5 },
   sectionTitle: { color: palette.ink, fontFamily: Platform.select({ ios: 'Georgia-Bold', default: 'serif' }), fontSize: 24, letterSpacing: -0.7 },
   sectionAction: { color: palette.burgundy, fontSize: 12, fontWeight: '800', paddingBottom: 4 },
+  seededNotice: { alignSelf: 'flex-start', borderWidth: 1, borderColor: palette.warning, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, marginTop: -8, marginBottom: 18 },
+  seededNoticeText: { color: palette.warning, fontSize: 11, fontWeight: '700' },
   cardRow: { paddingHorizontal: 18, paddingBottom: 8, gap: 14 },
   dishCard: { width: 294, backgroundColor: palette.paper, borderRadius: 22, overflow: 'hidden', borderWidth: 1, borderColor: palette.line },
   dishImage: { width: '100%', height: 190, backgroundColor: palette.blush },
   matchBadge: { position: 'absolute', left: 12, top: 12, overflow: 'hidden', backgroundColor: palette.cream, color: palette.burgundy, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, fontSize: 11, fontWeight: '900' },
-  heartButton: { position: 'absolute', right: 12, top: 12, width: 38, height: 38, backgroundColor: '#FFFCF7EE', borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  heartButton: { position: 'absolute', right: 12, top: 12, width: 38, height: 38, backgroundColor: palette.paper, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   heartText: { color: palette.burgundy, fontSize: 23 },
   heartTextSaved: { color: palette.terracotta },
   dishBody: { padding: 17 },
@@ -705,12 +834,21 @@ const styles = StyleSheet.create({
   preferenceRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 14, paddingVertical: 14, borderTopWidth: 1, borderTopColor: palette.line },
   preferenceLabel: { color: palette.muted, fontSize: 12 },
   preferenceValue: { flex: 1, textAlign: 'right', color: palette.ink, fontSize: 12, fontWeight: '700' },
+  settingsChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 18 },
+  settingsChoice: { borderWidth: 1, borderColor: palette.line, backgroundColor: palette.cream, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 15 },
+  settingsChoiceActive: { backgroundColor: palette.burgundy, borderColor: palette.burgundy },
+  settingsChoiceText: { color: palette.ink, fontSize: 11, fontWeight: '800' },
+  settingsChoiceTextActive: { color: palette.cream },
+  locationInput: { minHeight: 50, marginTop: 14, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.cream, color: palette.ink, borderRadius: 14, paddingHorizontal: 13 },
+  locationSuggestion: { marginTop: 9, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.cream, borderRadius: 14, padding: 12 },
+  googleAttribution: { color: palette.muted, fontFamily: 'AvenirNext-Regular', fontSize: 12, fontWeight: '400', paddingTop: 6 },
+  privacyText: { color: palette.muted, fontSize: 11, lineHeight: 16, marginTop: 16 },
   safetyCard: { marginHorizontal: 18, backgroundColor: palette.sage, borderRadius: 19, padding: 16, flexDirection: 'row', gap: 12 },
   safetyIcon: { width: 24, height: 24, textAlign: 'center', paddingTop: 3, borderRadius: 12, overflow: 'hidden', backgroundColor: palette.olive, color: '#FFFFFF', fontWeight: '900' },
   safetyCopy: { flex: 1 },
   safetyTitle: { color: palette.ink, fontWeight: '800', fontSize: 12 },
   safetyBody: { color: palette.muted, fontSize: 11, lineHeight: 16, marginTop: 4 },
-  tabBar: { position: 'absolute', left: 12, right: 12, bottom: 8, height: 76, backgroundColor: '#FFFCF7F5', borderRadius: 25, borderWidth: 1, borderColor: palette.line, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, shadowColor: '#4C1725', shadowOpacity: 0.12, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
+  tabBar: { position: 'absolute', left: 12, right: 12, bottom: 8, height: 76, backgroundColor: palette.paper, borderRadius: 25, borderWidth: 1, borderColor: palette.line, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, shadowColor: '#4C1725', shadowOpacity: 0.12, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
   tabButton: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3, height: 62 },
   tabIcon: { color: palette.muted, fontSize: 22, lineHeight: 23 },
   tabLabel: { color: palette.muted, fontSize: 9, fontWeight: '700' },

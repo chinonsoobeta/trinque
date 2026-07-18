@@ -40,6 +40,8 @@ To enable live photo analysis, copy .env.example to .env.local and add an OpenAI
 
 For production, add `OPENAI_API_KEY` and `GOOGLE_PLACES_API_KEY` as secrets in the Sites environment. The public client never receives them. `GET /api/health` reports OpenAI, Places, D1, and R2 independently without exposing secret values.
 
+Regional behavior, UK English and the other supported languages, coarse location storage, provider attribution, and theme behavior are documented in [docs/location-foundation.md](docs/location-foundation.md).
+
 ## GPT-5.6 integration
 
 POST /api/analyze uses the OpenAI Responses API with gpt-5.6-sol, low reasoning effort, high-detail image input, and a strict JSON schema. The prompt explicitly treats ingredient and allergen inference as uncertain. A deterministic seed provider remains available through the separate labeled demo action so judges can still complete the experience without credentials.

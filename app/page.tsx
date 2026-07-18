@@ -1,6 +1,10 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { coarseLocation, normalizeLocation, type NormalizedLocation } from "@/lib/location";
+import type { LocationSuggestion } from "@/lib/places/types";
+import { REGIONAL_DEFAULTS, type MeasurementSystem, type ThemePreference } from "@/lib/regions";
+import { LANGUAGE_LABEL_KEYS, resolveUiLanguage, translate, UI_LANGUAGES, type MessageKey, type UiLanguage } from "@/ios/i18n";
 
 type Dish = {
   id: number; name: string; restaurant: string; area: string; distance: string;
@@ -17,6 +21,7 @@ type NearbyMatch = { id: string; name: string; restaurant: string; neighborhood:
 type PublishedDish = Analysis & { id: string; sourceMode: "live" | "demo"; imageUrl?: string | null; localPreview?: string };
 type GroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; explanation: string; conflicts: string[] };
 type GroupSnapshot = { id: string; name: string; eventTime: string; neighborhood: string; budgetMax: number; maxDistanceKm: number; vegetarianRequired: number; allergies: string[]; inviteCode: string; status: "voting" | "finalized"; selectedCandidateId: string | null; candidates: GroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number> };
+type Translator = (key: MessageKey, values?: Record<string, string | number>) => string;
 
 const dishes: Dish[] = [
   { id: 1, name: "Brown butter agnolotti", restaurant: "Bar Susu", area: "Mount Pleasant", distance: "0.8 km", price: "$24", image: "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=1400&q=86", match: 96, note: "Silky, nutty, bright with lemon", tags: ["Pasta", "Vegetarian"], likes: 284 },
@@ -50,8 +55,45 @@ export default function Home() {
   const [publishedDishes, setPublishedDishes] = useState<PublishedDish[]>([]);
   const [nearbyMatches, setNearbyMatches] = useState<NearbyMatch[]>([]);
   const [publishing, setPublishing] = useState(false);
+  const [language, setLanguage] = useState<UiLanguage>("en-CA");
+  const [theme, setTheme] = useState<ThemePreference>("system");
+  const [measurementSystem, setMeasurementSystem] = useState<MeasurementSystem>("metric");
+  const [location, setLocation] = useState<NormalizedLocation | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const visible = useMemo(() => view === "saved" ? dishes.filter((d) => saved.has(d.id)) : dishes, [saved, view]);
+  const t = useCallback<Translator>((key, values) => translate(language, key, values), [language]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const savedLanguage = window.localStorage.getItem("trinque.language") as UiLanguage | null;
+      const savedTheme = window.localStorage.getItem("trinque.theme");
+      const savedMeasurement = window.localStorage.getItem("trinque.measurement");
+      const savedLocation = window.localStorage.getItem("trinque.location");
+      const restoredLanguage = savedLanguage && UI_LANGUAGES.includes(savedLanguage) ? savedLanguage : resolveUiLanguage(navigator.languages);
+      setLanguage(restoredLanguage);
+      if (savedTheme === "light" || savedTheme === "dark" || savedTheme === "system") setTheme(savedTheme);
+      if (savedMeasurement === "metric" || savedMeasurement === "imperial") setMeasurementSystem(savedMeasurement);
+      if (savedLocation) {
+        try { setLocation(normalizeLocation(JSON.parse(savedLocation) as NormalizedLocation, restoredLanguage)); }
+        catch { window.localStorage.removeItem("trinque.location"); }
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      const effective = theme === "system" ? (media.matches ? "dark" : "light") : theme;
+      document.documentElement.dataset.theme = effective;
+      document.documentElement.dataset.themePreference = theme;
+      document.documentElement.lang = language;
+    };
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [language, theme]);
 
   useEffect(() => {
     let active = true;
@@ -66,6 +108,16 @@ export default function Home() {
         if (session.guestToken) window.localStorage.setItem("trinque.guestToken", session.guestToken);
         setGuestToken(token);
         setIdentityLabel(session.identity.displayName);
+        const preferencesResponse = await fetch("/api/preferences", { headers: token ? { Authorization: `Guest ${token}` } : undefined });
+        if (preferencesResponse.ok) {
+          const payload = await preferencesResponse.json() as { preferences: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: NormalizedLocation | null } | null };
+          if (active && payload.preferences) {
+            if (payload.preferences.language) setLanguage(payload.preferences.language);
+            if (payload.preferences.theme) setTheme(payload.preferences.theme);
+            if (payload.preferences.measurementSystem) setMeasurementSystem(payload.preferences.measurementSystem);
+            if (payload.preferences.location) setLocation(payload.preferences.location);
+          }
+        }
         const savesResponse = await fetch("/api/saves", { headers: token ? { Authorization: `Guest ${token}` } : undefined });
         if (savesResponse.ok) {
           const payload = await savesResponse.json() as { savedDishIds: number[] };
@@ -84,6 +136,23 @@ export default function Home() {
     return () => { active = false; };
   }, []);
 
+  async function persistPreferences(next: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: NormalizedLocation | null }) {
+    const nextLanguage = next.language ?? language;
+    const nextTheme = next.theme ?? theme;
+    const nextMeasurement = next.measurementSystem ?? measurementSystem;
+    const storedLocation = next.location === undefined ? location : next.location;
+    const nextLocation = storedLocation ? { ...storedLocation, language: nextLanguage, measurementSystem: nextMeasurement } : null;
+    setLanguage(nextLanguage); setTheme(nextTheme); setMeasurementSystem(nextMeasurement); setLocation(nextLocation);
+    window.localStorage.setItem("trinque.language", nextLanguage);
+    window.localStorage.setItem("trinque.theme", nextTheme);
+    window.localStorage.setItem("trinque.measurement", nextMeasurement);
+    if (nextLocation) window.localStorage.setItem("trinque.location", JSON.stringify(coarseLocation({ ...nextLocation, language: nextLanguage, measurementSystem: nextMeasurement })));
+    else window.localStorage.removeItem("trinque.location");
+    if (guestToken) {
+      await fetch("/api/preferences", { method: "PUT", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ language: nextLanguage, theme: nextTheme, measurementSystem: nextMeasurement, location: nextLocation }) }).catch(() => undefined);
+    }
+  }
+
   function flash(text: string) {
     setToast(text);
     window.setTimeout(() => setToast(""), 2200);
@@ -92,14 +161,14 @@ export default function Home() {
     const shouldSave = !saved.has(id);
     setSaved((current) => {
       const next = new Set(current);
-      if (next.has(id)) { next.delete(id); flash("Removed from your saves"); }
-      else { next.add(id); flash("Saved to your tasteboard"); }
+      if (next.has(id)) { next.delete(id); flash(t("save.removed")); }
+      else { next.add(id); flash(t("save.added")); }
       return next;
     });
     if (guestToken) {
       void fetch("/api/saves", { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ dishId: id, saved: shouldSave }) })
-        .then((response) => { if (!response.ok) flash("Save is local until Trinque reconnects"); })
-        .catch(() => flash("Save is local until Trinque reconnects"));
+        .then((response) => { if (!response.ok) flash(t("save.offline")); })
+        .catch(() => flash(t("save.offline")));
     }
   }
   async function analyze(imageDataUrl?: string, demo = false) {
@@ -119,7 +188,7 @@ export default function Home() {
       setAnalysis(envelope.result); setAnalysisMode(envelope.mode); setAnalysisWarning(envelope.warning ?? "");
       setPhase("review");
     } catch {
-      setAnalysisError("The identifier could not be reached. Check your connection and retry, or use the labeled demo.");
+      setAnalysisError(t("analysis.networkError"));
       setPhase("error");
     }
   }
@@ -135,7 +204,7 @@ export default function Home() {
   async function publish(event: FormEvent) {
     event.preventDefault();
     if (!guestToken || !analysisMode) {
-      setAnalysisError("Your guest session is still connecting. Close this sheet, wait a moment, and try again.");
+      setAnalysisError(t("analysis.sessionError"));
       setPhase("error");
       return;
     }
@@ -149,7 +218,7 @@ export default function Home() {
       setPhase("published");
       flash(`Dish published — ${payload.matches.length} nearby matches ready`);
     } catch {
-      setAnalysisError("Trinque couldn’t save this dish. Your reviewed fields are still here; retry when the connection returns.");
+      setAnalysisError(t("analysis.publishError"));
       setPhase("error");
     } finally { setPublishing(false); }
   }
@@ -161,26 +230,26 @@ export default function Home() {
         <nav className="desktop-nav" aria-label="Primary navigation">
           {(["discover", "groups", "saved"] as const).map((item) => (
             <button key={item} className={view === item ? "nav active" : "nav"} onClick={() => setView(item)}>
-              {item[0].toUpperCase() + item.slice(1)}{item === "saved" && <i>{saved.size}</i>}
+              {t(`nav.${item}`)}{item === "saved" && <i>{saved.size}</i>}
             </button>
           ))}
         </nav>
-        <div className="top-actions"><button aria-label="Search dishes">⌕</button><button aria-label={`Profile: ${identityLabel}`}>{identityLabel === "Guest explorer" ? "GE" : identityLabel.slice(0, 2).toUpperCase()}</button></div>
+        <div className="top-actions"><button onClick={() => setSettingsOpen(true)} aria-label={t("settings.title")}>⚙</button><button aria-label={`Profile: ${identityLabel}`}>{identityLabel === "Guest explorer" ? "GE" : identityLabel.slice(0, 2).toUpperCase()}</button></div>
       </header>
 
       <main>
         {view === "groups" ? (
-          <GroupPlanner guestToken={guestToken} flash={flash} />
+          <GroupPlanner guestToken={guestToken} flash={flash} t={t} location={location} language={language} />
         ) : (
           <>
             <section className="hero">
               <div className="hero-copy">
-                <div className="eyebrow"><span>✦</span> Dish-first discovery</div>
-                <h1>{view === "saved" ? "Your table, remembered." : "Good food finds good company."}</h1>
-                <p>{view === "saved" ? "The dishes worth crossing town for, all in one place." : "Snap a dish, understand what makes it special, and find your next version nearby."}</p>
+                <div className="eyebrow"><span>✦</span> {t("home.eyebrow")}</div>
+                <h1>{view === "saved" ? t("home.savedTitle") : t("home.title")}</h1>
+                <p>{view === "saved" ? t("home.savedBody") : t("home.body")}</p>
                 {view === "discover" && <div className="hero-actions">
-                  <button className="primary" onClick={() => fileRef.current?.click()}>＋ Analyze a dish</button>
-                  <button className="text-button" onClick={() => { setPreview(dishes[0].image); void analyze(undefined, true); }}>Try the labeled demo →</button>
+                  <button className="primary" onClick={() => fileRef.current?.click()}>＋ {t("home.analyze")}</button>
+                  <button className="text-button" onClick={() => { setPreview(dishes[0].image); void analyze(undefined, true); }}>{t("home.demo")} →</button>
                   <input ref={fileRef} className="sr-only" type="file" accept="image/*" onChange={handleFile} />
                 </div>}
               </div>
@@ -193,20 +262,21 @@ export default function Home() {
 
             <section className="discover-section">
               <div className="section-heading">
-                <div><span className="kicker">Curated near Vancouver</span><h2>{view === "saved" ? "Saved for later" : "Worth gathering around"}</h2></div>
+                <div><span className="kicker">{t("home.curated", { location: location?.locality ?? "—" })}</span><h2>{view === "saved" ? t("home.savedHeading") : t("home.gather")}</h2></div>
                 {view === "discover" && <div className="filters" role="group" aria-label="Feed filters">
                   {["For you", "Near you", "Hidden gems"].map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item}</button>)}
                 </div>}
               </div>
+              {view !== "saved" && <p className="seeded-notice">{t("home.seededNotice")}</p>}
               {visible.length ? <div className="dish-grid">
-                {view === "discover" && publishedDishes.map((dish) => <PublishedDishCard key={dish.id} dish={dish} />)}
-                {visible.map((dish, index) => <DishCard key={dish.id} dish={dish} featured={index === 0 && view === "discover"} isSaved={saved.has(dish.id)} onSave={toggleSaved} />)}
-              </div> : <div className="empty-state"><span>♡</span><h3>Your next obsession belongs here.</h3><p>Save dishes from Discover and Trinque will learn what you love.</p><button className="primary" onClick={() => setView("discover")}>Explore dishes</button></div>}
+                {view === "discover" && publishedDishes.map((dish) => <PublishedDishCard key={dish.id} dish={dish} t={t} />)}
+                {visible.map((dish, index) => <DishCard key={dish.id} dish={dish} featured={index === 0 && view === "discover"} isSaved={saved.has(dish.id)} onSave={toggleSaved} t={t} />)}
+              </div> : <div className="empty-state"><span>♡</span><h3>{t("home.emptyTitle")}</h3><p>{t("home.emptyBody")}</p><button className="primary" onClick={() => setView("discover")}>{t("home.explore")}</button></div>}
             </section>
 
             {view === "discover" && <section className="insider-strip">
               <div className="insider-number">03</div>
-              <div><span className="kicker">Local note</span><h2>Ask for the off-menu chile crisp.</h2><p>Community tips surface the details that restaurant listings miss.</p></div>
+              <div><span className="kicker">{t("home.localNote")}</span><h2>Ask for the off-menu chile crisp.</h2><p>{t("home.localTip")}</p></div>
               <div className="people">{["AM", "JR", "SK"].map((name, i) => <span key={name} style={{ background: colors[i] }}>{name}</span>)}<small>18 locals agree</small></div>
             </section>}
           </>
@@ -214,19 +284,20 @@ export default function Home() {
       </main>
 
       <nav className="mobile-nav" aria-label="Mobile navigation">
-        <button className={view === "discover" ? "active" : ""} onClick={() => setView("discover")}><span>⌂</span>Discover</button>
-        <button className={view === "groups" ? "active" : ""} onClick={() => setView("groups")}><span>♢</span>Groups</button>
-        <button className="mobile-add" onClick={() => fileRef.current?.click()} aria-label="Analyze a dish">＋</button>
-        <button className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}><span>♡</span>Saved</button>
-        <button><span>○</span>Profile</button>
+        <button className={view === "discover" ? "active" : ""} onClick={() => setView("discover")}><span>⌂</span>{t("nav.discover")}</button>
+        <button className={view === "groups" ? "active" : ""} onClick={() => setView("groups")}><span>♢</span>{t("nav.groups")}</button>
+        <button className="mobile-add" onClick={() => fileRef.current?.click()} aria-label={t("home.analyze")}>＋</button>
+        <button className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}><span>♡</span>{t("nav.saved")}</button>
+        <button onClick={() => setSettingsOpen(true)}><span>○</span>{t("nav.profile")}</button>
       </nav>
-      {modal && <Analyzer preview={preview} phase={phase} analysis={analysis} analysisMode={analysisMode} warning={analysisWarning} error={analysisError} matches={nearbyMatches} publishing={publishing} close={() => setModal(false)} update={update} publish={publish} retry={() => void analyze(pendingImage, false)} demo={() => void analyze(undefined, true)} />}
+      {modal && <Analyzer preview={preview} phase={phase} analysis={analysis} analysisMode={analysisMode} warning={analysisWarning} error={analysisError} matches={nearbyMatches} publishing={publishing} close={() => setModal(false)} update={update} publish={publish} retry={() => void analyze(pendingImage, false)} demo={() => void analyze(undefined, true)} t={t} language={language} measurementSystem={measurementSystem} />}
+      {settingsOpen && <SettingsPanel t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} close={() => setSettingsOpen(false)} persist={persistPreferences} />}
       {toast && <div className="toast" role="status">✓ {toast}</div>}
     </div>
   );
 }
 
-function DishCard({ dish, featured, isSaved, onSave }: { dish: Dish; featured: boolean; isSaved: boolean; onSave: (id: number) => void }) {
+function DishCard({ dish, featured, isSaved, onSave, t }: { dish: Dish; featured: boolean; isSaved: boolean; onSave: (id: number) => void; t: Translator }) {
   return <article className={featured ? "dish-card featured" : "dish-card"}>
     <div className="dish-image" style={{ backgroundImage: "linear-gradient(180deg,transparent 58%,rgba(22,13,10,.62)),url(" + dish.image + ")" }}>
       <span className="match"><b>{dish.match}%</b> taste match</span>
@@ -236,42 +307,92 @@ function DishCard({ dish, featured, isSaved, onSave }: { dish: Dish; featured: b
     <div className="dish-body">
       <div className="dish-title"><div><h3>{dish.name}</h3><p>{dish.note}</p></div><strong>{dish.price}</strong></div>
       <div className="dish-meta"><div>{dish.tags.map((tag) => <span key={tag}>{tag}</span>)}</div><small>{dish.distance} · ♥ {dish.likes}</small></div>
-      {featured && <button className="find-button">Find something like this <span>→</span></button>}
+      {featured && <button className="find-button">{t("analysis.explore")} <span>→</span></button>}
     </div>
   </article>;
 }
 
-function PublishedDishCard({ dish }: { dish: PublishedDish }) {
+function PublishedDishCard({ dish, t }: { dish: PublishedDish; t: Translator }) {
   return <article className="dish-card published-card">
-    <div className="dish-image" style={{ backgroundImage: `linear-gradient(180deg,transparent 55%,rgba(22,13,10,.68)),url(${dish.localPreview ?? dish.imageUrl ?? dishes[0].image})` }}><span className="match"><b>NEW</b> your dish</span><div className="photo-caption"><b>{dish.sourceMode === "live" ? "Live identified" : "Demo published"}</b><small>Added by you</small></div></div>
-    <div className="dish-body"><div className="dish-title"><div><h3>{dish.name}</h3><p>{dish.description}</p></div><strong>{dish.confidence}%</strong></div><div className="dish-meta"><div><span>{dish.cuisine}</span></div><small>Reviewed & published</small></div></div>
+    <div className="dish-image" style={{ backgroundImage: `linear-gradient(180deg,transparent 55%,rgba(22,13,10,.68)),url(${dish.localPreview ?? dish.imageUrl ?? dishes[0].image})` }}><span className="match"><b>NEW</b> {t("analysis.publishedTitle")}</span><div className="photo-caption"><b>{dish.sourceMode === "live" ? t("analysis.live") : t("analysis.demo")}</b><small>{t("analysis.review")}</small></div></div>
+    <div className="dish-body"><div className="dish-title"><div><h3>{dish.name}</h3><p>{dish.description}</p></div><strong>{dish.confidence}%</strong></div><div className="dish-meta"><div><span>{dish.cuisine}</span></div><small>{t("analysis.review")}</small></div></div>
   </article>;
 }
 
-function Analyzer({ preview, phase, analysis, analysisMode, warning, error, matches, publishing, close, update, publish, retry, demo }: { preview: string; phase: string; analysis: Analysis; analysisMode: "live" | "demo" | null; warning: string; error: string; matches: NearbyMatch[]; publishing: boolean; close: () => void; update: (field: keyof Analysis, value: string) => void; publish: (event: FormEvent) => void; retry: () => void; demo: () => void }) {
+function Analyzer({ preview, phase, analysis, analysisMode, warning, error, matches, publishing, close, update, publish, retry, demo, t, language, measurementSystem }: { preview: string; phase: string; analysis: Analysis; analysisMode: "live" | "demo" | null; warning: string; error: string; matches: NearbyMatch[]; publishing: boolean; close: () => void; update: (field: keyof Analysis, value: string) => void; publish: (event: FormEvent) => void; retry: () => void; demo: () => void; t: Translator; language: UiLanguage; measurementSystem: MeasurementSystem }) {
   return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="analyzer-title"><div className="analyzer">
     <button className="modal-close" onClick={close} aria-label="Close analyzer">×</button>
     <div className="analyzer-image" style={{ backgroundImage: "url(" + preview + ")" }}><span>✦ GPT-5.6 vision</span></div>
     <div className="analyzer-content">
-      {phase === "loading" ? <div className="loading-state"><div className="scan"><span /></div><em>Reading the plate</em><h2 id="analyzer-title">Finding the details that make this dish special…</h2><div><span>Dish family</span><span>Ingredients</span><span>Dietary notes</span></div></div>
-      : phase === "error" ? <div className="identifier-error"><span>!</span><p className="kicker">LIVE IDENTIFIER UNAVAILABLE</p><h2 id="analyzer-title">We didn’t identify this photo.</h2><p>{error}</p><div className="modal-actions"><button type="button" className="secondary" onClick={demo}>Use labeled demo</button><button type="button" className="primary" onClick={retry}>Retry photo</button></div></div>
-      : phase === "published" ? <div className="published"><span>✓</span><h2 id="analyzer-title">Added to Trinque</h2><p>{matches.length} nearby dishes ranked from your reviewed taste profile.</p><div className="nearby-results">{matches.slice(0, 3).map((match) => <article key={match.id}><img src={match.image} alt="" /><div><b>{match.name}</b><small>{match.restaurant} · {match.distanceKm.toFixed(1)} km</small><p>{match.score}% match · {match.explanation}</p></div></article>)}</div><div className="modal-actions"><button className="primary" onClick={close}>Explore the feed →</button></div></div>
-      : <form onSubmit={publish}><div className={`analysis-mode ${analysisMode ?? ""}`}>{analysisMode === "live" ? "● Live GPT-5.6 analysis" : "◇ Seeded demo result"}</div><span className="kicker">Review before publishing</span><div className="confidence"><h2 id="analyzer-title">Trinque thinks it knows this dish.</h2><span>{analysis.confidence}% confident</span></div>
+      {phase === "loading" ? <div className="loading-state"><div className="scan"><span /></div><em>{t("analysis.loadingKicker")}</em><h2 id="analyzer-title">{t("analysis.loadingTitle")}</h2><div><span>{t("analysis.field.name")}</span><span>{t("analysis.field.ingredients")}</span><span>{t("analysis.field.dietary")}</span></div></div>
+      : phase === "error" ? <div className="identifier-error"><span>!</span><p className="kicker">{t("analysis.unavailableKicker")}</p><h2 id="analyzer-title">{t("analysis.unavailableTitle")}</h2><p>{error}</p><div className="modal-actions"><button type="button" className="secondary" onClick={demo}>{t("analysis.useDemo")}</button><button type="button" className="primary" onClick={retry}>{t("analysis.retry")}</button></div></div>
+      : phase === "published" ? <div className="published"><span>✓</span><h2 id="analyzer-title">{t("analysis.publishedTitle")}</h2><p>{t("analysis.publishedBody", { count: matches.length })}</p><div className="nearby-results">{matches.slice(0, 3).map((match) => <article key={match.id}><img src={match.image} alt="" /><div><b>{match.name}</b><small>{match.restaurant} · {new Intl.NumberFormat(language, { style: "unit", unit: measurementSystem === "imperial" ? "mile" : "kilometer", unitDisplay: "short", maximumFractionDigits: 1 }).format(measurementSystem === "imperial" ? match.distanceKm * .621371 : match.distanceKm)}</small><p>{match.score}% · {match.explanation}</p></div></article>)}</div><div className="modal-actions"><button className="primary" onClick={close}>{t("analysis.explore")} →</button></div></div>
+      : <form onSubmit={publish}><div className={`analysis-mode ${analysisMode ?? ""}`}>{analysisMode === "live" ? `● ${t("analysis.live")}` : `◇ ${t("analysis.demo")}`}</div><span className="kicker">{t("analysis.review")}</span><div className="confidence"><h2 id="analyzer-title">{t("analysis.reviewTitle")}</h2><span>{t("analysis.confident", { confidence: analysis.confidence })}</span></div>
         {warning && <p className="demo-warning">{warning}</p>}
-        <p className="review-note">AI can miss ingredients. Confirm the details—especially allergens—before sharing.</p>
+        <p className="review-note">{t("analysis.warning")}</p>
         <div className="form-grid">
-          <label className="wide">Dish name<input value={analysis.name} onChange={(e) => update("name", e.target.value)} /></label>
-          <label>Cuisine<input value={analysis.cuisine} onChange={(e) => update("cuisine", e.target.value)} /></label>
-          <label>Dietary notes<input value={analysis.dietary} onChange={(e) => update("dietary", e.target.value)} /></label>
-          <label className="wide">Likely ingredients<textarea value={analysis.ingredients} onChange={(e) => update("ingredients", e.target.value)} /></label>
-          <label className="wide">What makes it special<textarea value={analysis.description} onChange={(e) => update("description", e.target.value)} /></label>
-        </div><div className="modal-actions"><button type="button" className="secondary" onClick={close}>Keep private</button><button className="primary" type="submit" disabled={publishing}>{publishing ? "Publishing…" : "Publish & find matches →"}</button></div>
+          <label className="wide">{t("analysis.field.name")}<input value={analysis.name} onChange={(e) => update("name", e.target.value)} /></label>
+          <label>{t("analysis.field.cuisine")}<input value={analysis.cuisine} onChange={(e) => update("cuisine", e.target.value)} /></label>
+          <label>{t("analysis.field.dietary")}<input value={analysis.dietary} onChange={(e) => update("dietary", e.target.value)} /></label>
+          <label className="wide">{t("analysis.field.ingredients")}<textarea value={analysis.ingredients} onChange={(e) => update("ingredients", e.target.value)} /></label>
+          <label className="wide">{t("analysis.field.description")}<textarea value={analysis.description} onChange={(e) => update("description", e.target.value)} /></label>
+        </div><div className="modal-actions"><button type="button" className="secondary" onClick={close}>{t("analysis.keepPrivate")}</button><button className="primary" type="submit" disabled={publishing}>{publishing ? t("analysis.publishing") : `${t("analysis.publish")} →`}</button></div>
       </form>}
     </div>
   </div></div>;
 }
 
-function GroupPlanner({ guestToken, flash }: { guestToken: string | null; flash: (text: string) => void }) {
+function SettingsPanel({ t, language, theme, measurementSystem, location, close, persist }: { t: Translator; language: UiLanguage; theme: ThemePreference; measurementSystem: MeasurementSystem; location: NormalizedLocation | null; close: () => void; persist: (next: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: NormalizedLocation | null }) => Promise<void> }) {
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("");
+  const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  async function search(payload: { input?: string; latitude?: number; longitude?: number; providerPlaceId?: string }) {
+    setBusy(true); setStatus(""); setSuggestions([]);
+    try {
+      const response = await fetch("/api/locations/autocomplete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...payload, language, location }) });
+      const body = await response.json() as { suggestions?: LocationSuggestion[]; location?: NormalizedLocation; error?: { code?: string } };
+      if (!response.ok) {
+        setStatus(body.error?.code === "unsupported_country" ? t("location.unsupported") : body.error?.code === "credentials" ? t("location.unavailable") : t("location.providerError"));
+        return;
+      }
+      if (body.location) {
+        const defaults = REGIONAL_DEFAULTS[body.location.countryCode];
+        const selected = { ...body.location, language, measurementSystem: defaults.measurementSystem };
+        await persist({ location: selected, measurementSystem: defaults.measurementSystem });
+        setStatus(t("location.current", { location: `${selected.locality}, ${selected.countryCode}` }));
+        return;
+      }
+      setSuggestions(body.suggestions ?? []);
+    } catch { setStatus(t("location.unavailable")); }
+    finally { setBusy(false); }
+  }
+
+  function useDeviceLocation() {
+    if (!navigator.geolocation) { setStatus(t("location.permissionDenied")); return; }
+    setBusy(true); setStatus("");
+    navigator.geolocation.getCurrentPosition(
+      (position) => void search({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+      () => { setBusy(false); setStatus(t("location.permissionDenied")); },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 15 * 60 * 1000 },
+    );
+  }
+
+  async function selectSuggestion(suggestion: LocationSuggestion) {
+    await search({ providerPlaceId: suggestion.providerPlaceId });
+  }
+
+  return <div className="settings-backdrop" role="dialog" aria-modal="true" aria-labelledby="settings-title" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}><aside className="settings-panel">
+    <div className="settings-heading"><h2 id="settings-title">{t("settings.title")}</h2><button onClick={close} aria-label={t("settings.close")}>×</button></div>
+    <div className="setting-block"><span>{t("settings.language")}</span><div className="setting-options">{UI_LANGUAGES.map((item) => <button key={item} className={language === item ? "active" : ""} onClick={() => void persist({ language: item })}>{t(LANGUAGE_LABEL_KEYS[item])}</button>)}</div></div>
+    <div className="setting-block"><span>{t("settings.theme")}</span><div className="setting-options">{(["system", "light", "dark"] as const).map((item) => <button key={item} className={theme === item ? "active" : ""} onClick={() => void persist({ theme: item })}>{t(`settings.theme.${item}`)}</button>)}</div></div>
+    <div className="setting-block"><span>{t("settings.measurement")}</span><div className="setting-options">{(["metric", "imperial"] as const).map((item) => <button key={item} className={measurementSystem === item ? "active" : ""} onClick={() => void persist({ measurementSystem: item })}>{t(item === "metric" ? "location.metric" : "location.imperial")}</button>)}</div></div>
+    <div className="setting-block"><span>{t("settings.location")}</span>{location && <p className="location-status">{t("location.current", { location: `${location.locality}, ${location.countryCode}` })}</p>}<button className="location-chip" disabled={busy} onClick={useDeviceLocation}>{t("location.useDevice")}</button><form className="location-search" onSubmit={(event) => { event.preventDefault(); if (query.trim()) void search({ input: query.trim() }); }}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("location.search")} /><button disabled={busy || !query.trim()}>{t("location.searchAction")}</button></form>{status && <p className="location-status warning">{status}</p>}<div className="location-suggestions">{suggestions.map((suggestion) => <button key={suggestion.id} onClick={() => void selectSuggestion(suggestion)}><b>{suggestion.label}</b><br /><small>{suggestion.secondaryLabel}</small></button>)}{suggestions.length > 0 && <small className="google-attribution" translate="no">Google Maps</small>}</div><p className="privacy-note">{t("location.privacy")}</p></div>
+  </aside></div>;
+}
+
+function GroupPlanner({ guestToken, flash, t, location, language }: { guestToken: string | null; flash: (text: string) => void; t: Translator; location: NormalizedLocation | null; language: UiLanguage }) {
   const [group, setGroup] = useState<GroupSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [budgetMax, setBudgetMax] = useState("35");
@@ -288,13 +409,14 @@ function GroupPlanner({ guestToken, flash }: { guestToken: string | null; flash:
 
   async function createGroup() {
     if (!guestToken) { flash("Guest session is still connecting"); return; }
+    if (!location) { flash(t("location.change")); return; }
     setBusy(true);
     try {
       const eventTime = new Date(Date.now() + 24 * 60 * 60 * 1000); eventTime.setHours(19, 30, 0, 0);
-      const response = await fetch("/api/groups", { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ name: "Friday supper", eventTime: eventTime.toISOString(), neighborhood: "Mount Pleasant", budgetMax: Number(budgetMax), maxDistanceKm: Number(maxDistanceKm), vegetarianRequired: Number(vegetarianRequired), allergies: allergies.split(",") }) });
+      const response = await fetch("/api/groups", { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ name: t("group.name"), eventTime: eventTime.toISOString(), neighborhood: location.locality, budgetMax: Number(budgetMax), maxDistanceKm: Number(maxDistanceKm), vegetarianRequired: Number(vegetarianRequired), allergies: allergies.split(",") }) });
       if (!response.ok) throw new Error();
-      setGroup(((await response.json()) as { group: GroupSnapshot }).group); flash("Your decision room is ready");
-    } catch { flash("Couldn’t create the group yet"); } finally { setBusy(false); }
+      setGroup(((await response.json()) as { group: GroupSnapshot }).group); flash(t("group.rank"));
+    } catch { flash(t("error.generic")); } finally { setBusy(false); }
   }
 
   async function groupAction(path: string, body?: object) {
@@ -304,26 +426,26 @@ function GroupPlanner({ guestToken, flash }: { guestToken: string | null; flash:
       const response = await fetch(`/api/groups/${group.id}/${path}`, { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
       if (!response.ok) throw new Error((await response.json() as { error?: string }).error);
       const payload = await response.json() as { group: GroupSnapshot };
-      setGroup(payload.group); flash(path === "vote" ? "Your vote is in" : path === "finalize" ? "The table is locked" : "RSVP saved");
-    } catch (error) { flash(error instanceof Error && error.message ? error.message : "That action didn’t go through"); } finally { setBusy(false); }
+      setGroup(payload.group); flash(path === "vote" ? t("group.voteSaved") : path === "finalize" ? t("group.finalized") : t("group.rsvpSaved"));
+    } catch { flash(t("error.generic")); } finally { setBusy(false); }
   }
 
   async function downloadCalendar() {
     if (!guestToken || !group) return;
     const response = await fetch(`/api/groups/${group.id}/calendar`, { headers: { Authorization: `Guest ${guestToken}` } });
-    if (!response.ok) { flash("Calendar export isn’t ready"); return; }
-    const url = URL.createObjectURL(await response.blob()); const link = document.createElement("a"); link.href = url; link.download = "trinque-friday-supper.ics"; link.click(); URL.revokeObjectURL(url); flash("Calendar event downloaded");
+    if (!response.ok) { flash(t("error.generic")); return; }
+    const url = URL.createObjectURL(await response.blob()); const link = document.createElement("a"); link.href = url; link.download = "trinque-plan.ics"; link.click(); URL.revokeObjectURL(url); flash(t("group.calendarDownloaded"));
   }
 
-  if (!group) return <section className="group-page"><div className="group-intro"><div className="eyebrow"><span>♢</span> Shared table</div><h1>From group chat to a table everyone can enjoy.</h1><p>Set the non-negotiables. Trinque will rank nearby dishes, explain conflicts, collect your vote, and turn the winner into a real plan.</p></div><div className="group-starter"><span className="kicker">START A DECISION ROOM</span><h2>Friday supper</h2><div className="planner-form"><label>Maximum per person<input value={budgetMax} onChange={(event) => setBudgetMax(event.target.value)} inputMode="numeric" /></label><label>Travel radius (km)<input value={maxDistanceKm} onChange={(event) => setMaxDistanceKm(event.target.value)} inputMode="numeric" /></label><label>Vegetarian guests<input value={vegetarianRequired} onChange={(event) => setVegetarianRequired(event.target.value)} inputMode="numeric" /></label><label>Hard allergy exclusions<input value={allergies} onChange={(event) => setAllergies(event.target.value)} placeholder="sesame, peanuts" /></label></div><button className="primary full" disabled={busy || !guestToken} onClick={createGroup}>{guestToken ? busy ? "Building shortlist…" : "Rank the table →" : "Connecting guest session…"}</button></div></section>;
+  if (!group) return <section className="group-page"><div className="group-intro"><div className="eyebrow"><span>♢</span> {t("group.eyebrow")}</div><h1>{t("group.createTitle")}</h1><p>{t("group.createBody")}</p></div><div className="group-starter"><span className="kicker">{t("group.start")}</span><h2>{t("group.name")}</h2><div className="planner-form"><label>{t("group.budget")}<input value={budgetMax} onChange={(event) => setBudgetMax(event.target.value)} inputMode="numeric" /></label><label>{t("group.radius")}<input value={maxDistanceKm} onChange={(event) => setMaxDistanceKm(event.target.value)} inputMode="numeric" /></label><label>{t("group.vegetarian")}<input value={vegetarianRequired} onChange={(event) => setVegetarianRequired(event.target.value)} inputMode="numeric" /></label><label>{t("group.allergies")}<input value={allergies} onChange={(event) => setAllergies(event.target.value)} placeholder="sesame, peanuts" /></label></div>{!location && <p className="location-status warning">{t("location.change")}</p>}<button className="primary full" disabled={busy || !guestToken || !location} onClick={createGroup}>{guestToken ? busy ? t("group.building") : `${t("group.rank")} →` : t("auth.connecting")}</button></div></section>;
 
   const winner = group.candidates.find((candidate) => candidate.candidateId === group.selectedCandidateId);
   return <section className="group-page">
-    <div className="group-intro"><div className="eyebrow"><span>♢</span> Shared table</div><h1>{group.status === "finalized" ? "The group chat has a destination." : "Vote with the tradeoffs in view."}</h1><p>Hard constraints stay hard. Every candidate explains why it fits—or why it was excluded.</p><div className="members">{["YOU", "+3"].map((name, index) => <span key={name} style={{ background: colors[index] }}>{name}</span>)}</div></div>
-    <div className="planner"><aside className="constraints"><span className="kicker">{new Date(group.eventTime).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}</span><h2>{group.name}</h2>{[["◎", group.neighborhood, `Within ${group.maxDistanceKm} km`], ["$", `Up to $${group.budgetMax}`, "Per person"], ["!", group.allergies.join(", ") || "No listed allergies", "Hard exclusion"], ["♧", `${group.vegetarianRequired} vegetarian guest`, "Candidate must fit"]].map(([icon, title, note], index) => <div className={index === 2 && group.allergies.length ? "constraint warning" : "constraint"} key={title}><span>{icon}</span><div><b>{title}</b><small>{note}</small></div></div>)}<button className="secondary full" onClick={() => { void navigator.clipboard?.writeText(`${location.origin}/?join=${group.inviteCode}`); flash("Invite link copied"); }}>Copy invite link</button></aside>
-      <div className="shortlist"><div className="section-heading"><div><span className="kicker">EXPLAINABLE RANKING</span><h2>{group.status === "voting" ? "Best eligible fits" : "Final dining plan"}</h2></div><span className="live">● Persisted</span></div>
-        {group.candidates.slice(0, 5).map((candidate, index) => <article className={`${candidate.eligible && index === 0 ? "vote-card winner" : "vote-card"} ${candidate.eligible ? "" : "ineligible"}`} key={candidate.candidateId}><div className="vote-image" style={{ backgroundImage: `url(${candidate.image})` }}><span>{candidate.eligible ? `#${index + 1}` : "!"}</span></div><div className="vote-copy"><div><span>{candidate.eligible ? `${candidate.score}% group fit` : "Hard conflict"}</span><h3>{candidate.restaurant}</h3><p>{candidate.name} · {candidate.price} · {candidate.distanceKm} km</p><small>{candidate.explanation}</small></div><button disabled={busy || !candidate.eligible || group.status === "finalized"} onClick={() => void groupAction("vote", { candidateId: candidate.candidateId })}>▲ <b>{group.votes[candidate.candidateId] ?? 0}</b></button></div></article>)}
-        {group.status === "voting" ? <button className="primary plan-button" disabled={busy} onClick={() => void groupAction("finalize")}>Lock the best eligible table →</button> : winner ? <div className="final-plan"><span>✦ Your best table</span><h3>{winner.restaurant}</h3><p>{winner.name} at {new Date(group.eventTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}. {winner.explanation}</p><div><button className="primary" onClick={() => void groupAction("rsvp", { status: "yes" })}>I’m in · {group.rsvps.yes ?? 0}</button><button className="secondary" onClick={() => void downloadCalendar()}>Add to calendar</button></div></div> : null}
+    <div className="group-intro"><div className="eyebrow"><span>♢</span> {t("group.eyebrow")}</div><h1>{group.status === "finalized" ? t("group.finalTitle") : t("group.voteTitle")}</h1><p>{t("group.constraints")}</p><div className="members">{["YOU", "+3"].map((name, index) => <span key={name} style={{ background: colors[index] }}>{name}</span>)}</div></div>
+    <div className="planner"><aside className="constraints"><span className="kicker">{new Intl.DateTimeFormat(language, { weekday: "short", hour: "numeric", minute: "2-digit", timeZone: location?.timeZone }).format(new Date(group.eventTime))}</span><h2>{group.name}</h2>{[["◎", group.neighborhood, group.maxDistanceKm.toString()], ["$", new Intl.NumberFormat(location?.locale ?? language, { style: "currency", currency: location?.currencyCode ?? "CAD", maximumFractionDigits: 0 }).format(group.budgetMax), t("group.budget")], ["!", group.allergies.join(", ") || "—", t("group.allergies")], ["♧", group.vegetarianRequired.toString(), t("group.vegetarian")]].map(([icon, title, note], index) => <div className={index === 2 && group.allergies.length ? "constraint warning" : "constraint"} key={`${icon}-${title}`}><span>{icon}</span><div><b>{title}</b><small>{note}</small></div></div>)}<button className="secondary full" onClick={() => { void navigator.clipboard?.writeText(`${window.location.origin}/?join=${group.inviteCode}`); flash(t("group.inviteCopied")); }}>{t("group.copyInvite")}</button></aside>
+      <div className="shortlist"><div className="section-heading"><div><span className="kicker">{t("group.ranking")}</span><h2>{group.status === "voting" ? t("group.bestFits") : t("group.finalPlan")}</h2></div><span className="live">● D1</span></div>
+        {group.candidates.slice(0, 5).map((candidate, index) => <article className={`${candidate.eligible && index === 0 ? "vote-card winner" : "vote-card"} ${candidate.eligible ? "" : "ineligible"}`} key={candidate.candidateId}><div className="vote-image" style={{ backgroundImage: `url(${candidate.image})` }}><span>{candidate.eligible ? `#${index + 1}` : "!"}</span></div><div className="vote-copy"><div><span>{candidate.eligible ? t("group.groupFit", { score: candidate.score }) : t("group.hardConflict")}</span><h3>{candidate.restaurant}</h3><p>{candidate.name} · {candidate.price} · {candidate.distanceKm} km</p><small>{candidate.explanation}</small></div><button disabled={busy || !candidate.eligible || group.status === "finalized"} onClick={() => void groupAction("vote", { candidateId: candidate.candidateId })}>▲ <b>{group.votes[candidate.candidateId] ?? 0}</b></button></div></article>)}
+        {group.status === "voting" ? <button className="primary plan-button" disabled={busy} onClick={() => void groupAction("finalize")}>{t("group.lock")} →</button> : winner ? <div className="final-plan"><span>✦ {t("group.bestTable")}</span><h3>{winner.restaurant}</h3><p>{winner.name} · {new Intl.DateTimeFormat(language, { hour: "numeric", minute: "2-digit", timeZone: location?.timeZone }).format(new Date(group.eventTime))}. {winner.explanation}</p><div><button className="primary" onClick={() => void groupAction("rsvp", { status: "yes" })}>{t("group.rsvpYes")} · {group.rsvps.yes ?? 0}</button><button className="secondary" onClick={() => void downloadCalendar()}>{t("group.calendar")}</button></div></div> : null}
       </div>
     </div>
   </section>;

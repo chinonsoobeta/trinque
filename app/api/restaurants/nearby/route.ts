@@ -1,0 +1,36 @@
+import { normalizeLocation } from "@/lib/location";
+import { placesApiKey, placesErrorResponse, placesResponseHeaders } from "@/lib/places/http";
+import { createPlacesProvider } from "@/lib/places/provider";
+import { PlacesProviderError } from "@/lib/places/types";
+import { SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/lib/regions";
+
+export const runtime = "edge";
+
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const rawLatitude = url.searchParams.get("latitude");
+  const rawLongitude = url.searchParams.get("longitude");
+  const latitude = Number(rawLatitude);
+  const longitude = Number(rawLongitude);
+  const radiusMeters = url.searchParams.has("radiusMeters") ? Number(url.searchParams.get("radiusMeters")) : 5_000;
+  const requestedLanguage = url.searchParams.get("language") as SupportedLanguage | null;
+  const language = requestedLanguage && SUPPORTED_LANGUAGES.includes(requestedLanguage) ? requestedLanguage : "en-CA";
+  if (rawLatitude === null || rawLongitude === null || !Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180 || !Number.isFinite(radiusMeters) || radiusMeters < 100 || radiusMeters > 50_000) {
+    return placesErrorResponse(new PlacesProviderError("invalid_request", "Valid coordinates and a radius from 100 to 50000 metres are required.", 400));
+  }
+  try {
+    const provider = createPlacesProvider(await placesApiKey());
+    const resolved = await provider.resolveCoordinates(latitude, longitude, language);
+    const location = normalizeLocation({ ...resolved, latitude, longitude, source: "device" }, language);
+    const restaurants = await provider.nearbyRestaurants(location, { language, radiusMeters });
+    return Response.json({
+      location,
+      restaurants,
+      attribution: "Google Maps",
+      ranking: {
+        factors: ["relevance", "distance", "prominence"],
+        learnMoreUri: "https://support.google.com/business/answer/7091",
+      },
+    }, { headers: placesResponseHeaders });
+  } catch (error) { return placesErrorResponse(error); }
+}

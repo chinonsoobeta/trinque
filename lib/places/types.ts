@@ -1,5 +1,5 @@
 import type { NormalizedLocation } from "../location.ts";
-import type { SupportedLanguage } from "../regions.ts";
+import type { SupportedCountry, SupportedLanguage } from "../regions.ts";
 
 export type ProviderName = "google";
 
@@ -27,8 +27,13 @@ export type ProviderPhoto = {
   reference: string;
   width?: number;
   height?: number;
+  authorAttributions: Array<{ displayName: string; uri?: string; photoUri?: string }>;
+  googleMapsUri?: string;
+  flagContentUri?: string;
   attribution: "Google Maps";
 };
+
+export type ProviderAttribution = { provider: string; providerUri?: string };
 
 export type RestaurantPlace = {
   provider: ProviderName;
@@ -39,11 +44,18 @@ export type RestaurantPlace = {
   longitude: number;
   locality: string;
   administrativeRegion: string;
-  countryCode: string;
-  priceLevel?: string;
+  countryCode: SupportedCountry;
+  currencyCode: string;
+  locale: string;
+  priceLevel?: "free" | "inexpensive" | "moderate" | "expensive" | "very_expensive";
   rating?: number;
+  businessStatus?: "operational" | "temporarily_closed" | "permanently_closed" | "future_opening" | "unknown";
   openingStatus?: "open" | "closed" | "unknown";
+  distanceKm?: number;
   photos: ProviderPhoto[];
+  providerAttributions: ProviderAttribution[];
+  googleMapsUri?: string;
+  displayNameLanguageCode?: string;
   attribution: "Google Maps";
 };
 

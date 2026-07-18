@@ -1,5 +1,5 @@
-import { getRuntimeEnv, selectGooglePlacesKey } from "@/lib/runtime-env";
-import { GoogleLocationProvider } from "@/lib/places/google-location";
+import { placesApiKey } from "@/lib/places/http";
+import { createPlacesProvider } from "@/lib/places/provider";
 import { PlacesProviderError } from "@/lib/places/types";
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/lib/regions";
 
@@ -9,15 +9,12 @@ const headers = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Head
 export function OPTIONS() { return new Response(null, { status: 204, headers }); }
 
 export async function POST(request: Request) {
-  const env = await getRuntimeEnv();
-  const apiKey = selectGooglePlacesKey(env.GOOGLE_PLACES_API_KEY, process.env.GOOGLE_PLACES_API_KEY);
-  if (!apiKey) return providerError(new PlacesProviderError("credentials", "Live restaurant discovery is not configured.", 503));
   let body: { input?: string; providerPlaceId?: string; latitude?: number; longitude?: number; language?: SupportedLanguage; location?: { latitude?: number; longitude?: number } | null };
   try { body = await request.json(); }
   catch { return providerError(new PlacesProviderError("invalid_request", "A JSON request body is required.", 400)); }
   const language = body.language && SUPPORTED_LANGUAGES.includes(body.language) ? body.language : "en-CA";
-  const provider = new GoogleLocationProvider(apiKey);
   try {
+    const provider = createPlacesProvider(await placesApiKey());
     if (body.providerPlaceId) return Response.json({ location: await provider.resolveLocation(body.providerPlaceId, language), attribution: "Google Maps" }, { headers });
     if (typeof body.latitude === "number" && typeof body.longitude === "number") {
       return Response.json({ location: await provider.resolveCoordinates(body.latitude, body.longitude, language), attribution: "Google Maps" }, { headers });

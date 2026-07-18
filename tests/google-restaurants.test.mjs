@@ -14,6 +14,8 @@ function googleRestaurant({ id = "ChIJRestaurant123", name = "Café Étoile", co
     rating: 4.7,
     businessStatus: "OPERATIONAL",
     currentOpeningHours: { openNow: true },
+    primaryType: "restaurant",
+    types: ["restaurant", "food", "point_of_interest", "establishment"],
     addressComponents: [
       { longText: locality, shortText: locality, types: ["locality"] },
       { longText: region, shortText: region, types: ["administrative_area_level_1"] },
@@ -42,6 +44,7 @@ test("nearby restaurant search uses a minimal field mask and normalizes Google c
   assert.equal(captured.init.cache, "no-store");
   assert.deepEqual(JSON.parse(captured.init.body), {
     includedTypes: ["restaurant"],
+    includedPrimaryTypes: ["restaurant"],
     locationRestriction: { circle: { center: { latitude: 45.75, longitude: 4.83 }, radius: 3_000 } },
     rankPreference: "POPULARITY", maxResultCount: 20, languageCode: "en-GB",
   });
@@ -56,6 +59,27 @@ test("nearby restaurant search uses a minimal field mask and normalizes Google c
   assert.equal(restaurant.photos[0].authorAttributions[0].displayName, "A. Photographer");
   assert.equal(restaurant.photos[0].googleMapsUri, "https://maps.google.com/photo/example");
   assert.deepEqual(restaurant.providerAttributions, [{ provider: "Local data partner", providerUri: "https://example.com/provider" }]);
+});
+
+test("nearby restaurant search excludes a cinema carrying a food-service tag", async () => {
+  const provider = new GooglePlacesProvider("server-secret", async () => Response.json({
+    places: [
+      { ...googleRestaurant({ id: "ChIJCinema123", name: "Cinema with concessions" }), primaryType: "movie_theater", types: ["movie_theater", "restaurant", "food"] },
+      googleRestaurant({ id: "ChIJRealRestaurant123", name: "Verified restaurant category" }),
+    ],
+  }));
+  const location = normalizeLocation({ latitude: 48.8566, longitude: 2.3522, locality: "Paris", administrativeRegion: "IDF", countryCode: "FR", timeZone: "Europe/Paris", source: "manual" }, "fr");
+  const restaurants = await provider.nearbyRestaurants(location, { language: "fr", radiusMeters: 3_000 });
+  assert.deepEqual(restaurants.map((restaurant) => restaurant.displayName), ["Verified restaurant category"]);
+});
+
+test("restaurant details rejects a venue that is not a restaurant", async () => {
+  const provider = new GooglePlacesProvider("server-secret", async () => Response.json({
+    ...googleRestaurant({ id: "ChIJCinema123", name: "Cinema with concessions" }),
+    primaryType: "movie_theater",
+    types: ["movie_theater", "restaurant", "food"],
+  }));
+  await assert.rejects(() => provider.restaurantDetails("ChIJCinema123", "fr"), (error) => error.code === "invalid_request");
 });
 
 const regionalRestaurants = [

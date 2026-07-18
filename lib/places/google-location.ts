@@ -20,7 +20,7 @@ const AUTOCOMPLETE_MASK = [
 ].join(",");
 const LOCATION_MASK = "id,displayName,formattedAddress,addressComponents,location,timeZone,postalAddress";
 const COORDINATE_MASK = `places.${LOCATION_MASK.split(",").join(",places.")}`;
-const RESTAURANT_FIELDS = "id,displayName,formattedAddress,addressComponents,location,priceLevel,rating,businessStatus,currentOpeningHours.openNow,photos,googleMapsUri,attributions";
+const RESTAURANT_FIELDS = "id,displayName,formattedAddress,addressComponents,location,primaryType,types,priceLevel,rating,businessStatus,currentOpeningHours.openNow,photos,googleMapsUri,attributions";
 const NEARBY_RESTAURANT_MASK = `places.${RESTAURANT_FIELDS.split(",").join(",places.")}`;
 const PHOTO_MASK = "id,photos";
 
@@ -31,6 +31,8 @@ type GooglePlace = {
   formattedAddress?: string;
   addressComponents?: GoogleAddressComponent[];
   location?: { latitude?: number; longitude?: number };
+  primaryType?: string;
+  types?: string[];
   timeZone?: { id?: string } | string;
   postalAddress?: { regionCode?: string; languageCode?: string; locality?: string; administrativeArea?: string; postalCode?: string };
   priceLevel?: string;
@@ -140,6 +142,7 @@ export class GooglePlacesProvider implements LocationResolver, PlacesProvider {
         method: "POST",
         body: JSON.stringify({
           includedTypes: ["restaurant"],
+          includedPrimaryTypes: ["restaurant"],
           locationRestriction: { circle: { center: { latitude: location.latitude, longitude: location.longitude }, radius } },
           rankPreference: "POPULARITY",
           maxResultCount: 20,
@@ -152,6 +155,7 @@ export class GooglePlacesProvider implements LocationResolver, PlacesProvider {
     let unreadable = false;
     for (const place of payload.places ?? []) {
       try {
+        if (!isRestaurantPlace(place)) continue;
         const normalized = normalizeGoogleRestaurant(place);
         restaurants.push({ ...normalized, distanceKm: haversineDistanceKm(location, normalized) });
       } catch (error) {
@@ -170,6 +174,7 @@ export class GooglePlacesProvider implements LocationResolver, PlacesProvider {
       { method: "GET" },
       RESTAURANT_FIELDS,
     );
+    if (!isRestaurantPlace(place)) throw new PlacesProviderError("invalid_request", "The selected place is not a restaurant.", 400);
     return normalizeGoogleRestaurant(place);
   }
 
@@ -256,6 +261,20 @@ function normalizeGoogleRestaurant(place: GooglePlace): RestaurantPlace {
     displayNameLanguageCode: place.displayName?.languageCode,
     attribution: "Google Maps",
   };
+}
+
+// Nearby Search filters restaurant services and restaurant primary types. Keep a
+// defensive client-side exclusion for venue categories that can still carry a
+// secondary food-service tag (for example, a cinema with concessions).
+function isRestaurantPlace(place: GooglePlace): boolean {
+  const primaryType = place.primaryType?.trim();
+  if (!primaryType) return true;
+  return !new Set([
+    "movie_theater",
+    "performing_arts_theater",
+    "event_venue",
+    "amusement_center",
+  ]).has(primaryType);
 }
 
 function normalizePhotos(photos?: GooglePlace["photos"]): ProviderPhoto[] {

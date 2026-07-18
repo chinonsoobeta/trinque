@@ -3,12 +3,13 @@ import { readFile } from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-test("D1 migration creates guest identity and durable save tables", async () => {
+test("D1 migrations preserve durable identities and independent three-member group state", async () => {
   const sql = await readFile(new URL("../drizzle/0000_useful_maria_hill.sql", import.meta.url), "utf8");
   const publishSql = await readFile(new URL("../drizzle/0001_fair_the_hunter.sql", import.meta.url), "utf8");
   const groupSql = await readFile(new URL("../drizzle/0002_unusual_lady_mastermind.sql", import.meta.url), "utf8");
   const regionalPreferencesSql = await readFile(new URL("../drizzle/0003_unknown_mattie_franklin.sql", import.meta.url), "utf8");
   const dishGraphSql = await readFile(new URL("../drizzle/0004_wandering_marvex.sql", import.meta.url), "utf8");
+  const groupMembershipSql = await readFile(new URL("../drizzle/0005_bored_sabra.sql", import.meta.url), "utf8");
   const db = new DatabaseSync(":memory:");
   db.exec("PRAGMA foreign_keys = ON");
   for (const statement of sql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
@@ -16,17 +17,29 @@ test("D1 migration creates guest identity and durable save tables", async () => 
   for (const statement of groupSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
   for (const statement of regionalPreferencesSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
   for (const statement of dishGraphSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
+  db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("legacy-owner", "guest", "Legacy owner", "legacy-hash");
+  db.prepare("INSERT INTO groups (id, owner_id, name, event_time, neighborhood, budget_max, max_distance_km, vegetarian_required, allergies, invite_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run("legacy-group", "legacy-owner", "Legacy plan", "2026-07-20T19:30:00.000Z", "Vancouver", 35, 4, 0, "[]", "legacy-invite", "2026-07-18T12:00:00.000Z");
+  for (const statement of groupMembershipSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
 
   db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("guest-1", "guest", "Guest explorer", "hash-1");
+  db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("guest-b", "guest", "Guest B", "hash-b");
+  db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("guest-c", "guest", "Guest C", "hash-c");
   db.prepare("INSERT INTO saves (user_id, dish_id) VALUES (?, ?)").run("guest-1", 2);
   db.prepare("INSERT INTO preferences (user_id) VALUES (?)").run("guest-1");
   db.prepare("INSERT INTO published_dishes (id, owner_id, source_mode, name, cuisine, ingredients, dietary, confidence, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run("dish-1", "guest-1", "live", "Jollof rice", "West African", "rice tomato pepper", "Confirm stock", 92, "Smoky tomato rice");
   db.prepare("INSERT INTO restaurants (id, provider, provider_place_id, name, latitude, longitude, locality, administrative_region, country_code, address, currency_code, created_by_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run("restaurant-1", "google", "ChIJRestaurant123", "Café Montréal", 45.5, -73.57, "Montréal", "QC", "CA", "10 rue Exemple", "CAD", "guest-1");
   db.prepare("UPDATE published_dishes SET restaurant_id = ?, contributor_id = ?, price_amount = ?, currency_code = ?, price_knowledge = ?, provenance = ?, verification_status = ?, availability_knowledge = ?, availability_confidence = ?, last_confirmed_at = ?, latitude = ?, longitude = ?, country_code = ?, language = ?, original_name = ? WHERE id = ?").run("restaurant-1", "guest-1", 24.5, "CAD", "exact", "ai_identified", "unverified", "recently_confirmed", 90, "2026-07-18T12:00:00.000Z", 45.5, -73.57, "CA", "fr", "Jollof rice", "dish-1");
   db.prepare("INSERT INTO groups (id, owner_id, name, event_time, neighborhood, budget_max, max_distance_km, vegetarian_required, allergies, invite_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run("group-1", "guest-1", "Friday supper", "2026-07-18T02:30:00.000Z", "Mount Pleasant", 35, 4, 1, "[\"sesame\"]", "invite123");
+  db.prepare("INSERT INTO group_members (group_id, user_id, role, language) VALUES (?, ?, ?, ?)").run("group-1", "guest-1", "owner", "en-GB");
+  db.prepare("INSERT INTO group_members (group_id, user_id, role, language) VALUES (?, ?, ?, ?)").run("group-1", "guest-b", "participant", "fr");
+  db.prepare("INSERT INTO group_members (group_id, user_id, role, language) VALUES (?, ?, ?, ?)").run("group-1", "guest-c", "participant", "es");
   db.prepare("INSERT INTO group_candidates (group_id, candidate_id, name, restaurant, neighborhood, distance_km, price, image, score, eligible, explanation) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run("group-1", "oca-agnolotti", "Brown butter agnolotti", "Oca Pastificio", "Mount Pleasant", 0.8, "$24", "https://example.com/dish.jpg", 94, 1, "Within every constraint");
   db.prepare("INSERT INTO group_votes (group_id, user_id, candidate_id) VALUES (?, ?, ?)").run("group-1", "guest-1", "oca-agnolotti");
+  db.prepare("INSERT INTO group_votes (group_id, user_id, candidate_id) VALUES (?, ?, ?)").run("group-1", "guest-b", "oca-agnolotti");
+  db.prepare("INSERT INTO group_votes (group_id, user_id, candidate_id) VALUES (?, ?, ?)").run("group-1", "guest-c", "oca-agnolotti");
   db.prepare("INSERT INTO group_rsvps (group_id, user_id, status) VALUES (?, ?, ?)").run("group-1", "guest-1", "yes");
+  db.prepare("INSERT INTO group_rsvps (group_id, user_id, status) VALUES (?, ?, ?)").run("group-1", "guest-b", "maybe");
+  db.prepare("INSERT INTO group_rsvps (group_id, user_id, status) VALUES (?, ?, ?)").run("group-1", "guest-c", "no");
 
   const saved = db.prepare("SELECT dish_id FROM saves WHERE user_id = ?").get("guest-1");
   db.prepare("UPDATE preferences SET language = ?, theme = ?, measurement_system = ?, location_latitude = ?, location_longitude = ?, location_locality = ?, location_administrative_region = ?, location_country_code = ?, location_time_zone = ?, location_currency_code = ?, location_locale = ? WHERE user_id = ?").run("en-GB", "dark", "imperial", 51.51, -0.13, "London", "England", "GB", "Europe/London", "GBP", "en-GB", "guest-1");
@@ -44,6 +57,12 @@ test("D1 migration creates guest identity and durable save tables", async () => 
   assert.throws(() => db.prepare("INSERT INTO restaurants (id, provider, provider_place_id, name, latitude, longitude, locality, administrative_region, country_code, address, currency_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run("restaurant-2", "google", "ChIJRestaurant123", "Duplicate", 45.5, -73.57, "Montréal", "QC", "CA", "Other", "CAD"));
   assert.equal(db.prepare("SELECT candidate_id FROM group_votes WHERE group_id = ?").get("group-1").candidate_id, "oca-agnolotti");
   assert.equal(db.prepare("SELECT status FROM group_rsvps WHERE group_id = ?").get("group-1").status, "yes");
+  assert.equal(db.prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?").get("group-1", "guest-1").role, "owner");
+  assert.equal(db.prepare("SELECT count(*) AS count FROM group_members WHERE group_id = ?").get("group-1").count, 3);
+  assert.equal(db.prepare("SELECT count(*) AS count FROM group_votes WHERE group_id = ?").get("group-1").count, 3);
+  assert.deepEqual({ ...db.prepare("SELECT role, language FROM group_members WHERE group_id = ? AND user_id = ?").get("legacy-group", "legacy-owner") }, { role: "owner", language: "en-CA" });
+  assert.match(db.prepare("SELECT invite_expires_at FROM groups WHERE id = ?").get("legacy-group").invite_expires_at, /^2026-07-25T12:00:00\.000Z$/);
+  assert.deepEqual(db.prepare("SELECT user_id, status FROM group_rsvps WHERE group_id = ? ORDER BY user_id").all("group-1").map((row) => ({ ...row })), [{ user_id: "guest-1", status: "yes" }, { user_id: "guest-b", status: "maybe" }, { user_id: "guest-c", status: "no" }]);
   assert.throws(() => db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("guest-2", "guest", "Other guest", "hash-1"));
   db.close();
 });

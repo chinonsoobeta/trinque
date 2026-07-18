@@ -23,9 +23,21 @@ type MatchTiers = { confirmedNearbyDishes: MatchResult[]; communityOrInferredDis
 type PublishRestaurant = { provider: "google" | "community"; providerPlaceId?: string | null; name: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: NormalizedLocation["countryCode"]; address: string; currencyCode: string };
 type PublicationMetadata = { restaurant: PublishRestaurant; knowledge: { priceKnowledge: "unknown" | "exact" | "approximate"; priceAmount?: number; availabilityKnowledge: "unknown" | "recently_confirmed" | "historical"; lastConfirmedAt?: string }; reviewConfirmed: true; restaurantConfirmed: true };
 type PublishedDish = Analysis & { id: string; sourceMode: "live" | "demo"; imageUrl?: string | null; localPreview?: string; provenance?: string; verificationStatus?: string; availabilityKnowledge?: string; restaurant?: { name: string } | null };
-type GroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; explanation: string; conflicts: string[] };
-type GroupSnapshot = { id: string; name: string; eventTime: string; neighborhood: string; budgetMax: number; maxDistanceKm: number; vegetarianRequired: number; allergies: string[]; inviteCode: string; status: "voting" | "finalized"; selectedCandidateId: string | null; candidates: GroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number> };
+type GroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; explanation: string; conflicts: string[]; kind: "published_dish" | "provider_restaurant" | "seed_demo"; provenance?: string | null; verificationStatus?: string | null; currentAvailabilityConfirmed: boolean; dietaryCaveat: string };
+type GroupSnapshot = { id: string; name: string; eventTime: string; neighborhood: string; budgetMax: number; maxDistanceKm: number; vegetarianRequired: number; allergies: string[]; inviteCode: string; inviteExpiresAt: string | null; inviteRevokedAt: string | null; status: "voting" | "finalized"; selectedCandidateId: string | null; candidates: GroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number>; memberCount: number; viewerRole: "owner" | "participant"; viewerVote: string | null; viewerRsvp: string | null; timeZone: string | null; currencyCode: string | null; locale: string | null; locality: string | null; countryCode: string | null };
 type Translator = (key: MessageKey, values?: Record<string, string | number>) => string;
+
+function groupConflictLabel(t: Translator, conflict: string): string {
+  const [code, detail = ""] = conflict.split(":", 2);
+  const keys: Record<string, MessageKey> = { price_unknown: "group.conflict.priceUnknown", over_budget: "group.conflict.overBudget", beyond_distance: "group.conflict.beyondDistance", vegetarian_unknown: "group.conflict.vegetarianUnknown", vegetarian_unsupported: "group.conflict.vegetarianUnsupported", allergen_unknown: "group.conflict.allergenUnknown", allergen_conflict: "group.conflict.allergenConflict" };
+  return keys[code] ? t(keys[code], { allergen: detail }) : conflict;
+}
+
+function groupCandidateCopy(t: Translator, candidate: GroupCandidate) {
+  const explanation = candidate.explanation === "eligible" ? t("group.fitEligible") : candidate.explanation === "ineligible" ? `${t("group.fitIneligible")} ${candidate.conflicts.map((conflict) => groupConflictLabel(t, conflict)).join("; ")}` : candidate.explanation;
+  const dietaryCaveat = candidate.dietaryCaveat === "provider_information_unconfirmed" ? t("group.providerCaveat") : candidate.dietaryCaveat;
+  return { explanation, dietaryCaveat };
+}
 
 const dishes: Dish[] = [
   { id: 1, name: "Brown butter agnolotti", restaurant: "Bar Susu", area: "Mount Pleasant", distance: "0.8 km", price: "$24", image: "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=1400&q=86", match: 96, note: "Silky, nutty, bright with lemon", tags: ["Pasta", "Vegetarian"], likes: 284 },
@@ -86,6 +98,13 @@ export default function Home() {
         try { setLocation(normalizeLocation(JSON.parse(savedLocation) as NormalizedLocation, restoredLanguage)); }
         catch { window.localStorage.removeItem("trinque.location"); }
       }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (new URLSearchParams(window.location.search).has("join")) setView("groups");
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -161,10 +180,10 @@ export default function Home() {
     }
   }
 
-  function flash(text: string) {
+  const flash = useCallback((text: string) => {
     setToast(text);
     window.setTimeout(() => setToast(""), 2200);
-  }
+  }, []);
   function toggleSaved(id: number) {
     const shouldSave = !saved.has(id);
     setSaved((current) => {
@@ -472,27 +491,42 @@ function SettingsPanel({ t, language, theme, measurementSystem, location, close,
 function GroupPlanner({ guestToken, flash, t, location, language }: { guestToken: string | null; flash: (text: string) => void; t: Translator; location: NormalizedLocation | null; language: UiLanguage }) {
   const [group, setGroup] = useState<GroupSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
+  const [placesUnavailable, setPlacesUnavailable] = useState(false);
   const [budgetMax, setBudgetMax] = useState("35");
   const [maxDistanceKm, setMaxDistanceKm] = useState("4");
   const [vegetarianRequired, setVegetarianRequired] = useState("1");
   const [allergies, setAllergies] = useState("sesame");
+  const joinAttempted = useRef(false);
+
+  useEffect(() => {
+    void fetch("/api/health").then(async (response) => {
+      const health = await response.json() as { capabilities?: { places?: { status?: string } } };
+      setPlacesUnavailable(health.capabilities?.places?.status !== "available");
+    }).catch(() => setPlacesUnavailable(true));
+  }, []);
 
   useEffect(() => {
     if (!guestToken) return;
-    void fetch("/api/groups", { headers: { Authorization: `Guest ${guestToken}` } }).then(async (response) => {
-      if (response.ok) setGroup(((await response.json()) as { group: GroupSnapshot | null }).group);
-    });
-  }, [guestToken]);
+    const inviteCode = new URLSearchParams(window.location.search).get("join");
+    if (inviteCode && !joinAttempted.current) {
+      joinAttempted.current = true;
+      void fetch("/api/groups/join", { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ inviteCode, language }) }).then(async (response) => { if (!response.ok) { flash(t("group.inviteInvalid")); return; } setGroup(((await response.json()) as { group: GroupSnapshot }).group); window.history.replaceState({}, "", window.location.pathname); flash(t("group.joined")); });
+      return;
+    }
+    void fetch("/api/groups", { headers: { Authorization: `Guest ${guestToken}` } }).then(async (response) => { if (response.ok) setGroup(((await response.json()) as { group: GroupSnapshot | null }).group); });
+  }, [flash, guestToken, language, t]);
 
   async function createGroup() {
     if (!guestToken) { flash("Guest session is still connecting"); return; }
     if (!location) { flash(t("location.change")); return; }
     setBusy(true);
     try {
-      const eventTime = new Date(Date.now() + 24 * 60 * 60 * 1000); eventTime.setHours(19, 30, 0, 0);
-      const response = await fetch("/api/groups", { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ name: t("group.name"), eventTime: eventTime.toISOString(), neighborhood: location.locality, budgetMax: Number(budgetMax), maxDistanceKm: Number(maxDistanceKm), vegetarianRequired: Number(vegetarianRequired), allergies: allergies.split(",") }) });
+      const eventDateParts = new Intl.DateTimeFormat("en-CA", { timeZone: location.timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date(Date.now() + 24 * 60 * 60 * 1000));
+      const eventLocalDate = ["year", "month", "day"].map((type) => eventDateParts.find((part) => part.type === type)?.value).join("-");
+      const response = await fetch("/api/groups", { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ name: t("group.name"), eventLocalDate, eventLocalTime: "19:30", location, language, budgetMax: Number(budgetMax), maxDistanceKm: Number(maxDistanceKm), vegetarianRequired: Number(vegetarianRequired), allergies: allergies.split(",") }) });
       if (!response.ok) throw new Error();
-      setGroup(((await response.json()) as { group: GroupSnapshot }).group); flash(t("group.rank"));
+      const payload = await response.json() as { group: GroupSnapshot; providerStatus?: { status: "live" | "unavailable" } };
+      setGroup(payload.group); setPlacesUnavailable(payload.providerStatus?.status === "unavailable"); flash(t("group.rank"));
     } catch { flash(t("error.generic")); } finally { setBusy(false); }
   }
 
@@ -517,12 +551,13 @@ function GroupPlanner({ guestToken, flash, t, location, language }: { guestToken
   if (!group) return <section className="group-page"><div className="group-intro"><div className="eyebrow"><span>♢</span> {t("group.eyebrow")}</div><h1>{t("group.createTitle")}</h1><p>{t("group.createBody")}</p></div><div className="group-starter"><span className="kicker">{t("group.start")}</span><h2>{t("group.name")}</h2><div className="planner-form"><label>{t("group.budget")}<input value={budgetMax} onChange={(event) => setBudgetMax(event.target.value)} inputMode="numeric" /></label><label>{t("group.radius")}<input value={maxDistanceKm} onChange={(event) => setMaxDistanceKm(event.target.value)} inputMode="numeric" /></label><label>{t("group.vegetarian")}<input value={vegetarianRequired} onChange={(event) => setVegetarianRequired(event.target.value)} inputMode="numeric" /></label><label>{t("group.allergies")}<input value={allergies} onChange={(event) => setAllergies(event.target.value)} placeholder="sesame, peanuts" /></label></div>{!location && <p className="location-status warning">{t("location.change")}</p>}<button className="primary full" disabled={busy || !guestToken || !location} onClick={createGroup}>{guestToken ? busy ? t("group.building") : `${t("group.rank")} →` : t("auth.connecting")}</button></div></section>;
 
   const winner = group.candidates.find((candidate) => candidate.candidateId === group.selectedCandidateId);
+  const winnerCopy = winner ? groupCandidateCopy(t, winner) : null;
   return <section className="group-page">
-    <div className="group-intro"><div className="eyebrow"><span>♢</span> {t("group.eyebrow")}</div><h1>{group.status === "finalized" ? t("group.finalTitle") : t("group.voteTitle")}</h1><p>{t("group.constraints")}</p><div className="members">{["YOU", "+3"].map((name, index) => <span key={name} style={{ background: colors[index] }}>{name}</span>)}</div></div>
-    <div className="planner"><aside className="constraints"><span className="kicker">{new Intl.DateTimeFormat(language, { weekday: "short", hour: "numeric", minute: "2-digit", timeZone: location?.timeZone }).format(new Date(group.eventTime))}</span><h2>{group.name}</h2>{[["◎", group.neighborhood, group.maxDistanceKm.toString()], ["$", new Intl.NumberFormat(location?.locale ?? language, { style: "currency", currency: location?.currencyCode ?? "CAD", maximumFractionDigits: 0 }).format(group.budgetMax), t("group.budget")], ["!", group.allergies.join(", ") || "—", t("group.allergies")], ["♧", group.vegetarianRequired.toString(), t("group.vegetarian")]].map(([icon, title, note], index) => <div className={index === 2 && group.allergies.length ? "constraint warning" : "constraint"} key={`${icon}-${title}`}><span>{icon}</span><div><b>{title}</b><small>{note}</small></div></div>)}<button className="secondary full" onClick={() => { void navigator.clipboard?.writeText(`${window.location.origin}/?join=${group.inviteCode}`); flash(t("group.inviteCopied")); }}>{t("group.copyInvite")}</button></aside>
+    <div className="group-intro"><div className="eyebrow"><span>♢</span> {t("group.eyebrow")}</div><h1>{group.status === "finalized" ? t("group.finalTitle") : t("group.voteTitle")}</h1><p>{t("group.constraints")}</p>{placesUnavailable && <p className="location-status warning">{t("match.providerUnavailable")}</p>}<div className="members"><span style={{ background: colors[0] }}>{t("group.memberCount", { count: group.memberCount })}</span></div></div>
+    <div className="planner"><aside className="constraints"><span className="kicker">{new Intl.DateTimeFormat(language, { weekday: "short", hour: "numeric", minute: "2-digit", timeZone: group.timeZone ?? "UTC" }).format(new Date(group.eventTime))}</span><h2>{group.name}</h2>{[["◎", group.locality ?? group.neighborhood, group.maxDistanceKm.toString()], ["$", new Intl.NumberFormat(group.locale ?? language, { style: "currency", currency: group.currencyCode ?? "CAD", maximumFractionDigits: 0 }).format(group.budgetMax), t("group.budget")], ["!", group.allergies.join(", ") || "—", t("group.allergies")], ["♧", group.vegetarianRequired.toString(), t("group.vegetarian")]].map(([icon, title, note], index) => <div className={index === 2 && group.allergies.length ? "constraint warning" : "constraint"} key={`${icon}-${title}`}><span>{icon}</span><div><b>{title}</b><small>{note}</small></div></div>)}{group.viewerRole === "owner" && !group.inviteRevokedAt && <><button className="secondary full" onClick={() => { void navigator.clipboard?.writeText(`${window.location.origin}/?join=${group.inviteCode}`); flash(t("group.inviteCopied")); }}>{t("group.copyInvite")}</button><button className="text-button full" onClick={() => void groupAction("invite/revoke")}>{t("group.revokeInvite")}</button></>}</aside>
       <div className="shortlist"><div className="section-heading"><div><span className="kicker">{t("group.ranking")}</span><h2>{group.status === "voting" ? t("group.bestFits") : t("group.finalPlan")}</h2></div><span className="live">● D1</span></div>
-        {group.candidates.slice(0, 5).map((candidate, index) => <article className={`${candidate.eligible && index === 0 ? "vote-card winner" : "vote-card"} ${candidate.eligible ? "" : "ineligible"}`} key={candidate.candidateId}><div className="vote-image" style={{ backgroundImage: `url(${candidate.image})` }}><span>{candidate.eligible ? `#${index + 1}` : "!"}</span></div><div className="vote-copy"><div><span>{candidate.eligible ? t("group.groupFit", { score: candidate.score }) : t("group.hardConflict")}</span><h3>{candidate.restaurant}</h3><p>{candidate.name} · {candidate.price} · {candidate.distanceKm} km</p><small>{candidate.explanation}</small></div><button disabled={busy || !candidate.eligible || group.status === "finalized"} onClick={() => void groupAction("vote", { candidateId: candidate.candidateId })}>▲ <b>{group.votes[candidate.candidateId] ?? 0}</b></button></div></article>)}
-        {group.status === "voting" ? <button className="primary plan-button" disabled={busy} onClick={() => void groupAction("finalize")}>{t("group.lock")} →</button> : winner ? <div className="final-plan"><span>✦ {t("group.bestTable")}</span><h3>{winner.restaurant}</h3><p>{winner.name} · {new Intl.DateTimeFormat(language, { hour: "numeric", minute: "2-digit", timeZone: location?.timeZone }).format(new Date(group.eventTime))}. {winner.explanation}</p><div><button className="primary" onClick={() => void groupAction("rsvp", { status: "yes" })}>{t("group.rsvpYes")} · {group.rsvps.yes ?? 0}</button><button className="secondary" onClick={() => void downloadCalendar()}>{t("group.calendar")}</button></div></div> : null}
+        {group.candidates.length === 0 && <p className="empty-tier">{t("group.noLiveCandidates")}</p>}{group.candidates.slice(0, 5).map((candidate, index) => { const copy = groupCandidateCopy(t, candidate); return <article className={`${candidate.eligible && index === 0 ? "vote-card winner" : "vote-card"} ${candidate.eligible ? "" : "ineligible"}`} key={candidate.candidateId}><div className="vote-image" style={candidate.image ? { backgroundImage: `url(${candidate.image})` } : undefined}><span>{candidate.eligible ? `#${index + 1}` : "!"}</span></div><div className="vote-copy"><div><span>{candidate.eligible ? t("group.groupFit", { score: candidate.score }) : t("group.hardConflict")}</span><h3>{candidate.restaurant}</h3><p>{candidate.name} · {candidate.price} · {candidate.distanceKm.toFixed(1)} km</p><small>{copy.explanation}</small><small>{candidate.kind === "provider_restaurant" ? t("match.restaurantReason") : `${candidate.provenance ?? ""} · ${candidate.verificationStatus ?? ""}`} · {candidate.currentAvailabilityConfirmed ? t("availability.confirmed") : t("availability.unknown")}</small><small>{copy.dietaryCaveat}</small></div><button disabled={busy || !candidate.eligible || group.status === "finalized"} onClick={() => void groupAction("vote", { candidateId: candidate.candidateId })}>▲ <b>{group.votes[candidate.candidateId] ?? 0}</b></button></div></article>; })}
+        {group.status === "voting" && group.viewerRole === "owner" ? <button className="primary plan-button" disabled={busy} onClick={() => void groupAction("finalize")}>{t("group.lock")} →</button> : group.status === "voting" ? <p className="privacy-note">{t("group.ownerFinalizes")}</p> : winner && winnerCopy ? <div className="final-plan"><span>✦ {t("group.bestTable")}</span><h3>{winner.restaurant}</h3><p>{winner.name} · {new Intl.DateTimeFormat(language, { hour: "numeric", minute: "2-digit", timeZone: group.timeZone ?? "UTC" }).format(new Date(group.eventTime))}. {winnerCopy.explanation}</p><div><button className="primary" onClick={() => void groupAction("rsvp", { status: "yes" })}>{t("group.rsvpYes")} · {group.rsvps.yes ?? 0}</button><button className="secondary" onClick={() => void downloadCalendar()}>{t("group.calendar")}</button></div></div> : null}
       </div>
     </div>
   </section>;

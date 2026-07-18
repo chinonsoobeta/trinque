@@ -110,10 +110,30 @@ export const groups = sqliteTable("groups", {
   vegetarianRequired: integer("vegetarian_required").notNull().default(0),
   allergies: text("allergies").notNull().default("[]"),
   inviteCode: text("invite_code").notNull(),
+  inviteExpiresAt: text("invite_expires_at"),
+  inviteRevokedAt: text("invite_revoked_at"),
+  latitude: real("latitude"),
+  longitude: real("longitude"),
+  locality: text("locality"),
+  administrativeRegion: text("administrative_region"),
+  countryCode: text("country_code", { enum: ["US", "CA", "MX", "GB", "FR"] }),
+  currencyCode: text("currency_code", { enum: ["USD", "CAD", "MXN", "GBP", "EUR"] }),
+  timeZone: text("time_zone"),
+  locale: text("locale"),
+  displayLanguage: text("display_language", { enum: ["en-CA", "en-US", "en-GB", "fr", "es"] }).notNull().default("en-CA"),
   status: text("status", { enum: ["voting", "finalized"] }).notNull().default("voting"),
   selectedCandidateId: text("selected_candidate_id"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [uniqueIndex("groups_invite_code_unique").on(table.inviteCode)]);
+
+export const groupMembers = sqliteTable("group_members", {
+  groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: text("role", { enum: ["owner", "participant"] }).notNull(),
+  language: text("language", { enum: ["en-CA", "en-US", "en-GB", "fr", "es"] }).notNull().default("en-CA"),
+  joinedAt: text("joined_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [primaryKey({ columns: [table.groupId, table.userId] }), index("group_members_user_idx").on(table.userId, table.joinedAt)]);
 
 export const groupCandidates = sqliteTable("group_candidates", {
   groupId: text("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
@@ -128,6 +148,15 @@ export const groupCandidates = sqliteTable("group_candidates", {
   eligible: integer("eligible", { mode: "boolean" }).notNull(),
   explanation: text("explanation").notNull(),
   conflicts: text("conflicts").notNull().default("[]"),
+  kind: text("kind", { enum: ["published_dish", "provider_restaurant", "seed_demo"] }).notNull().default("seed_demo"),
+  restaurantId: text("restaurant_id").references(() => restaurants.id, { onDelete: "set null" }),
+  providerPlaceId: text("provider_place_id"),
+  priceAmount: real("price_amount"),
+  currencyCode: text("currency_code", { enum: ["USD", "CAD", "MXN", "GBP", "EUR"] }),
+  provenance: text("provenance"),
+  verificationStatus: text("verification_status"),
+  currentAvailabilityConfirmed: integer("current_availability_confirmed", { mode: "boolean" }).notNull().default(false),
+  dietaryCaveat: text("dietary_caveat").notNull().default("Dietary details are unknown; confirm directly."),
 }, (table) => [primaryKey({ columns: [table.groupId, table.candidateId] })]);
 
 export const groupVotes = sqliteTable("group_votes", {

@@ -1,7 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -125,6 +126,33 @@ export default function App() {
   const [analysisMode, setAnalysisMode] = useState<'live' | 'demo' | null>(null);
   const [analysisWarning, setAnalysisWarning] = useState('');
   const [analysisError, setAnalysisError] = useState('');
+  const [guestToken, setGuestToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!remoteApi) return;
+    let active = true;
+    async function restoreGuest() {
+      try {
+        const stored = await AsyncStorage.getItem('trinque.guestToken');
+        const sessionResponse = await fetch(`${remoteApi}/api/session`, { method: 'POST', headers: stored ? { Authorization: `Guest ${stored}` } : undefined });
+        if (!sessionResponse.ok) return;
+        const session = await sessionResponse.json() as { guestToken?: string };
+        const token = session.guestToken ?? stored;
+        if (!active || !token) return;
+        if (session.guestToken) await AsyncStorage.setItem('trinque.guestToken', session.guestToken);
+        setGuestToken(token);
+        const savesResponse = await fetch(`${remoteApi}/api/saves`, { headers: { Authorization: `Guest ${token}` } });
+        if (savesResponse.ok) {
+          const payload = await savesResponse.json() as { savedDishIds: number[] };
+          if (active) setSavedIds(payload.savedDishIds);
+        }
+      } catch {
+        // Keep the offline demo available; the next launch retries persistence.
+      }
+    }
+    void restoreGuest();
+    return () => { active = false; };
+  }, []);
 
   const savedDishes = useMemo(
     () => dishes.filter((dish) => savedIds.includes(dish.id)),
@@ -202,7 +230,11 @@ export default function App() {
   };
 
   const toggleSaved = (dishId: number) => {
-    setSavedIds((current) => current.includes(dishId) ? current.filter((id) => id !== dishId) : [...current, dishId]);
+    const shouldSave = !savedIds.includes(dishId);
+    setSavedIds((current) => shouldSave ? [...current, dishId] : current.filter((id) => id !== dishId));
+    if (remoteApi && guestToken) {
+      void fetch(`${remoteApi}/api/saves`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ dishId, saved: shouldSave }) });
+    }
   };
 
   return (

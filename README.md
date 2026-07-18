@@ -34,6 +34,8 @@ The app includes a deterministic photo-analysis demo. To connect it to the web a
 
 Use your Mac's local network address instead of `localhost` when testing on a physical iPhone. The OpenAI API key stays only in the web/server environment and is never shipped in the mobile bundle.
 
+Guest sessions are created server-side and stored as an opaque token on the device. Profiles, preferences, and saved dishes are persisted in the platform D1 database; authenticated ChatGPT browser users are recognized from trusted hosting headers.
+
 To enable live photo analysis, copy .env.example to .env.local and add an OpenAI API key. Never commit the key.
 
 ## GPT-5.6 integration

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type Dish = {
   id: number; name: string; restaurant: string; area: string; distance: string;
@@ -42,20 +42,54 @@ export default function Home() {
   const [pendingImage, setPendingImage] = useState<string | undefined>();
   const [plan, setPlan] = useState(false);
   const [toast, setToast] = useState("");
+  const [guestToken, setGuestToken] = useState<string | null>(null);
+  const [identityLabel, setIdentityLabel] = useState("Guest");
   const fileRef = useRef<HTMLInputElement>(null);
   const visible = useMemo(() => view === "saved" ? dishes.filter((d) => saved.has(d.id)) : dishes, [saved, view]);
+
+  useEffect(() => {
+    let active = true;
+    async function restoreSession() {
+      try {
+        const storedToken = window.localStorage.getItem("trinque.guestToken");
+        const sessionResponse = await fetch("/api/session", { method: "POST", headers: storedToken ? { Authorization: `Guest ${storedToken}` } : undefined });
+        if (!sessionResponse.ok) return;
+        const session = await sessionResponse.json() as { identity: { displayName: string }; guestToken?: string };
+        const token = session.guestToken ?? storedToken;
+        if (!active) return;
+        if (session.guestToken) window.localStorage.setItem("trinque.guestToken", session.guestToken);
+        setGuestToken(token);
+        setIdentityLabel(session.identity.displayName);
+        const savesResponse = await fetch("/api/saves", { headers: token ? { Authorization: `Guest ${token}` } : undefined });
+        if (savesResponse.ok) {
+          const payload = await savesResponse.json() as { savedDishIds: number[] };
+          if (active) setSaved(new Set(payload.savedDishIds));
+        }
+      } catch {
+        // The visual demo remains usable while durable services recover.
+      }
+    }
+    void restoreSession();
+    return () => { active = false; };
+  }, []);
 
   function flash(text: string) {
     setToast(text);
     window.setTimeout(() => setToast(""), 2200);
   }
   function toggleSaved(id: number) {
+    const shouldSave = !saved.has(id);
     setSaved((current) => {
       const next = new Set(current);
       if (next.has(id)) { next.delete(id); flash("Removed from your saves"); }
       else { next.add(id); flash("Saved to your tasteboard"); }
       return next;
     });
+    if (guestToken) {
+      void fetch("/api/saves", { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ dishId: id, saved: shouldSave }) })
+        .then((response) => { if (!response.ok) flash("Save is local until Trinque reconnects"); })
+        .catch(() => flash("Save is local until Trinque reconnects"));
+    }
   }
   async function analyze(imageDataUrl?: string, demo = false) {
     setModal(true); setPhase("loading");
@@ -103,7 +137,7 @@ export default function Home() {
             </button>
           ))}
         </nav>
-        <div className="top-actions"><button aria-label="Search dishes">⌕</button><button aria-label="Open profile">CO</button></div>
+        <div className="top-actions"><button aria-label="Search dishes">⌕</button><button aria-label={`Profile: ${identityLabel}`}>{identityLabel === "Guest explorer" ? "GE" : identityLabel.slice(0, 2).toUpperCase()}</button></div>
       </header>
 
       <main>

@@ -20,6 +20,20 @@ Requirements: Node.js 22.13 or newer.
 
 Open http://localhost:3000.
 
+### iOS app
+
+The native Expo app lives in `ios/` so it can share this repository without changing the web deployment.
+
+    cd ios
+    npm install
+    npm run ios
+
+The app includes a deterministic photo-analysis demo. To connect it to the web app's server-side GPT analysis route, create `ios/.env.local` and set:
+
+    EXPO_PUBLIC_TRINQUE_API_URL=http://localhost:3000
+
+Use your Mac's local network address instead of `localhost` when testing on a physical iPhone. The OpenAI API key stays only in the web/server environment and is never shipped in the mobile bundle.
+
 To enable live photo analysis, copy .env.example to .env.local and add an OpenAI API key. Never commit the key.
 
 ## GPT-5.6 integration
@@ -37,4 +51,4 @@ Codex translated the product thesis into a working demo, shaped the PRD and tech
 
 ## Stack
 
-Next.js, React, TypeScript, OpenAI Responses API, GPT-5.6 Sol, Codex, and the Sites deployment runtime.
+Next.js, React, React Native, Expo, TypeScript, OpenAI Responses API, GPT-5.6 Sol, Codex, and the Sites deployment runtime.

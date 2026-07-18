@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Trinque",
+    "slug": "trinque-ios",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/trinque-icon.png",
+    "scheme": "trinque",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.chinonsoobeta.trinque",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Trinque uses your photos to identify dishes and suggest similar food nearby.",
+          "cameraPermission": "Trinque uses your camera to identify dishes and suggest similar food nearby.",
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

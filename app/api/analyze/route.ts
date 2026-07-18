@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { analyzeDishWithOpenAI, demoEnvelope, type AnalysisFailure } from "@/lib/dish-analysis";
+import { getRuntimeEnv, selectOpenAIKey } from "@/lib/runtime-env";
 
 export const runtime = "edge";
 
@@ -23,7 +24,8 @@ export async function POST(request: Request) {
       return json(failure(requestId, "invalid_image", "Choose a valid PNG, JPEG or WebP image under 5 MB."), 400);
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
+    const runtimeEnv = await getRuntimeEnv();
+    const apiKey = selectOpenAIKey(runtimeEnv.OPENAI_API_KEY, process.env.OPENAI_API_KEY);
     if (!apiKey) {
       return json(failure(requestId, "live_not_configured", "Live identification is not configured yet. You can still choose the clearly labeled demo."), 503);
     }

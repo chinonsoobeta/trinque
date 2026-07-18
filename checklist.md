@@ -30,4 +30,4 @@
 - [x] `npm run verify` gates the production web build, regression tests, iOS type-check, and iOS export.
 - [x] GitHub Actions enforces the same gate.
 - [x] `/api/health` safely reports capability availability.
-- [ ] Sites production secret `OPENAI_API_KEY` is configured (owner action; never commit it).
+- [x] Sites production secret `OPENAI_API_KEY` is configured outside source control.

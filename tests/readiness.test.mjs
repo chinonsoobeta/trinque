@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { capabilityStatus } from "../lib/readiness.ts";
+import { selectOpenAIKey } from "../lib/runtime-env.ts";
 
 test("readiness is only complete when all live capabilities are configured", () => {
   assert.deepEqual(capabilityStatus({ openAIKey: "secret", hasDatabase: true, hasUploads: true }), {
@@ -19,4 +20,10 @@ test("readiness exposes missing capabilities without exposing a key", () => {
   assert.equal(status.persistence, true);
   assert.equal(status.uploads, false);
   assert.equal(JSON.stringify(status).includes("secret"), false);
+});
+
+test("Sites Worker secrets take precedence while local Node env remains supported", () => {
+  assert.equal(selectOpenAIKey(" worker-secret ", "local-secret"), "worker-secret");
+  assert.equal(selectOpenAIKey(undefined, " local-secret "), "local-secret");
+  assert.equal(selectOpenAIKey("", ""), undefined);
 });

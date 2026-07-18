@@ -41,6 +41,24 @@ export const preferences = sqliteTable("preferences", {
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const userConsents = sqliteTable("user_consents", {
+  userId: text("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  locationConsent: integer("location_consent", { mode: "boolean" }).notNull().default(false),
+  analyticsConsent: integer("analytics_consent", { mode: "boolean" }).notNull().default(false),
+  imageRetentionConsent: integer("image_retention_consent", { mode: "boolean" }).notNull().default(false),
+  consentedAt: text("consented_at"),
+  withdrawnAt: text("withdrawn_at"),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const usageCounters = sqliteTable("usage_counters", {
+  action: text("action").notNull(),
+  scope: text("scope").notNull(),
+  windowStart: text("window_start").notNull(),
+  count: integer("count").notNull().default(0),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [primaryKey({ columns: [table.action, table.scope, table.windowStart] }), index("usage_counters_cleanup_idx").on(table.windowStart)]);
+
 export const restaurants = sqliteTable("restaurants", {
   id: text("id").primaryKey(),
   provider: text("provider", { enum: ["google", "community"] }).notNull(),

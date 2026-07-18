@@ -13,12 +13,12 @@ export async function GET() {
       hasUploads: Boolean(env.UPLOADS),
     });
     return Response.json({ ok: true, ...capabilities }, {
-      headers: { "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" },
+      headers: { "Cache-Control": "no-store" },
     });
   } catch {
     return Response.json({
       ok: false,
       ...capabilityStatus({ openAIKey: process.env.OPENAI_API_KEY, googlePlacesKey: process.env.GOOGLE_PLACES_API_KEY, hasDatabase: false, hasUploads: false }),
-    }, { status: 503, headers: { "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" } });
+    }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
 }

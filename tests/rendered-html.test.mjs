@@ -13,6 +13,7 @@ test("server-renders the Trinque experience", async () => {
   const app = await worker();
   const response = await app.fetch(new Request("http://localhost/", { headers: { accept: "text/html" } }), env, ctx);
   assert.equal(response.status, 200);
+  assert.match(response.headers.get("x-request-id"), /^[0-9a-f-]{36}$/);
   const html = await response.text();
   assert.match(html, /<title>Trinque — Good food finds good company<\/title>/i);
   assert.match(html, /Good food finds good company\./);
@@ -20,6 +21,27 @@ test("server-renders the Trinque experience", async () => {
   assert.match(html, /Worth gathering around/);
   assert.match(html, /GPT-5\.6/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/i);
+});
+
+test("worker CORS permits only same-origin or explicitly configured browser origins", async () => {
+  const app = await worker();
+  const sameOrigin = await app.fetch(new Request("http://localhost/api/health", {
+    method: "OPTIONS", headers: { origin: "http://localhost" },
+  }), env, ctx);
+  assert.equal(sameOrigin.status, 204);
+  assert.equal(sameOrigin.headers.get("access-control-allow-origin"), "http://localhost");
+
+  const rejected = await app.fetch(new Request("http://localhost/api/health", {
+    method: "OPTIONS", headers: { origin: "https://attacker.example" },
+  }), env, ctx);
+  assert.equal(rejected.status, 403);
+  assert.equal(rejected.headers.has("access-control-allow-origin"), false);
+
+  const configured = await app.fetch(new Request("http://localhost/api/health", {
+    method: "OPTIONS", headers: { origin: "https://ios-webview.trinque.example" },
+  }), { ...env, TRINQUE_ALLOWED_ORIGINS: "https://ios-webview.trinque.example" }, ctx);
+  assert.equal(configured.status, 204);
+  assert.equal(configured.headers.get("access-control-allow-origin"), "https://ios-webview.trinque.example");
 });
 
 test("returns deterministic analysis without credentials", async () => {

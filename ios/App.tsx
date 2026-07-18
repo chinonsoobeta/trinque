@@ -35,7 +35,7 @@ type MobileLocation = { latitude: number; longitude: number; locality: string; a
 type MobileLocationSuggestion = { id: string; provider: 'google'; providerPlaceId: string; label: string; secondaryLabel: string; attribution: 'Google Maps' };
 type MobileRestaurantPlace = { provider: 'google'; providerPlaceId: string; displayName: string; address: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: MobileLocation['countryCode']; currencyCode: string; attribution: 'Google Maps' };
 type PublishRestaurant = { provider: 'google' | 'community'; providerPlaceId?: string | null; name: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: MobileLocation['countryCode']; address: string; currencyCode: string };
-type PublicationMetadata = { restaurant: PublishRestaurant; knowledge: { priceKnowledge: 'unknown' | 'exact' | 'approximate'; priceAmount?: number; availabilityKnowledge: 'unknown' | 'recently_confirmed' | 'historical'; lastConfirmedAt?: string }; reviewConfirmed: true; restaurantConfirmed: true };
+type PublicationMetadata = { restaurant: PublishRestaurant; knowledge: { priceKnowledge: 'unknown' | 'exact' | 'approximate'; priceAmount?: number; availabilityKnowledge: 'unknown' | 'recently_confirmed' | 'historical'; lastConfirmedAt?: string }; retainImage: boolean; reviewConfirmed: true; restaurantConfirmed: true };
 
 type Analysis = {
   name: string;
@@ -268,6 +268,7 @@ export default function App() {
     ]);
     if (remoteApi && guestToken) {
       await fetch(`${remoteApi}/api/preferences`, { method: 'PUT', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ language: nextLanguage, theme: nextTheme, measurementSystem: nextMeasurement, location: nextLocation }) }).catch(() => undefined);
+      if (next.location !== undefined) await fetch(`${remoteApi}/api/privacy`, { method: 'PUT', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ locationConsent: Boolean(nextLocation) }) }).catch(() => undefined);
     }
   };
 
@@ -326,7 +327,7 @@ export default function App() {
       } else {
         const response = await fetch(`${remoteApi}/api/analyze`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(guestToken ? { Authorization: `Guest ${guestToken}` } : {}) },
           body: JSON.stringify({ imageDataUrl: dataUrl, demo, language }),
         });
         const envelope = (await response.json()) as AnalysisEnvelope;
@@ -387,7 +388,7 @@ export default function App() {
           {tab === 'Discover' && <DiscoverScreen savedIds={savedIds} onSave={toggleSaved} onAnalyze={openAnalyzer} t={t} location={location} />}
           {tab === 'Groups' && <GroupsScreen guestToken={guestToken} t={t} location={location} language={language} inviteCode={pendingInvite} inviteHandled={inviteHandled} />}
           {tab === 'Saved' && <SavedScreen dishes={savedDishes} onSave={toggleSaved} onDiscover={() => setTab('Discover')} t={t} />}
-          {tab === 'Profile' && <ProfileScreen t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} persist={persistPreferences} />}
+          {tab === 'Profile' && <ProfileScreen guestToken={guestToken} t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} persist={persistPreferences} />}
           <TabBar active={tab} onSelect={setTab} onAnalyze={openAnalyzer} t={t} />
         </View>
         <AnalyzerModal
@@ -420,6 +421,7 @@ export default function App() {
           measurementSystem={measurementSystem}
           location={location}
           apiBase={remoteApi}
+          guestToken={guestToken}
         />
       </SafeAreaView>
     </SafeAreaProvider>
@@ -601,16 +603,42 @@ function SavedScreen({ dishes: saved, onSave, onDiscover, t }: { dishes: Dish[];
   );
 }
 
-function ProfileScreen({ t, language, theme, measurementSystem, location, persist }: { t: Translator; language: UiLanguage; theme: ThemePreference; measurementSystem: MeasurementSystem; location: MobileLocation | null; persist: (next: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: MobileLocation | null }) => Promise<void> }) {
+function ProfileScreen({ guestToken, t, language, theme, measurementSystem, location, persist }: { guestToken: string | null; t: Translator; language: UiLanguage; theme: ThemePreference; measurementSystem: MeasurementSystem; location: MobileLocation | null; persist: (next: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: MobileLocation | null }) => Promise<void> }) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<MobileLocationSuggestion[]>([]);
   const [busy, setBusy] = useState(false);
+  const [consent, setConsent] = useState({ locationConsent: false, analyticsConsent: false, imageRetentionConsent: false });
+
+  useEffect(() => {
+    if (!remoteApi || !guestToken) return;
+    void fetch(`${remoteApi}/api/privacy`, { headers: { Authorization: `Guest ${guestToken}` } }).then(async (response) => { if (response.ok) setConsent((await response.json() as { consent: typeof consent }).consent); });
+  }, [guestToken]);
+
+  const saveConsent = async (next = consent) => {
+    if (!remoteApi || !guestToken) return;
+    const response = await fetch(`${remoteApi}/api/privacy`, { method: 'PUT', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(next) });
+    if (!response.ok) { Alert.alert(t('error.generic')); return; }
+    setConsent((await response.json() as { consent: typeof consent }).consent);
+    if (!next.locationConsent) await persist({ location: null });
+  };
+
+  const exportData = async () => {
+    if (!remoteApi || !guestToken) return;
+    const response = await fetch(`${remoteApi}/api/privacy/export`, { headers: { Authorization: `Guest ${guestToken}` } });
+    if (!response.ok) { Alert.alert(t('error.generic')); return; }
+    await Share.share({ title: t('privacy.export'), message: await response.text() });
+  };
+
+  const deleteData = () => {
+    if (!remoteApi || !guestToken) return;
+    Alert.alert(t('privacy.delete'), t('privacy.deleteConfirm'), [{ text: t('analysis.keepPrivate'), style: 'cancel' }, { text: t('privacy.delete'), style: 'destructive', onPress: () => { void fetch(`${remoteApi}/api/privacy`, { method: 'DELETE', headers: { Authorization: `Guest ${guestToken}` } }).then(async (response) => { if (!response.ok) { Alert.alert(t('error.generic')); return; } await AsyncStorage.multiRemove(['trinque.guestToken', 'trinque.location', 'trinque.language', 'trinque.theme', 'trinque.measurement']); Alert.alert(t('privacy.deleted')); }); } }]);
+  };
 
   const lookup = async (payload: { input?: string; latitude?: number; longitude?: number; providerPlaceId?: string }) => {
     if (!remoteApi) { Alert.alert(t('health.placesUnavailable'), t('location.unavailable')); return; }
     setBusy(true); setSuggestions([]);
     try {
-      const response = await fetch(`${remoteApi}/api/locations/autocomplete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, language, location }) });
+      const response = await fetch(`${remoteApi}/api/locations/autocomplete`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(guestToken ? { Authorization: `Guest ${guestToken}` } : {}) }, body: JSON.stringify({ ...payload, language, location }) });
       const body = await response.json() as { suggestions?: MobileLocationSuggestion[]; location?: MobileLocation; error?: { code?: string } };
       if (!response.ok) {
         const message = body.error?.code === 'unsupported_country' ? t('location.unsupported') : body.error?.code === 'credentials' ? t('location.unavailable') : t('location.providerError');
@@ -660,6 +688,7 @@ function ProfileScreen({ t, language, theme, measurementSystem, location, persis
         {suggestions.length > 0 ? <Text accessibilityLabel="Google Maps" style={styles.googleAttribution}>Google Maps</Text> : null}
         <Text style={styles.privacyText}>{t('location.privacy')}</Text>
       </View>
+      <View style={styles.preferenceCard}><Text style={styles.preferenceKicker}>{t('privacy.title').toUpperCase()}</Text><Text style={styles.privacyText}>{t('privacy.location')}</Text>{([['locationConsent', 'privacy.locationConsent'], ['analyticsConsent', 'privacy.analyticsConsent'], ['imageRetentionConsent', 'privacy.imageConsent']] as const).map(([field, key]) => <Toggle key={field} selected={consent[field]} label={t(key)} onPress={() => setConsent((current) => ({ ...current, [field]: !current[field] }))} />)}<Pressable style={styles.secondaryButton} onPress={() => void saveConsent()}><Text style={styles.secondaryButtonText}>{t('privacy.saveConsent')}</Text></Pressable><Pressable style={styles.secondaryButton} onPress={() => { const withdrawn = { locationConsent: false, analyticsConsent: false, imageRetentionConsent: false }; setConsent(withdrawn); void saveConsent(withdrawn); }}><Text style={styles.secondaryButtonText}>{t('privacy.withdraw')}</Text></Pressable><Pressable style={styles.secondaryButton} onPress={() => void exportData()}><Text style={styles.secondaryButtonText}>{t('privacy.export')}</Text></Pressable><Pressable style={styles.secondaryButton} onPress={deleteData}><Text style={styles.secondaryButtonText}>{t('privacy.delete')}</Text></Pressable></View>
       <View style={styles.safetyCard}><Text style={styles.safetyIcon}>i</Text><View style={styles.safetyCopy}><Text style={styles.safetyTitle}>{t('privacy.title')}</Text><Text style={styles.safetyBody}>{t('analysis.warning')}</Text></View></View>
     </ScrollView>
   );
@@ -706,7 +735,7 @@ function TabButton({ tab, icon, active, onPress, t }: { tab: Tab; icon: string; 
   return <Pressable style={styles.tabButton} onPress={onPress}><Text style={[styles.tabIcon, active && styles.tabActive]}>{icon}</Text><Text style={[styles.tabLabel, active && styles.tabActive]}>{t(key)}</Text></Pressable>;
 }
 
-function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analysisMode, warning, error, matches, matchProviderUnavailable, matchRecordsUnavailable, publishing, onAnalysisChange, onChoose, onDemo, onRetry, onPublish, onClose, onReset, t, language, measurementSystem, location, apiBase }: {
+function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analysisMode, warning, error, matches, matchProviderUnavailable, matchRecordsUnavailable, publishing, onAnalysisChange, onChoose, onDemo, onRetry, onPublish, onClose, onReset, t, language, measurementSystem, location, apiBase, guestToken }: {
   visible: boolean;
   phase: AnalyzerPhase;
   preview: string | null;
@@ -731,6 +760,7 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
   measurementSystem: MeasurementSystem;
   location: MobileLocation | null;
   apiBase: string | null | undefined;
+  guestToken: string | null;
 }) {
   const [restaurants, setRestaurants] = useState<MobileRestaurantPlace[]>([]);
   const [selectedRestaurant, setSelectedRestaurant] = useState<PublishRestaurant | null>(null);
@@ -743,13 +773,14 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
   const [lastConfirmedAt, setLastConfirmedAt] = useState('');
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [restaurantConfirmed, setRestaurantConfirmed] = useState(false);
+  const [retainImage, setRetainImage] = useState(false);
 
   async function findRestaurants() {
     if (!location) { setRestaurantStatus(t('publish.noLocation')); return; }
     if (!apiBase) { setRestaurantStatus(t('publish.providerUnavailable')); return; }
     setRestaurantStatus('');
     try {
-      const response = await fetch(`${apiBase}/api/restaurants/nearby?latitude=${location.latitude}&longitude=${location.longitude}&radiusMeters=5000&language=${language}`);
+      const response = await fetch(`${apiBase}/api/restaurants/nearby?latitude=${location.latitude}&longitude=${location.longitude}&radiusMeters=5000&language=${language}`, { headers: guestToken ? { Authorization: `Guest ${guestToken}` } : undefined });
       const body = await response.json() as { restaurants?: MobileRestaurantPlace[]; error?: { code?: string } };
       if (!response.ok) { setRestaurantStatus(body.error?.code === 'credentials' ? t('publish.providerUnavailable') : t('location.providerError')); return; }
       setRestaurants(body.restaurants ?? []);
@@ -770,7 +801,7 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
   const ready = Boolean(selectedRestaurant && priceKnowledge && availabilityKnowledge && (priceKnowledge === 'unknown' || Number(priceAmount) > 0) && (availabilityKnowledge !== 'historical' || lastConfirmedAt) && reviewConfirmed && restaurantConfirmed);
   function publishReviewed() {
     if (!ready || !selectedRestaurant || !priceKnowledge || !availabilityKnowledge) { setRestaurantStatus(t('publish.requirements')); return; }
-    onPublish({ restaurant: selectedRestaurant, knowledge: { priceKnowledge, priceAmount: priceKnowledge === 'unknown' ? undefined : Number(priceAmount), availabilityKnowledge, lastConfirmedAt: availabilityKnowledge === 'historical' ? lastConfirmedAt : undefined }, reviewConfirmed: true, restaurantConfirmed: true });
+    onPublish({ restaurant: selectedRestaurant, knowledge: { priceKnowledge, priceAmount: priceKnowledge === 'unknown' ? undefined : Number(priceAmount), availabilityKnowledge, lastConfirmedAt: availabilityKnowledge === 'historical' ? lastConfirmedAt : undefined }, retainImage, reviewConfirmed: true, restaurantConfirmed: true });
   }
   function editAnalysis(field: 'name' | 'cuisine' | 'ingredients' | 'dietary' | 'description', value: string) {
     onAnalysisChange({ ...analysis, [field]: value, canonical: { ...analysis.canonical, ...(field === 'name' ? { dishName: value.trim().toLowerCase() } : {}), ...(field === 'cuisine' ? { cuisine: value.trim().toLowerCase() } : {}), ...(field === 'ingredients' ? { ingredients: value.split(',').map((item) => item.trim().toLowerCase()).filter(Boolean) } : {}), metadataSource: 'user_reviewed' } });
@@ -830,6 +861,7 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
                 <Text style={styles.fieldLabel}>{t('publish.availabilityKnowledge')}</Text><View style={styles.choiceRow}>{(['unknown', 'recently_confirmed', 'historical'] as const).map((value) => <Choice key={value} selected={availabilityKnowledge === value} label={t(value === 'unknown' ? 'publish.availabilityUnknown' : value === 'recently_confirmed' ? 'publish.availabilityRecent' : 'publish.availabilityHistorical')} onPress={() => setAvailabilityKnowledge(value)} />)}</View>
                 {availabilityKnowledge === 'historical' ? <Field label={t('publish.lastSeen')} value={lastConfirmedAt} onChangeText={setLastConfirmedAt} /> : null}
                 <Text style={styles.provenancePreview}>{t('publish.provenancePreview', { provenance: t(analysisMode === 'demo' ? 'provenance.seed_demo' : 'provenance.ai_identified'), verification: t('verification.unverified'), availability: t(availabilityKnowledge === 'recently_confirmed' ? 'availability.confirmed' : 'availability.unknown') })}</Text>
+                <Toggle selected={retainImage} label={t('publish.retainImage')} onPress={() => setRetainImage((value) => !value)} /><Text style={styles.privacyText}>{t('privacy.imageRetentionDetails')}</Text>
                 <Toggle selected={reviewConfirmed} label={t('publish.reviewConfirm')} onPress={() => setReviewConfirmed((value) => !value)} /><Toggle selected={restaurantConfirmed} disabled={!selectedRestaurant} label={t('publish.restaurantConfirm')} onPress={() => setRestaurantConfirmed((value) => !value)} />
               </View>
               <Pressable disabled={publishing || !ready} style={({ pressed }) => [styles.primaryButton, styles.publishButton, pressed && styles.pressed, (publishing || !ready) && styles.disabledButton]} onPress={publishReviewed}><Text style={styles.primaryButtonText}>{publishing ? t('analysis.publishing') : t('analysis.publish')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable>

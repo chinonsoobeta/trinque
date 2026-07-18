@@ -9,7 +9,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ key
   if (!object) return new Response("Not found", { status: 404 });
   const headers = new Headers();
   object.writeHttpMetadata(headers);
-  headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  headers.set("Cache-Control", "private, no-store");
   headers.set("ETag", object.httpEtag);
   return new Response(object.body, { headers });
 }

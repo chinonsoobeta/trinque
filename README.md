@@ -40,6 +40,8 @@ To enable live photo analysis, copy .env.example to .env.local and add an OpenAI
 
 For production, add `OPENAI_API_KEY` and `GOOGLE_PLACES_API_KEY` as secrets in the Sites environment. The public client never receives them. `GET /api/health` reports OpenAI, Places, D1, and R2 independently without exposing secret values.
 
+Pilot operations also support `TRINQUE_ALLOWED_ORIGINS` plus per-action `TRINQUE_BUDGET_<ACTION>_USER_HOURLY` and `TRINQUE_BUDGET_<ACTION>_GLOBAL_HOURLY` settings for `ANALYSIS`, `PLACES`, `PUBLISH`, `INVITE_JOIN`, and `VOTE`. Defaults are safe and bounded; configure names only in source control and values only in server-side environment settings. See `docs/security-privacy-operations.md`.
+
 Regional behavior, UK English and the other supported languages, coarse location storage, provider attribution, and theme behavior are documented in [docs/location-foundation.md](docs/location-foundation.md).
 
 The server-side restaurant adapter, normalized route contracts, field masks, photo attribution, cache policy, and provider error behavior are documented in [docs/places-provider.md](docs/places-provider.md).

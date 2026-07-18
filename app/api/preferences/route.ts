@@ -6,7 +6,7 @@ import { coarseLocation, normalizeLocation, type LocationCandidate } from "@/lib
 import { SUPPORTED_LANGUAGES, type SupportedLanguage, type ThemePreference } from "@/lib/regions";
 
 export const runtime = "edge";
-const headers = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Authorization, Content-Type", "Access-Control-Allow-Methods": "GET, PUT, OPTIONS" };
+const headers = { "Access-Control-Allow-Headers": "Authorization, Content-Type", "Access-Control-Allow-Methods": "GET, PUT, OPTIONS" };
 
 export function OPTIONS() { return new Response(null, { status: 204, headers }); }
 

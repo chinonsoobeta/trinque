@@ -21,7 +21,7 @@ type AnalysisEnvelope =
 type MatchResult = { kind: "dish" | "restaurant_alternative"; id: string; dishName: string | null; restaurantName: string; locality: string; distanceKm: number; score: number; reasonCode: "semantic_and_distance" | "nearby_alternative" | "restaurant_only"; provenance: string; verificationStatus: string; lastConfirmedAt: string | null; dietaryCaveat: string; currentAvailabilityConfirmed: boolean; priceAmount: number | null; currencyCode: string | null; imageUrl: string | null; attribution?: "Google Maps" };
 type MatchTiers = { confirmedNearbyDishes: MatchResult[]; communityOrInferredDishes: MatchResult[]; restaurantLevelAlternatives: MatchResult[] };
 type PublishRestaurant = { provider: "google" | "community"; providerPlaceId?: string | null; name: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: NormalizedLocation["countryCode"]; address: string; currencyCode: string };
-type PublicationMetadata = { restaurant: PublishRestaurant; knowledge: { priceKnowledge: "unknown" | "exact" | "approximate"; priceAmount?: number; availabilityKnowledge: "unknown" | "recently_confirmed" | "historical"; lastConfirmedAt?: string }; reviewConfirmed: true; restaurantConfirmed: true };
+type PublicationMetadata = { restaurant: PublishRestaurant; knowledge: { priceKnowledge: "unknown" | "exact" | "approximate"; priceAmount?: number; availabilityKnowledge: "unknown" | "recently_confirmed" | "historical"; lastConfirmedAt?: string }; retainImage: boolean; reviewConfirmed: true; restaurantConfirmed: true };
 type PublishedDish = Analysis & { id: string; sourceMode: "live" | "demo"; imageUrl?: string | null; localPreview?: string; provenance?: string; verificationStatus?: string; availabilityKnowledge?: string; restaurant?: { name: string } | null };
 type GroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; explanation: string; conflicts: string[]; kind: "published_dish" | "provider_restaurant" | "seed_demo"; provenance?: string | null; verificationStatus?: string | null; currentAvailabilityConfirmed: boolean; dietaryCaveat: string };
 type GroupSnapshot = { id: string; name: string; eventTime: string; neighborhood: string; budgetMax: number; maxDistanceKm: number; vegetarianRequired: number; allergies: string[]; inviteCode: string; inviteExpiresAt: string | null; inviteRevokedAt: string | null; status: "voting" | "finalized"; selectedCandidateId: string | null; candidates: GroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number>; memberCount: number; viewerRole: "owner" | "participant"; viewerVote: string | null; viewerRsvp: string | null; timeZone: string | null; currencyCode: string | null; locale: string | null; locality: string | null; countryCode: string | null };
@@ -177,6 +177,7 @@ export default function Home() {
     else window.localStorage.removeItem("trinque.location");
     if (guestToken) {
       await fetch("/api/preferences", { method: "PUT", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ language: nextLanguage, theme: nextTheme, measurementSystem: nextMeasurement, location: nextLocation }) }).catch(() => undefined);
+      if (next.location !== undefined) await fetch("/api/privacy", { method: "PUT", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ locationConsent: Boolean(nextLocation) }) }).catch(() => undefined);
     }
   }
 
@@ -203,7 +204,7 @@ export default function Home() {
     setPendingImage(imageDataUrl); setAnalysisError(""); setAnalysisWarning(""); setAnalysisMode(null);
     try {
       const response = await fetch("/api/analyze", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json", ...(guestToken ? { Authorization: `Guest ${guestToken}` } : {}) },
         body: JSON.stringify({ imageDataUrl, demo, demoFixture: "pasta", language }),
       });
       const envelope = await response.json() as AnalysisEnvelope;
@@ -218,6 +219,12 @@ export default function Home() {
       setAnalysisError(t("analysis.networkError"));
       setPhase("error");
     }
+  }
+  async function deletePublishedDish(id: string, imageOnly = false) {
+    if (!guestToken || !window.confirm(imageOnly ? t("privacy.deleteImage") : t("privacy.deleteDish"))) return;
+    const response = await fetch(`/api/dishes/${id}${imageOnly ? "/image" : ""}`, { method: "DELETE", headers: { Authorization: `Guest ${guestToken}` } });
+    if (!response.ok) { flash(t("error.generic")); return; }
+    setPublishedDishes((current) => imageOnly ? current.map((dish) => dish.id === id ? { ...dish, imageUrl: null, localPreview: undefined } : dish) : current.filter((dish) => dish.id !== id));
   }
   function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]; if (!file) return;
@@ -299,7 +306,7 @@ export default function Home() {
               </div>
               {view !== "saved" && <p className="seeded-notice">{t("home.seededNotice")}</p>}
               {visible.length ? <div className="dish-grid">
-                {view === "discover" && publishedDishes.map((dish) => <PublishedDishCard key={dish.id} dish={dish} t={t} />)}
+                {view === "discover" && publishedDishes.map((dish) => <PublishedDishCard key={dish.id} dish={dish} t={t} onDelete={deletePublishedDish} />)}
                 {visible.map((dish, index) => <DishCard key={dish.id} dish={dish} featured={index === 0 && view === "discover"} isSaved={saved.has(dish.id)} onSave={toggleSaved} t={t} />)}
               </div> : <div className="empty-state"><span>♡</span><h3>{t("home.emptyTitle")}</h3><p>{t("home.emptyBody")}</p><button className="primary" onClick={() => setView("discover")}>{t("home.explore")}</button></div>}
             </section>
@@ -320,8 +327,8 @@ export default function Home() {
         <button className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}><span>♡</span>{t("nav.saved")}</button>
         <button onClick={() => setSettingsOpen(true)}><span>○</span>{t("nav.profile")}</button>
       </nav>
-      {modal && <Analyzer key={`${pendingImage ?? "demo"}-${analysisMode ?? "pending"}`} preview={preview} phase={phase} analysis={analysis} analysisMode={analysisMode} warning={analysisWarning} error={analysisError} matches={nearbyMatches} matchProviderUnavailable={matchProviderUnavailable} matchRecordsUnavailable={matchRecordsUnavailable} publishing={publishing} close={() => setModal(false)} update={update} publish={publish} retry={() => void analyze(pendingImage, false)} demo={() => void analyze(undefined, true)} t={t} language={language} measurementSystem={measurementSystem} location={location} />}
-      {settingsOpen && <SettingsPanel t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} close={() => setSettingsOpen(false)} persist={persistPreferences} />}
+      {modal && <Analyzer key={`${pendingImage ?? "demo"}-${analysisMode ?? "pending"}`} guestToken={guestToken} preview={preview} phase={phase} analysis={analysis} analysisMode={analysisMode} warning={analysisWarning} error={analysisError} matches={nearbyMatches} matchProviderUnavailable={matchProviderUnavailable} matchRecordsUnavailable={matchRecordsUnavailable} publishing={publishing} close={() => setModal(false)} update={update} publish={publish} retry={() => void analyze(pendingImage, false)} demo={() => void analyze(undefined, true)} t={t} language={language} measurementSystem={measurementSystem} location={location} />}
+      {settingsOpen && <SettingsPanel guestToken={guestToken} t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} close={() => setSettingsOpen(false)} persist={persistPreferences} />}
       {toast && <div className="toast" role="status">✓ {toast}</div>}
     </div>
   );
@@ -342,14 +349,14 @@ function DishCard({ dish, featured, isSaved, onSave, t }: { dish: Dish; featured
   </article>;
 }
 
-function PublishedDishCard({ dish, t }: { dish: PublishedDish; t: Translator }) {
+function PublishedDishCard({ dish, t, onDelete }: { dish: PublishedDish; t: Translator; onDelete: (id: string, imageOnly?: boolean) => void }) {
   return <article className="dish-card published-card">
     <div className="dish-image" style={{ backgroundImage: `linear-gradient(180deg,transparent 55%,rgba(22,13,10,.68)),url(${dish.localPreview ?? dish.imageUrl ?? dishes[0].image})` }}><span className="match"><b>NEW</b> {t("analysis.publishedTitle")}</span><div className="photo-caption"><b>{dish.sourceMode === "live" ? t("analysis.live") : t("analysis.demo")}</b><small>{t("analysis.review")}</small></div></div>
-    <div className="dish-body"><div className="dish-title"><div><h3>{dish.name}</h3><p>{dish.description}</p></div><strong>{dish.confidence}%</strong></div><div className="dish-meta"><div><span>{dish.cuisine}</span></div><small>{dish.restaurant?.name ?? t("analysis.review")}</small></div>{dish.provenance && <p className="record-honesty">{t(`provenance.${dish.provenance}` as MessageKey)} · {t(`verification.${dish.verificationStatus ?? "unverified"}` as MessageKey)} · {t(dish.availabilityKnowledge === "recently_confirmed" ? "availability.confirmed" : "availability.unknown")}</p>}</div>
+    <div className="dish-body"><div className="dish-title"><div><h3>{dish.name}</h3><p>{dish.description}</p></div><strong>{dish.confidence}%</strong></div><div className="dish-meta"><div><span>{dish.cuisine}</span></div><small>{dish.restaurant?.name ?? t("analysis.review")}</small></div>{dish.provenance && <p className="record-honesty">{t(`provenance.${dish.provenance}` as MessageKey)} · {t(`verification.${dish.verificationStatus ?? "unverified"}` as MessageKey)} · {t(dish.availabilityKnowledge === "recently_confirmed" ? "availability.confirmed" : "availability.unknown")}</p>}<div className="modal-actions">{dish.imageUrl && <button className="text-button" onClick={() => onDelete(dish.id, true)}>{t("privacy.deleteImage")}</button>}<button className="text-button" onClick={() => onDelete(dish.id)}>{t("privacy.deleteDish")}</button></div></div>
   </article>;
 }
 
-function Analyzer({ preview, phase, analysis, analysisMode, warning, error, matches, matchProviderUnavailable, matchRecordsUnavailable, publishing, close, update, publish, retry, demo, t, language, measurementSystem, location }: { preview: string; phase: string; analysis: Analysis; analysisMode: "live" | "demo" | null; warning: string; error: string; matches: MatchTiers; matchProviderUnavailable: boolean; matchRecordsUnavailable: boolean; publishing: boolean; close: () => void; update: (field: "name" | "cuisine" | "ingredients" | "dietary" | "description", value: string) => void; publish: (event: FormEvent, metadata: PublicationMetadata) => void; retry: () => void; demo: () => void; t: Translator; language: UiLanguage; measurementSystem: MeasurementSystem; location: NormalizedLocation | null }) {
+function Analyzer({ guestToken, preview, phase, analysis, analysisMode, warning, error, matches, matchProviderUnavailable, matchRecordsUnavailable, publishing, close, update, publish, retry, demo, t, language, measurementSystem, location }: { guestToken: string | null; preview: string; phase: string; analysis: Analysis; analysisMode: "live" | "demo" | null; warning: string; error: string; matches: MatchTiers; matchProviderUnavailable: boolean; matchRecordsUnavailable: boolean; publishing: boolean; close: () => void; update: (field: "name" | "cuisine" | "ingredients" | "dietary" | "description", value: string) => void; publish: (event: FormEvent, metadata: PublicationMetadata) => void; retry: () => void; demo: () => void; t: Translator; language: UiLanguage; measurementSystem: MeasurementSystem; location: NormalizedLocation | null }) {
   const [restaurants, setRestaurants] = useState<RestaurantPlace[]>([]);
   const [selectedRestaurant, setSelectedRestaurant] = useState<PublishRestaurant | null>(null);
   const [restaurantStatus, setRestaurantStatus] = useState("");
@@ -361,12 +368,13 @@ function Analyzer({ preview, phase, analysis, analysisMode, warning, error, matc
   const [lastConfirmedAt, setLastConfirmedAt] = useState("");
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [restaurantConfirmed, setRestaurantConfirmed] = useState(false);
+  const [retainImage, setRetainImage] = useState(false);
 
   async function findRestaurants() {
     if (!location) { setRestaurantStatus(t("publish.noLocation")); return; }
     setRestaurantStatus("");
     try {
-      const response = await fetch(`/api/restaurants/nearby?latitude=${location.latitude}&longitude=${location.longitude}&radiusMeters=5000&language=${language}`);
+      const response = await fetch(`/api/restaurants/nearby?latitude=${location.latitude}&longitude=${location.longitude}&radiusMeters=5000&language=${language}`, { headers: guestToken ? { Authorization: `Guest ${guestToken}` } : undefined });
       const body = await response.json() as { restaurants?: RestaurantPlace[]; error?: { code?: string } };
       if (!response.ok) { setRestaurantStatus(body.error?.code === "credentials" ? t("publish.providerUnavailable") : t("location.providerError")); return; }
       setRestaurants(body.restaurants ?? []);
@@ -389,7 +397,7 @@ function Analyzer({ preview, phase, analysis, analysisMode, warning, error, matc
   const ready = Boolean(selectedRestaurant && priceKnowledge && availabilityKnowledge && validPrice && validAvailability && reviewConfirmed && restaurantConfirmed);
   function submit(event: FormEvent) {
     if (!ready || !selectedRestaurant || !priceKnowledge || !availabilityKnowledge) { event.preventDefault(); setRestaurantStatus(t("publish.requirements")); return; }
-    publish(event, { restaurant: selectedRestaurant, knowledge: { priceKnowledge, priceAmount: priceKnowledge === "unknown" ? undefined : Number(priceAmount), availabilityKnowledge, lastConfirmedAt: availabilityKnowledge === "historical" ? lastConfirmedAt : undefined }, reviewConfirmed: true, restaurantConfirmed: true });
+    publish(event, { restaurant: selectedRestaurant, knowledge: { priceKnowledge, priceAmount: priceKnowledge === "unknown" ? undefined : Number(priceAmount), availabilityKnowledge, lastConfirmedAt: availabilityKnowledge === "historical" ? lastConfirmedAt : undefined }, retainImage, reviewConfirmed: true, restaurantConfirmed: true });
   }
 
   return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="analyzer-title"><div className="analyzer">
@@ -419,6 +427,7 @@ function Analyzer({ preview, phase, analysis, analysisMode, warning, error, matc
         </section>
         <section className="publication-section"><h3>{t("publish.knowledgeTitle")}</h3><div className="knowledge-grid"><label>{t("publish.priceKnowledge")}<select value={priceKnowledge} onChange={(event) => setPriceKnowledge(event.target.value as typeof priceKnowledge)}><option value="">—</option><option value="unknown">{t("publish.priceUnknown")}</option><option value="exact">{t("publish.priceExact")}</option><option value="approximate">{t("publish.priceApproximate")}</option></select></label>{(priceKnowledge === "exact" || priceKnowledge === "approximate") && <label>{t("publish.priceAmount", { currency: location?.currencyCode ?? selectedRestaurant?.currencyCode ?? "" })}<input type="number" min="0.01" step="0.01" value={priceAmount} onChange={(event) => setPriceAmount(event.target.value)} /></label>}<label>{t("publish.availabilityKnowledge")}<select value={availabilityKnowledge} onChange={(event) => setAvailabilityKnowledge(event.target.value as typeof availabilityKnowledge)}><option value="">—</option><option value="unknown">{t("publish.availabilityUnknown")}</option><option value="recently_confirmed">{t("publish.availabilityRecent")}</option><option value="historical">{t("publish.availabilityHistorical")}</option></select></label>{availabilityKnowledge === "historical" && <label>{t("publish.lastSeen")}<input type="date" max={new Date().toISOString().slice(0, 10)} value={lastConfirmedAt} onChange={(event) => setLastConfirmedAt(event.target.value)} /></label>}</div>
           <p className="provenance-preview">{t("publish.provenancePreview", { provenance: t(analysisMode === "demo" ? "provenance.seed_demo" : "provenance.ai_identified"), verification: t("verification.unverified"), availability: t(availabilityKnowledge === "recently_confirmed" ? "availability.confirmed" : "availability.unknown") })}</p>
+          <label className="confirmation"><input type="checkbox" checked={retainImage} onChange={(event) => setRetainImage(event.target.checked)} />{t("publish.retainImage")}</label><p className="privacy-note">{t("privacy.imageRetentionDetails")}</p>
           <label className="confirmation"><input type="checkbox" checked={reviewConfirmed} onChange={(event) => setReviewConfirmed(event.target.checked)} />{t("publish.reviewConfirm")}</label><label className="confirmation"><input type="checkbox" checked={restaurantConfirmed} onChange={(event) => setRestaurantConfirmed(event.target.checked)} disabled={!selectedRestaurant} />{t("publish.restaurantConfirm")}</label>
         </section>
         <div className="modal-actions"><button type="button" className="secondary" onClick={close}>{t("analysis.keepPrivate")}</button><button className="primary" type="submit" disabled={publishing || !ready}>{publishing ? t("analysis.publishing") : `${t("analysis.publish")} →`}</button></div>
@@ -438,16 +447,43 @@ function MatchTier({ title, results, t, language, measurementSystem }: { title: 
   })}</div>}</section>;
 }
 
-function SettingsPanel({ t, language, theme, measurementSystem, location, close, persist }: { t: Translator; language: UiLanguage; theme: ThemePreference; measurementSystem: MeasurementSystem; location: NormalizedLocation | null; close: () => void; persist: (next: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: NormalizedLocation | null }) => Promise<void> }) {
+function SettingsPanel({ guestToken, t, language, theme, measurementSystem, location, close, persist }: { guestToken: string | null; t: Translator; language: UiLanguage; theme: ThemePreference; measurementSystem: MeasurementSystem; location: NormalizedLocation | null; close: () => void; persist: (next: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: NormalizedLocation | null }) => Promise<void> }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [busy, setBusy] = useState(false);
+  const [consent, setConsent] = useState({ locationConsent: false, analyticsConsent: false, imageRetentionConsent: false });
+
+  useEffect(() => {
+    if (!guestToken) return;
+    void fetch("/api/privacy", { headers: { Authorization: `Guest ${guestToken}` } }).then(async (response) => { if (response.ok) setConsent((await response.json() as { consent: typeof consent }).consent); });
+  }, [guestToken]);
+
+  async function saveConsent(next = consent) {
+    if (!guestToken) return;
+    setBusy(true);
+    try { const response = await fetch("/api/privacy", { method: "PUT", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify(next) }); if (!response.ok) throw new Error(); setConsent((await response.json() as { consent: typeof consent }).consent); if (!next.locationConsent) await persist({ location: null }); }
+    catch { setStatus(t("error.generic")); } finally { setBusy(false); }
+  }
+
+  async function exportData() {
+    if (!guestToken) return;
+    const response = await fetch("/api/privacy/export", { headers: { Authorization: `Guest ${guestToken}` } });
+    if (!response.ok) { setStatus(t("error.generic")); return; }
+    const url = URL.createObjectURL(await response.blob()); const link = document.createElement("a"); link.href = url; link.download = "trinque-data-export.json"; link.click(); URL.revokeObjectURL(url); setStatus(t("privacy.exportReady"));
+  }
+
+  async function deleteData() {
+    if (!guestToken || !window.confirm(t("privacy.deleteConfirm"))) return;
+    const response = await fetch("/api/privacy", { method: "DELETE", headers: { Authorization: `Guest ${guestToken}` } });
+    if (!response.ok) { setStatus(t("error.generic")); return; }
+    for (const key of ["trinque.guestToken", "trinque.location", "trinque.language", "trinque.theme", "trinque.measurement"]) window.localStorage.removeItem(key); window.location.reload();
+  }
 
   async function search(payload: { input?: string; latitude?: number; longitude?: number; providerPlaceId?: string }) {
     setBusy(true); setStatus(""); setSuggestions([]);
     try {
-      const response = await fetch("/api/locations/autocomplete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...payload, language, location }) });
+      const response = await fetch("/api/locations/autocomplete", { method: "POST", headers: { "Content-Type": "application/json", ...(guestToken ? { Authorization: `Guest ${guestToken}` } : {}) }, body: JSON.stringify({ ...payload, language, location }) });
       const body = await response.json() as { suggestions?: LocationSuggestion[]; location?: NormalizedLocation; error?: { code?: string } };
       if (!response.ok) {
         setStatus(body.error?.code === "unsupported_country" ? t("location.unsupported") : body.error?.code === "credentials" ? t("location.unavailable") : t("location.providerError"));
@@ -485,6 +521,7 @@ function SettingsPanel({ t, language, theme, measurementSystem, location, close,
     <div className="setting-block"><span>{t("settings.theme")}</span><div className="setting-options">{(["system", "light", "dark"] as const).map((item) => <button key={item} className={theme === item ? "active" : ""} onClick={() => void persist({ theme: item })}>{t(`settings.theme.${item}`)}</button>)}</div></div>
     <div className="setting-block"><span>{t("settings.measurement")}</span><div className="setting-options">{(["metric", "imperial"] as const).map((item) => <button key={item} className={measurementSystem === item ? "active" : ""} onClick={() => void persist({ measurementSystem: item })}>{t(item === "metric" ? "location.metric" : "location.imperial")}</button>)}</div></div>
     <div className="setting-block"><span>{t("settings.location")}</span>{location && <p className="location-status">{t("location.current", { location: `${location.locality}, ${location.countryCode}` })}</p>}<button className="location-chip" disabled={busy} onClick={useDeviceLocation}>{t("location.useDevice")}</button><form className="location-search" onSubmit={(event) => { event.preventDefault(); if (query.trim()) void search({ input: query.trim() }); }}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("location.search")} /><button disabled={busy || !query.trim()}>{t("location.searchAction")}</button></form>{status && <p className="location-status warning">{status}</p>}<div className="location-suggestions">{suggestions.map((suggestion) => <button key={suggestion.id} onClick={() => void selectSuggestion(suggestion)}><b>{suggestion.label}</b><br /><small>{suggestion.secondaryLabel}</small></button>)}{suggestions.length > 0 && <small className="google-attribution" translate="no">Google Maps</small>}</div><p className="privacy-note">{t("location.privacy")}</p></div>
+    <div className="setting-block"><span>{t("privacy.title")}</span>{([['locationConsent', 'privacy.locationConsent'], ['analyticsConsent', 'privacy.analyticsConsent'], ['imageRetentionConsent', 'privacy.imageConsent']] as const).map(([field, key]) => <label className="confirmation" key={field}><input type="checkbox" checked={consent[field]} onChange={(event) => setConsent((current) => ({ ...current, [field]: event.target.checked }))} />{t(key)}</label>)}<button className="location-chip" disabled={busy || !guestToken} onClick={() => void saveConsent()}>{t("privacy.saveConsent")}</button><button className="text-button full" disabled={busy || !guestToken} onClick={() => { const withdrawn = { locationConsent: false, analyticsConsent: false, imageRetentionConsent: false }; setConsent(withdrawn); void saveConsent(withdrawn); }}>{t("privacy.withdraw")}</button><button className="secondary full" disabled={!guestToken} onClick={() => void exportData()}>{t("privacy.export")}</button><button className="text-button full" disabled={!guestToken} onClick={() => void deleteData()}>{t("privacy.delete")}</button></div>
   </aside></div>;
 }
 

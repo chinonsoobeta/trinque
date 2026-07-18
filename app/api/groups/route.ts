@@ -10,6 +10,7 @@ import { placesApiKey } from "@/lib/places/http";
 import { createPlacesProvider } from "@/lib/places/provider";
 import { PlacesProviderError } from "@/lib/places/types";
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/lib/regions";
+import { enforceUsageBudget, UsageBudgetError } from "@/lib/operations";
 
 export const runtime = "edge";
 
@@ -44,11 +45,12 @@ export async function POST(request: Request) {
   });
   let providerStatus: { status: "live" | "unavailable"; code?: string } = { status: "live" };
   try {
+    await enforceUsageBudget("places", identity.id);
     const provider = createPlacesProvider(await placesApiKey());
     const places = await provider.nearbyRestaurants(location, { language: body.language, radiusMeters: Math.min(50_000, constraints.maxDistanceKm * 1000) });
     const existingIds = new Set(sources.map((source) => source.providerPlaceId).filter(Boolean));
     for (const place of places.filter((item) => !existingIds.has(item.providerPlaceId)).slice(0, 10)) sources.push({ candidateId: `google:${place.providerPlaceId}`, name: "Restaurant-level alternative", restaurant: place.displayName, neighborhood: place.locality, distanceKm: place.distanceKm ?? distanceBetween(location, place), priceAmount: null, currencyCode: place.currencyCode, image: null, dietaryCaveat: "provider_information_unconfirmed", kind: "provider_restaurant", providerPlaceId: place.providerPlaceId, provenance: "provider_place", verificationStatus: "not_applicable", currentAvailabilityConfirmed: false });
-  } catch (error) { providerStatus = { status: "unavailable", code: error instanceof PlacesProviderError ? error.code : "unavailable" }; }
+  } catch (error) { providerStatus = { status: "unavailable", code: error instanceof UsageBudgetError ? "rate_limit" : error instanceof PlacesProviderError ? error.code : "unavailable" }; }
   const ranked = rankGroupCandidates(sources, constraints, location.locale);
   const id = crypto.randomUUID();
   const now = new Date();

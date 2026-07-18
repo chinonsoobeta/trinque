@@ -4,12 +4,16 @@ import { groupMembers, groups } from "@/db/schema";
 import { groupSnapshot } from "@/lib/group-api";
 import { requireIdentity } from "@/lib/identity";
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/lib/regions";
+import { budgetResponse, enforceUsageBudget, requestIdFor, UsageBudgetError } from "@/lib/operations";
 
 export const runtime = "edge";
 
 export async function POST(request: Request) {
+  const requestId = requestIdFor(request);
   const identity = await requireIdentity(request);
   if (!identity) return Response.json({ error: "Guest session required." }, { status: 401 });
+  try { await enforceUsageBudget("invite_join", identity.id); }
+  catch (error) { if (error instanceof UsageBudgetError) return budgetResponse(error, requestId); throw error; }
   const body = await request.json() as { inviteCode?: string; language?: SupportedLanguage };
   if (!body.inviteCode?.trim() || !body.language || !SUPPORTED_LANGUAGES.includes(body.language)) return Response.json({ error: "valid_invite_required" }, { status: 400 });
   const db = await getDb();

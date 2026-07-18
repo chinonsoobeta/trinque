@@ -2,13 +2,20 @@ import { placesApiKey } from "@/lib/places/http";
 import { createPlacesProvider } from "@/lib/places/provider";
 import { PlacesProviderError } from "@/lib/places/types";
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/lib/regions";
+import { budgetResponse, enforceUsageBudget, requestIdFor, UsageBudgetError } from "@/lib/operations";
+import { requireIdentity } from "@/lib/identity";
 
 export const runtime = "edge";
-const headers = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Allow-Methods": "POST, OPTIONS", "Cache-Control": "no-store" };
+const headers = { "Access-Control-Allow-Headers": "Authorization, Content-Type", "Access-Control-Allow-Methods": "POST, OPTIONS", "Cache-Control": "no-store" };
 
 export function OPTIONS() { return new Response(null, { status: 204, headers }); }
 
 export async function POST(request: Request) {
+  const requestId = requestIdFor(request);
+  const identity = await requireIdentity(request);
+  if (!identity) return Response.json({ error: { code: "session_required", message: "A guest session is required." } }, { status: 401 });
+  try { await enforceUsageBudget("places", identity.id); }
+  catch (error) { if (error instanceof UsageBudgetError) return budgetResponse(error, requestId); throw error; }
   let body: { input?: string; providerPlaceId?: string; latitude?: number; longitude?: number; language?: SupportedLanguage; location?: { latitude?: number; longitude?: number } | null };
   try { body = await request.json(); }
   catch { return providerError(new PlacesProviderError("invalid_request", "A JSON request body is required.", 400)); }

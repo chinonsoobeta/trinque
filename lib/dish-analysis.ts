@@ -29,7 +29,7 @@ export type AnalysisFailure = {
   mode: "unavailable";
   requestId: string;
   error: {
-    code: "invalid_image" | "live_not_configured" | "provider_error" | "invalid_provider_response";
+    code: "invalid_image" | "live_not_configured" | "session_required" | "provider_error" | "invalid_provider_response";
     message: string;
   };
   demoAvailable: true;

@@ -3,12 +3,16 @@ import { getDb } from "@/db";
 import { groupCandidates, groupVotes, groups } from "@/db/schema";
 import { groupMembership, groupSnapshot } from "@/lib/group-api";
 import { requireIdentity } from "@/lib/identity";
+import { budgetResponse, enforceUsageBudget, requestIdFor, UsageBudgetError } from "@/lib/operations";
 
 export const runtime = "edge";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const requestId = requestIdFor(request);
   const identity = await requireIdentity(request);
   if (!identity) return Response.json({ error: "Guest session required." }, { status: 401 });
+  try { await enforceUsageBudget("vote", identity.id); }
+  catch (error) { if (error instanceof UsageBudgetError) return budgetResponse(error, requestId); throw error; }
   const { id } = await params;
   const db = await getDb();
   const membership = await groupMembership(id, identity.id);

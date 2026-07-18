@@ -1,6 +1,6 @@
 import { and, desc, eq, ne } from "drizzle-orm";
 import { getDb } from "@/db";
-import { publishedDishes, restaurants } from "@/db/schema";
+import { publishedDishes, restaurants, userConsents } from "@/db/schema";
 import type { DishAnalysis } from "@/lib/dish-analysis";
 import { matchNearby, type PublishedDishCandidate } from "@/lib/dish-matching";
 import { normalizePublicationRestaurant, preparePublishedDish, type PublicationKnowledge, type PublishRestaurantInput } from "@/lib/dish-records";
@@ -10,9 +10,10 @@ import { createPlacesProvider } from "@/lib/places/provider";
 import { PlacesProviderError, type RestaurantPlace } from "@/lib/places/types";
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/lib/regions";
 import { storeDishImage } from "@/lib/uploads";
+import { budgetResponse, enforceUsageBudget, requestIdFor, UsageBudgetError } from "@/lib/operations";
 
 export const runtime = "edge";
-const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Authorization, Content-Type", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" };
+const cors = { "Access-Control-Allow-Headers": "Authorization, Content-Type", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" };
 export function OPTIONS() { return new Response(null, { status: 204, headers: cors }); }
 
 export async function GET(request: Request) {
@@ -24,9 +25,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const requestId = requestIdFor(request);
   const identity = await requireIdentity(request);
   if (!identity) return Response.json({ error: "Guest session required." }, { status: 401, headers: cors });
-  const body = await request.json() as { analysis?: DishAnalysis; sourceMode?: "live" | "demo"; imageDataUrl?: string; restaurant?: PublishRestaurantInput; knowledge?: PublicationKnowledge; language?: SupportedLanguage; reviewConfirmed?: boolean; restaurantConfirmed?: boolean };
+  try { await enforceUsageBudget("publish", identity.id); }
+  catch (error) { if (error instanceof UsageBudgetError) return budgetResponse(error, requestId); throw error; }
+  const body = await request.json() as { analysis?: DishAnalysis; sourceMode?: "live" | "demo"; imageDataUrl?: string; retainImage?: boolean; restaurant?: PublishRestaurantInput; knowledge?: PublicationKnowledge; language?: SupportedLanguage; reviewConfirmed?: boolean; restaurantConfirmed?: boolean };
   if (!validAnalysis(body.analysis) || !["live", "demo"].includes(body.sourceMode ?? "") || !body.restaurant || !body.knowledge || !body.reviewConfirmed || !body.restaurantConfirmed || !body.language || !SUPPORTED_LANGUAGES.includes(body.language)) {
     return Response.json({ error: "review_and_restaurant_confirmation_required" }, { status: 400, headers: cors });
   }
@@ -34,6 +38,8 @@ export async function POST(request: Request) {
   let dishRecord: ReturnType<typeof preparePublishedDish>;
   try {
     if (body.restaurant.provider === "google") {
+      try { await enforceUsageBudget("places", identity.id); }
+      catch (error) { if (error instanceof UsageBudgetError) return budgetResponse(error, requestId); throw error; }
       const provider = createPlacesProvider(await placesApiKey());
       const place = await provider.restaurantDetails(body.restaurant.providerPlaceId ?? "", body.language);
       restaurantInput = normalizePublicationRestaurant({ provider: "google", providerPlaceId: place.providerPlaceId, name: place.displayName, latitude: place.latitude, longitude: place.longitude, locality: place.locality, administrativeRegion: place.administrativeRegion, countryCode: place.countryCode, address: place.address, currencyCode: place.currencyCode });
@@ -44,9 +50,15 @@ export async function POST(request: Request) {
     const code = error instanceof PlacesProviderError ? error.code : error instanceof Error ? error.message : "invalid_publication";
     return Response.json({ error: code }, { status, headers: cors });
   }
-  const imageKey = body.imageDataUrl ? await storeDishImage(body.imageDataUrl, identity.id) : null;
+  let imageKey: string | null = null;
+  try { imageKey = body.imageDataUrl && body.retainImage === true ? await storeDishImage(body.imageDataUrl, identity.id) : null; }
+  catch (error) { const code = error instanceof Error ? error.message : "invalid_image"; return Response.json({ error: code }, { status: code === "uploads_unavailable" ? 503 : 400, headers: cors }); }
   const id = crypto.randomUUID();
   const db = await getDb();
+  if (body.retainImage === true) {
+    const consentNow = new Date().toISOString();
+    await db.insert(userConsents).values({ userId: identity.id, imageRetentionConsent: true, consentedAt: consentNow, updatedAt: consentNow }).onConflictDoUpdate({ target: userConsents.userId, set: { imageRetentionConsent: true, consentedAt: consentNow, withdrawnAt: null, updatedAt: consentNow } });
+  }
   let restaurantId = crypto.randomUUID();
   const restaurantValues = { id: restaurantId, ...restaurantInput, createdById: identity.id, updatedAt: new Date().toISOString() };
   if (restaurantInput.provider === "google" && restaurantInput.providerPlaceId) {

@@ -10,6 +10,7 @@ test("D1 migrations preserve durable identities and independent three-member gro
   const regionalPreferencesSql = await readFile(new URL("../drizzle/0003_unknown_mattie_franklin.sql", import.meta.url), "utf8");
   const dishGraphSql = await readFile(new URL("../drizzle/0004_wandering_marvex.sql", import.meta.url), "utf8");
   const groupMembershipSql = await readFile(new URL("../drizzle/0005_bored_sabra.sql", import.meta.url), "utf8");
+  const operationsSql = await readFile(new URL("../drizzle/0006_flimsy_kitty_pryde.sql", import.meta.url), "utf8");
   const db = new DatabaseSync(":memory:");
   db.exec("PRAGMA foreign_keys = ON");
   for (const statement of sql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
@@ -20,6 +21,8 @@ test("D1 migrations preserve durable identities and independent three-member gro
   db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("legacy-owner", "guest", "Legacy owner", "legacy-hash");
   db.prepare("INSERT INTO groups (id, owner_id, name, event_time, neighborhood, budget_max, max_distance_km, vegetarian_required, allergies, invite_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run("legacy-group", "legacy-owner", "Legacy plan", "2026-07-20T19:30:00.000Z", "Vancouver", 35, 4, 0, "[]", "legacy-invite", "2026-07-18T12:00:00.000Z");
   for (const statement of groupMembershipSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
+  db.prepare("INSERT INTO preferences (user_id, location_latitude, location_longitude, location_updated_at) VALUES (?, ?, ?, ?)").run("legacy-owner", 49.28, -123.12, "2026-07-18T12:05:00.000Z");
+  for (const statement of operationsSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
 
   db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("guest-1", "guest", "Guest explorer", "hash-1");
   db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("guest-b", "guest", "Guest B", "hash-b");
@@ -62,7 +65,13 @@ test("D1 migrations preserve durable identities and independent three-member gro
   assert.equal(db.prepare("SELECT count(*) AS count FROM group_votes WHERE group_id = ?").get("group-1").count, 3);
   assert.deepEqual({ ...db.prepare("SELECT role, language FROM group_members WHERE group_id = ? AND user_id = ?").get("legacy-group", "legacy-owner") }, { role: "owner", language: "en-CA" });
   assert.match(db.prepare("SELECT invite_expires_at FROM groups WHERE id = ?").get("legacy-group").invite_expires_at, /^2026-07-25T12:00:00\.000Z$/);
+  assert.deepEqual({ ...db.prepare("SELECT location_consent, consented_at FROM user_consents WHERE user_id = ?").get("legacy-owner") }, { location_consent: 1, consented_at: "2026-07-18T12:05:00.000Z" });
   assert.deepEqual(db.prepare("SELECT user_id, status FROM group_rsvps WHERE group_id = ? ORDER BY user_id").all("group-1").map((row) => ({ ...row })), [{ user_id: "guest-1", status: "yes" }, { user_id: "guest-b", status: "maybe" }, { user_id: "guest-c", status: "no" }]);
+  db.prepare("INSERT INTO user_consents (user_id, location_consent, analytics_consent, image_retention_consent) VALUES (?, ?, ?, ?)").run("guest-1", 1, 0, 1);
+  db.prepare("INSERT INTO usage_counters (action, scope, window_start, count) VALUES (?, ?, ?, ?)").run("publish", "user:opaque", "2026-07-18T12:00:00.000Z", 1);
+  const incremented = db.prepare("INSERT INTO usage_counters (action, scope, window_start, count) VALUES (?, ?, ?, 1) ON CONFLICT(action, scope, window_start) DO UPDATE SET count = count + 1 RETURNING count").get("publish", "user:opaque", "2026-07-18T12:00:00.000Z");
+  assert.deepEqual({ ...db.prepare("SELECT location_consent, analytics_consent, image_retention_consent FROM user_consents WHERE user_id = ?").get("guest-1") }, { location_consent: 1, analytics_consent: 0, image_retention_consent: 1 });
+  assert.equal(incremented.count, 2);
   assert.throws(() => db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("guest-2", "guest", "Other guest", "hash-1"));
   db.close();
 });

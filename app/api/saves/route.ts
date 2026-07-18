@@ -4,7 +4,7 @@ import { saves } from "@/db/schema";
 import { requireIdentity } from "@/lib/identity";
 
 export const runtime = "edge";
-const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Authorization, Content-Type", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" };
+const cors = { "Access-Control-Allow-Headers": "Authorization, Content-Type", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" };
 export function OPTIONS() { return new Response(null, { status: 204, headers: cors }); }
 
 export async function GET(request: Request) {

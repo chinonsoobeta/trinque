@@ -13,6 +13,8 @@ type Analysis = {
 type AnalysisEnvelope =
   | { ok: true; mode: "live" | "demo"; requestId: string; result: Analysis; warning?: string }
   | { ok: false; mode: "unavailable"; requestId: string; error: { code: string; message: string }; demoAvailable: true };
+type NearbyMatch = { id: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; dietary: string; score: number; explanation: string };
+type PublishedDish = Analysis & { id: string; sourceMode: "live" | "demo"; imageUrl?: string | null; localPreview?: string };
 
 const dishes: Dish[] = [
   { id: 1, name: "Brown butter agnolotti", restaurant: "Bar Susu", area: "Mount Pleasant", distance: "0.8 km", price: "$24", image: "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=1400&q=86", match: 96, note: "Silky, nutty, bright with lemon", tags: ["Pasta", "Vegetarian"], likes: 284 },
@@ -44,6 +46,9 @@ export default function Home() {
   const [toast, setToast] = useState("");
   const [guestToken, setGuestToken] = useState<string | null>(null);
   const [identityLabel, setIdentityLabel] = useState("Guest");
+  const [publishedDishes, setPublishedDishes] = useState<PublishedDish[]>([]);
+  const [nearbyMatches, setNearbyMatches] = useState<NearbyMatch[]>([]);
+  const [publishing, setPublishing] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const visible = useMemo(() => view === "saved" ? dishes.filter((d) => saved.has(d.id)) : dishes, [saved, view]);
 
@@ -64,6 +69,11 @@ export default function Home() {
         if (savesResponse.ok) {
           const payload = await savesResponse.json() as { savedDishIds: number[] };
           if (active) setSaved(new Set(payload.savedDishIds));
+        }
+        const dishesResponse = await fetch("/api/dishes", { headers: token ? { Authorization: `Guest ${token}` } : undefined });
+        if (dishesResponse.ok) {
+          const payload = await dishesResponse.json() as { dishes: PublishedDish[] };
+          if (active) setPublishedDishes(payload.dishes);
         }
       } catch {
         // The visual demo remains usable while durable services recover.
@@ -121,9 +131,26 @@ export default function Home() {
   function update(field: keyof Analysis, value: string) {
     setAnalysis((current) => ({ ...current, [field]: field === "confidence" ? Number(value) : value }));
   }
-  function publish(event: FormEvent) {
-    event.preventDefault(); setPhase("published");
-    window.setTimeout(() => { setModal(false); setPhase("idle"); flash("Dish published — 12 nearby matches ready"); }, 900);
+  async function publish(event: FormEvent) {
+    event.preventDefault();
+    if (!guestToken || !analysisMode) {
+      setAnalysisError("Your guest session is still connecting. Close this sheet, wait a moment, and try again.");
+      setPhase("error");
+      return;
+    }
+    setPublishing(true);
+    try {
+      const response = await fetch("/api/dishes", { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ analysis, sourceMode: analysisMode, imageDataUrl: pendingImage }) });
+      if (!response.ok) throw new Error("publish failed");
+      const payload = await response.json() as { dish: PublishedDish; matches: NearbyMatch[] };
+      setPublishedDishes((current) => [{ ...payload.dish, localPreview: preview }, ...current.filter((dish) => dish.id !== payload.dish.id)]);
+      setNearbyMatches(payload.matches);
+      setPhase("published");
+      flash(`Dish published — ${payload.matches.length} nearby matches ready`);
+    } catch {
+      setAnalysisError("Trinque couldn’t save this dish. Your reviewed fields are still here; retry when the connection returns.");
+      setPhase("error");
+    } finally { setPublishing(false); }
   }
 
   return (
@@ -171,6 +198,7 @@ export default function Home() {
                 </div>}
               </div>
               {visible.length ? <div className="dish-grid">
+                {view === "discover" && publishedDishes.map((dish) => <PublishedDishCard key={dish.id} dish={dish} />)}
                 {visible.map((dish, index) => <DishCard key={dish.id} dish={dish} featured={index === 0 && view === "discover"} isSaved={saved.has(dish.id)} onSave={toggleSaved} />)}
               </div> : <div className="empty-state"><span>♡</span><h3>Your next obsession belongs here.</h3><p>Save dishes from Discover and Trinque will learn what you love.</p><button className="primary" onClick={() => setView("discover")}>Explore dishes</button></div>}
             </section>
@@ -191,7 +219,7 @@ export default function Home() {
         <button className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}><span>♡</span>Saved</button>
         <button><span>○</span>Profile</button>
       </nav>
-      {modal && <Analyzer preview={preview} phase={phase} analysis={analysis} analysisMode={analysisMode} warning={analysisWarning} error={analysisError} close={() => setModal(false)} update={update} publish={publish} retry={() => void analyze(pendingImage, false)} demo={() => void analyze(undefined, true)} />}
+      {modal && <Analyzer preview={preview} phase={phase} analysis={analysis} analysisMode={analysisMode} warning={analysisWarning} error={analysisError} matches={nearbyMatches} publishing={publishing} close={() => setModal(false)} update={update} publish={publish} retry={() => void analyze(pendingImage, false)} demo={() => void analyze(undefined, true)} />}
       {toast && <div className="toast" role="status">✓ {toast}</div>}
     </div>
   );
@@ -212,14 +240,21 @@ function DishCard({ dish, featured, isSaved, onSave }: { dish: Dish; featured: b
   </article>;
 }
 
-function Analyzer({ preview, phase, analysis, analysisMode, warning, error, close, update, publish, retry, demo }: { preview: string; phase: string; analysis: Analysis; analysisMode: "live" | "demo" | null; warning: string; error: string; close: () => void; update: (field: keyof Analysis, value: string) => void; publish: (event: FormEvent) => void; retry: () => void; demo: () => void }) {
+function PublishedDishCard({ dish }: { dish: PublishedDish }) {
+  return <article className="dish-card published-card">
+    <div className="dish-image" style={{ backgroundImage: `linear-gradient(180deg,transparent 55%,rgba(22,13,10,.68)),url(${dish.localPreview ?? dish.imageUrl ?? dishes[0].image})` }}><span className="match"><b>NEW</b> your dish</span><div className="photo-caption"><b>{dish.sourceMode === "live" ? "Live identified" : "Demo published"}</b><small>Added by you</small></div></div>
+    <div className="dish-body"><div className="dish-title"><div><h3>{dish.name}</h3><p>{dish.description}</p></div><strong>{dish.confidence}%</strong></div><div className="dish-meta"><div><span>{dish.cuisine}</span></div><small>Reviewed & published</small></div></div>
+  </article>;
+}
+
+function Analyzer({ preview, phase, analysis, analysisMode, warning, error, matches, publishing, close, update, publish, retry, demo }: { preview: string; phase: string; analysis: Analysis; analysisMode: "live" | "demo" | null; warning: string; error: string; matches: NearbyMatch[]; publishing: boolean; close: () => void; update: (field: keyof Analysis, value: string) => void; publish: (event: FormEvent) => void; retry: () => void; demo: () => void }) {
   return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="analyzer-title"><div className="analyzer">
     <button className="modal-close" onClick={close} aria-label="Close analyzer">×</button>
     <div className="analyzer-image" style={{ backgroundImage: "url(" + preview + ")" }}><span>✦ GPT-5.6 vision</span></div>
     <div className="analyzer-content">
       {phase === "loading" ? <div className="loading-state"><div className="scan"><span /></div><em>Reading the plate</em><h2 id="analyzer-title">Finding the details that make this dish special…</h2><div><span>Dish family</span><span>Ingredients</span><span>Dietary notes</span></div></div>
       : phase === "error" ? <div className="identifier-error"><span>!</span><p className="kicker">LIVE IDENTIFIER UNAVAILABLE</p><h2 id="analyzer-title">We didn’t identify this photo.</h2><p>{error}</p><div className="modal-actions"><button type="button" className="secondary" onClick={demo}>Use labeled demo</button><button type="button" className="primary" onClick={retry}>Retry photo</button></div></div>
-      : phase === "published" ? <div className="published"><span>✓</span><h2 id="analyzer-title">Added to Trinque</h2><p>We found 12 nearby dishes with a similar taste profile.</p></div>
+      : phase === "published" ? <div className="published"><span>✓</span><h2 id="analyzer-title">Added to Trinque</h2><p>{matches.length} nearby dishes ranked from your reviewed taste profile.</p><div className="nearby-results">{matches.slice(0, 3).map((match) => <article key={match.id}><img src={match.image} alt="" /><div><b>{match.name}</b><small>{match.restaurant} · {match.distanceKm.toFixed(1)} km</small><p>{match.score}% match · {match.explanation}</p></div></article>)}</div><div className="modal-actions"><button className="primary" onClick={close}>Explore the feed →</button></div></div>
       : <form onSubmit={publish}><div className={`analysis-mode ${analysisMode ?? ""}`}>{analysisMode === "live" ? "● Live GPT-5.6 analysis" : "◇ Seeded demo result"}</div><span className="kicker">Review before publishing</span><div className="confidence"><h2 id="analyzer-title">Trinque thinks it knows this dish.</h2><span>{analysis.confidence}% confident</span></div>
         {warning && <p className="demo-warning">{warning}</p>}
         <p className="review-note">AI can miss ingredients. Confirm the details—especially allergens—before sharing.</p>
@@ -229,7 +264,7 @@ function Analyzer({ preview, phase, analysis, analysisMode, warning, error, clos
           <label>Dietary notes<input value={analysis.dietary} onChange={(e) => update("dietary", e.target.value)} /></label>
           <label className="wide">Likely ingredients<textarea value={analysis.ingredients} onChange={(e) => update("ingredients", e.target.value)} /></label>
           <label className="wide">What makes it special<textarea value={analysis.description} onChange={(e) => update("description", e.target.value)} /></label>
-        </div><div className="modal-actions"><button type="button" className="secondary" onClick={close}>Keep private</button><button className="primary" type="submit">Publish dish →</button></div>
+        </div><div className="modal-actions"><button type="button" className="secondary" onClick={close}>Keep private</button><button className="primary" type="submit" disabled={publishing}>{publishing ? "Publishing…" : "Publish & find matches →"}</button></div>
       </form>}
     </div>
   </div></div>;

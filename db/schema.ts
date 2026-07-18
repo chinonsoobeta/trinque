@@ -28,3 +28,17 @@ export const preferences = sqliteTable("preferences", {
   radiusMinutes: integer("radius_minutes").notNull().default(25),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const publishedDishes = sqliteTable("published_dishes", {
+  id: text("id").primaryKey(),
+  ownerId: text("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  sourceMode: text("source_mode", { enum: ["live", "demo"] }).notNull(),
+  name: text("name").notNull(),
+  cuisine: text("cuisine").notNull(),
+  ingredients: text("ingredients").notNull(),
+  dietary: text("dietary").notNull(),
+  confidence: integer("confidence").notNull(),
+  description: text("description").notNull(),
+  imageKey: text("image_key"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});

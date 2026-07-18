@@ -35,6 +35,8 @@ type AnalysisEnvelope =
   | { ok: true; mode: 'live' | 'demo'; requestId: string; result: Analysis; warning?: string }
   | { ok: false; mode: 'unavailable'; requestId: string; error: { code: string; message: string }; demoAvailable: true };
 
+type NearbyMatch = { id: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; dietary: string; score: number; explanation: string };
+
 type Dish = {
   id: number;
   name: string;
@@ -127,6 +129,8 @@ export default function App() {
   const [analysisWarning, setAnalysisWarning] = useState('');
   const [analysisError, setAnalysisError] = useState('');
   const [guestToken, setGuestToken] = useState<string | null>(null);
+  const [nearbyMatches, setNearbyMatches] = useState<NearbyMatch[]>([]);
+  const [publishing, setPublishing] = useState(false);
 
   useEffect(() => {
     if (!remoteApi) return;
@@ -237,6 +241,25 @@ export default function App() {
     }
   };
 
+  const publishDish = async () => {
+    if (!remoteApi || !guestToken || !analysisMode) {
+      setAnalysisError('Your persistent guest session is not connected yet. Configure the API URL, wait for the session, and retry.');
+      setPhase('error');
+      return;
+    }
+    setPublishing(true);
+    try {
+      const response = await fetch(`${remoteApi}/api/dishes`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ analysis, sourceMode: analysisMode, imageDataUrl }) });
+      if (!response.ok) throw new Error('publish failed');
+      const payload = await response.json() as { matches: NearbyMatch[] };
+      setNearbyMatches(payload.matches);
+      setPhase('published');
+    } catch {
+      setAnalysisError('Trinque couldn’t save this dish. Your reviewed fields are still here; retry when the connection returns.');
+      setPhase('error');
+    } finally { setPublishing(false); }
+  };
+
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.safeArea}>
@@ -257,11 +280,13 @@ export default function App() {
           analysisMode={analysisMode}
           warning={analysisWarning}
           error={analysisError}
+          matches={nearbyMatches}
+          publishing={publishing}
           onAnalysisChange={setAnalysis}
           onChoose={choosePhoto}
           onDemo={() => analyze(null, true)}
           onRetry={() => analyze(imageDataUrl, false)}
-          onPublish={() => setPhase('published')}
+          onPublish={publishDish}
           onClose={() => setAnalyzerOpen(false)}
           onReset={() => {
             setPhase('choose');
@@ -452,7 +477,7 @@ function TabButton({ tab, icon, active, onPress }: { tab: Tab; icon: string; act
   return <Pressable style={styles.tabButton} onPress={onPress}><Text style={[styles.tabIcon, active && styles.tabActive]}>{icon}</Text><Text style={[styles.tabLabel, active && styles.tabActive]}>{tab}</Text></Pressable>;
 }
 
-function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analysisMode, warning, error, onAnalysisChange, onChoose, onDemo, onRetry, onPublish, onClose, onReset }: {
+function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analysisMode, warning, error, matches, publishing, onAnalysisChange, onChoose, onDemo, onRetry, onPublish, onClose, onReset }: {
   visible: boolean;
   phase: AnalyzerPhase;
   preview: string | null;
@@ -461,6 +486,8 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
   analysisMode: 'live' | 'demo' | null;
   warning: string;
   error: string;
+  matches: NearbyMatch[];
+  publishing: boolean;
   onAnalysisChange: (value: Analysis) => void;
   onChoose: (camera: boolean) => void;
   onDemo: () => void;
@@ -509,13 +536,13 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
               <Field label="Dietary notes" value={analysis.dietary} onChangeText={(dietary) => onAnalysisChange({ ...analysis, dietary })} />
               <Field label="Likely ingredients" value={analysis.ingredients} onChangeText={(ingredients) => onAnalysisChange({ ...analysis, ingredients })} multiline />
               <Field label="What makes it special" value={analysis.description} onChangeText={(description) => onAnalysisChange({ ...analysis, description })} multiline />
-              <Pressable style={({ pressed }) => [styles.primaryButton, styles.publishButton, pressed && styles.pressed]} onPress={onPublish}><Text style={styles.primaryButtonText}>Publish this dish</Text><Text style={styles.primaryArrow}>→</Text></Pressable>
+              <Pressable disabled={publishing} style={({ pressed }) => [styles.primaryButton, styles.publishButton, pressed && styles.pressed, publishing && styles.disabledButton]} onPress={onPublish}><Text style={styles.primaryButtonText}>{publishing ? 'Publishing…' : 'Publish & find matches'}</Text><Text style={styles.primaryArrow}>→</Text></Pressable>
             </ScrollView>
           )}
           {phase === 'published' && (
             <View style={styles.publishedPanel}>
-              <View style={styles.successMark}><Text style={styles.successMarkText}>✓</Text></View><Text style={styles.modalKicker}>ADDED TO TRINQUE</Text><Text style={styles.modalTitle}>{analysis.name}</Text><Text style={styles.modalBody}>We found 12 nearby dishes with a similar taste profile. Your tasteprint just got sharper.</Text>
-              <View style={styles.resultStrip}>{[['12', 'Nearby'], ['96%', 'Top match'], ['$24', 'From']].map(([value, label]) => <View key={label} style={styles.resultItem}><Text style={styles.resultValue}>{value}</Text><Text style={styles.resultLabel}>{label}</Text></View>)}</View>
+              <View style={styles.successMark}><Text style={styles.successMarkText}>✓</Text></View><Text style={styles.modalKicker}>ADDED TO TRINQUE</Text><Text style={styles.modalTitle}>{analysis.name}</Text><Text style={styles.modalBody}>{matches.length} nearby dishes were ranked from your reviewed taste profile.</Text>
+              <ScrollView style={styles.mobileMatches}>{matches.slice(0, 3).map((match) => <View key={match.id} style={styles.mobileMatch}><Image source={{ uri: match.image }} style={styles.mobileMatchImage} /><View style={styles.mobileMatchCopy}><View style={styles.mobileMatchTitle}><Text style={styles.mobileMatchName}>{match.name}</Text><Text style={styles.mobileMatchScore}>{match.score}%</Text></View><Text style={styles.mobileMatchPlace}>{match.restaurant} · {match.distanceKm.toFixed(1)} km</Text><Text style={styles.mobileMatchReason} numberOfLines={2}>{match.explanation}</Text></View></View>)}</ScrollView>
               <Pressable style={({ pressed }) => [styles.primaryButton, styles.modalButton, pressed && styles.pressed]} onPress={onClose}><Text style={styles.primaryButtonText}>Explore similar dishes</Text><Text style={styles.primaryArrow}>→</Text></Pressable>
               <Pressable onPress={onReset}><Text style={styles.demoLink}>Identify another dish</Text></Pressable>
             </View>
@@ -696,4 +723,13 @@ const styles = StyleSheet.create({
   modeBadgeTextDemo: { color: palette.terracotta },
   demoWarning: { backgroundColor: palette.blush, borderRadius: 14, padding: 12, marginTop: -6, marginBottom: 15 },
   demoWarningText: { color: palette.burgundy, fontSize: 11, lineHeight: 16 },
+  mobileMatches: { maxHeight: 260, marginBottom: 8 },
+  mobileMatch: { flexDirection: 'row', gap: 11, padding: 9, marginBottom: 8, backgroundColor: palette.paper, borderWidth: 1, borderColor: palette.line, borderRadius: 15 },
+  mobileMatchImage: { width: 72, height: 72, borderRadius: 11, backgroundColor: palette.blush },
+  mobileMatchCopy: { flex: 1, justifyContent: 'center' },
+  mobileMatchTitle: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
+  mobileMatchName: { flex: 1, color: palette.ink, fontFamily: Platform.select({ ios: 'Georgia-Bold', default: 'serif' }), fontSize: 14 },
+  mobileMatchScore: { color: palette.olive, fontWeight: '900', fontSize: 11 },
+  mobileMatchPlace: { color: palette.terracotta, fontWeight: '800', fontSize: 9, marginTop: 3 },
+  mobileMatchReason: { color: palette.muted, fontSize: 9, lineHeight: 13, marginTop: 4 },
 });

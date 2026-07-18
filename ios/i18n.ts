@@ -24,7 +24,7 @@ const enUS = {
   "settings.close": "Close settings",
   "location.change": "Change location",
   "location.useDevice": "Use my location",
-  "location.search": "Search for a city or locality",
+  "location.search": "Search for an address, city, or locality",
   "location.searchAction": "Search",
   "location.current": "Current location: {location}",
   "location.permissionDenied": "Location permission was denied. Search for a city or locality instead.",
@@ -236,7 +236,7 @@ const enCA: Messages = {
 const enGB: Messages = {
   ...enUS,
   "location.metric": "Kilometres",
-  "location.search": "Search for a city or locality",
+  "location.search": "Search for an address, city, or locality",
   "home.savedBody": "The dishes worth crossing town for, all in one place.",
   "group.radius": "Travel radius",
   "home.tasteTitle": "Bright, savoury, a little smoky.",

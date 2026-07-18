@@ -36,7 +36,7 @@ type AnalyticsEvent = 'analysis_started' | 'analysis_completed' | 'analysis_fail
 type FeedbackReason = 'wrong_identification' | 'stale_dish' | 'closed_restaurant';
 type MobileLocation = { latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: 'US' | 'CA' | 'MX' | 'GB' | 'FR'; timeZone: string; currencyCode: string; locale: string; language: UiLanguage; measurementSystem: MeasurementSystem; source: 'device' | 'manual' };
 type MobileLocationSuggestion = { id: string; provider: 'google'; providerPlaceId: string; label: string; secondaryLabel: string; attribution: 'Google Maps' };
-type MobileRestaurantPlace = { provider: 'google'; providerPlaceId: string; displayName: string; address: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: MobileLocation['countryCode']; currencyCode: string; attribution: 'Google Maps' };
+type MobileRestaurantPlace = { provider: 'google'; providerPlaceId: string; displayName: string; address: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: MobileLocation['countryCode']; currencyCode: string; rating?: number; attribution: 'Google Maps' };
 type PublishRestaurant = { provider: 'google' | 'community'; providerPlaceId?: string | null; name: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: MobileLocation['countryCode']; address: string; currencyCode: string };
 type PublicationMetadata = { restaurant: PublishRestaurant; knowledge: { priceKnowledge: 'unknown' | 'exact' | 'approximate'; priceAmount?: number; availabilityKnowledge: 'unknown' | 'recently_confirmed' | 'historical'; lastConfirmedAt?: string }; retainImage: boolean; reviewConfirmed: true; restaurantConfirmed: true };
 
@@ -884,7 +884,7 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
               <Text style={styles.canonicalNotice}>{t('analysis.canonicalNotice')}</Text>
               <View style={styles.publicationSection}><Text style={styles.publicationTitle}>{t('publish.restaurantTitle')}</Text><Text style={styles.publicationHelp}>{t('publish.restaurantHelp')}</Text>
                 <Pressable style={styles.secondaryButton} onPress={() => void findRestaurants()}><Text style={styles.secondaryButtonText}>{t('publish.findRestaurants')}</Text></Pressable>
-                {restaurants.map((place) => <Pressable key={place.providerPlaceId} style={[styles.restaurantOption, selectedRestaurant?.providerPlaceId === place.providerPlaceId && styles.restaurantOptionSelected]} onPress={() => selectProviderRestaurant(place)}><Text style={styles.restaurantName}>{place.displayName}</Text><Text style={styles.restaurantAddress}>{place.address}</Text></Pressable>)}
+                {restaurants.map((place) => <Pressable key={place.providerPlaceId} style={[styles.restaurantOption, selectedRestaurant?.providerPlaceId === place.providerPlaceId && styles.restaurantOptionSelected]} onPress={() => selectProviderRestaurant(place)}><View style={styles.restaurantTitleRow}><Text style={styles.restaurantName}>{place.displayName}</Text>{place.rating != null ? <Text accessibilityLabel={`${place.rating.toFixed(1)} out of 5 stars`} style={styles.restaurantRating}>{'★'.repeat(Math.round(place.rating))}{'☆'.repeat(5 - Math.round(place.rating))} {place.rating.toFixed(1)}</Text> : null}</View><Text style={styles.restaurantAddress}>{place.address}</Text></Pressable>)}
                 {restaurants.length > 0 ? <Text style={styles.googleAttribution}>{t('publish.googleAttribution')}</Text> : null}
                 {restaurantStatus ? <Text style={styles.publicationStatus}>{restaurantStatus}</Text> : null}
                 <Text style={styles.fieldLabel}>{t('publish.manualRestaurant')}</Text><TextInput style={styles.fieldInput} placeholder={t('publish.restaurantName')} placeholderTextColor={palette.muted} value={manualName} onChangeText={setManualName} /><TextInput style={styles.fieldInput} placeholder={t('publish.restaurantAddress')} placeholderTextColor={palette.muted} value={manualAddress} onChangeText={setManualAddress} />
@@ -1116,7 +1116,9 @@ const styles = StyleSheet.create({
   publicationHelp: { color: palette.muted, fontSize: 11, lineHeight: 17 },
   restaurantOption: { borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper, borderRadius: 14, padding: 12 },
   restaurantOptionSelected: { borderColor: palette.burgundy, borderWidth: 2 },
+  restaurantTitleRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' },
   restaurantName: { color: palette.ink, fontSize: 14, fontWeight: '800' },
+  restaurantRating: { color: palette.terracotta, fontSize: 11, fontWeight: '800' },
   restaurantAddress: { color: palette.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   publicationStatus: { color: palette.warning, fontSize: 11, lineHeight: 16 },
   selectedRestaurant: { color: palette.success, fontSize: 11, fontWeight: '800' },

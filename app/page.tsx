@@ -42,10 +42,10 @@ function groupCandidateCopy(t: Translator, candidate: GroupCandidate) {
 }
 
 const dishes: Dish[] = [
-  { id: 1, name: "Brown butter agnolotti", restaurant: "Bar Susu", area: "Mount Pleasant", distance: "0.8 km", price: "$24", image: "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=1400&q=86", match: 96, note: "Silky, nutty, bright with lemon", tags: ["Pasta", "Vegetarian"], likes: 284 },
-  { id: 2, name: "Charred miso ramen", restaurant: "Maruhachi Ra-men", area: "West End", distance: "1.7 km", price: "$19", image: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=1200&q=86", match: 91, note: "Smoky broth, springy noodles, deep umami", tags: ["Japanese", "Cozy"], likes: 411 },
-  { id: 3, name: "Crispy oyster mushroom tacos", restaurant: "La Taqueria", area: "Gastown", distance: "2.1 km", price: "$16", image: "https://images.unsplash.com/photo-1551504734-5ee1c4a1479b?auto=format&fit=crop&w=1200&q=86", match: 89, note: "Crunchy, tangy, chile-forward", tags: ["Mexican", "Plant-based"], likes: 356 },
-  { id: 4, name: "Wood-fired stracciatella pizza", restaurant: "Via Tevere", area: "Commercial Drive", distance: "3.4 km", price: "$23", image: "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=1200&q=86", match: 87, note: "Blistered crust, creamy centre, peppery finish", tags: ["Italian", "Shareable"], likes: 518 },
+  { id: 1, name: "Brown butter agnolotti", restaurant: "Bar Susu", area: "Mount Pleasant", distance: "0.8 km", price: "$24", image: "/images/demo-pasta.jpg", match: 96, note: "Silky, nutty, bright with lemon", tags: ["Pasta", "Vegetarian"], likes: 284 },
+  { id: 2, name: "Charred miso ramen", restaurant: "Maruhachi Ra-men", area: "West End", distance: "1.7 km", price: "$19", image: "/images/demo-ramen.jpg", match: 91, note: "Smoky broth, springy noodles, deep umami", tags: ["Japanese", "Cozy"], likes: 411 },
+  { id: 3, name: "Crispy oyster mushroom tacos", restaurant: "La Taqueria", area: "Gastown", distance: "2.1 km", price: "$16", image: "/images/demo-tacos.jpg", match: 89, note: "Crunchy, tangy, chile-forward", tags: ["Mexican", "Plant-based"], likes: 356 },
+  { id: 4, name: "Wood-fired stracciatella pizza", restaurant: "Via Tevere", area: "Commercial Drive", distance: "3.4 km", price: "$23", image: "/images/demo-pizza.jpg", match: 87, note: "Blistered crust, creamy centre, peppery finish", tags: ["Italian", "Shareable"], likes: 518 },
 ];
 const sample: Analysis = {
   name: "Brown butter agnolotti", cuisine: "Northern Italian",
@@ -133,8 +133,8 @@ export default function Home() {
         const storedToken = window.localStorage.getItem("trinque.guestToken");
         const sessionResponse = await fetch("/api/session", { method: "POST", headers: storedToken ? { Authorization: `Guest ${storedToken}` } : undefined });
         if (!sessionResponse.ok) return;
-        const session = await sessionResponse.json() as { identity: { displayName: string }; guestToken?: string };
-        const token = session.guestToken ?? storedToken;
+        const session = await sessionResponse.json() as { identity: { displayName: string; authType?: "guest" | "chatgpt" }; guestToken?: string };
+        const token = session.guestToken ?? storedToken ?? (session.identity.authType === "chatgpt" ? "chatgpt-session" : null);
         if (!active) return;
         if (session.guestToken) window.localStorage.setItem("trinque.guestToken", session.guestToken);
         setGuestToken(token);
@@ -442,7 +442,7 @@ function Analyzer({ guestToken, preview, phase, analysis, analysisMode, warning,
         <p className="canonical-note">{t("analysis.canonicalNotice")}</p>
         <section className="publication-section"><h3>{t("publish.restaurantTitle")}</h3><p>{t("publish.restaurantHelp")}</p>
           <button type="button" className="secondary" onClick={() => void findRestaurants()}>{t("publish.findRestaurants")}</button>
-          {restaurants.length > 0 && <div className="restaurant-results">{restaurants.map((place) => <button type="button" key={place.providerPlaceId} onClick={() => selectProviderRestaurant(place)} className={selectedRestaurant?.providerPlaceId === place.providerPlaceId ? "selected" : ""}><b>{place.displayName}</b><small>{place.address}</small></button>)}<small className="google-attribution" translate="no">{t("publish.googleAttribution")}</small></div>}
+          {restaurants.length > 0 && <div className="restaurant-results">{restaurants.map((place) => <button type="button" key={place.providerPlaceId} onClick={() => selectProviderRestaurant(place)} className={selectedRestaurant?.providerPlaceId === place.providerPlaceId ? "selected" : ""}><b>{place.displayName}{place.rating != null && <span className="place-rating" aria-label={`${place.rating.toFixed(1)} out of 5 stars`}>{"★".repeat(Math.round(place.rating))}{"☆".repeat(5 - Math.round(place.rating))} <em>{place.rating.toFixed(1)}</em></span>}</b><small>{place.address}</small></button>)}<small className="google-attribution" translate="no">{t("publish.googleAttribution")}</small></div>}
           {restaurantStatus && <p className="publication-status">{restaurantStatus}</p>}
           <div className="manual-restaurant"><b>{t("publish.manualRestaurant")}</b><input aria-label={t("publish.restaurantName")} placeholder={t("publish.restaurantName")} value={manualName} onChange={(event) => setManualName(event.target.value)} /><input aria-label={t("publish.restaurantAddress")} placeholder={t("publish.restaurantAddress")} value={manualAddress} onChange={(event) => setManualAddress(event.target.value)} /><button type="button" className="secondary" onClick={useManualRestaurant}>{t("publish.selectRestaurant")}</button></div>
           {selectedRestaurant && <p className="selected-restaurant">✓ {t("publish.selectedRestaurant", { restaurant: selectedRestaurant.name })}</p>}

@@ -74,7 +74,6 @@ export class GooglePlacesProvider implements LocationResolver, PlacesProvider {
     const body: Record<string, unknown> = {
       input: query,
       includedRegionCodes: SUPPORTED_COUNTRY_CODES.map((country) => country.toLowerCase()),
-      includedPrimaryTypes: ["(regions)"],
       languageCode: context.language,
     };
     if (context.location) {

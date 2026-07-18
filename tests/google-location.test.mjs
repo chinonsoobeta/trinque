@@ -3,7 +3,7 @@ import test from "node:test";
 import { GoogleLocationProvider, googleLocationFieldMasks } from "../lib/places/google-location.ts";
 import { PlacesProviderError } from "../lib/places/types.ts";
 
-test("Google autocomplete is country-bounded, field-masked and provider-neutral", async () => {
+test("Google autocomplete is country-bounded, field-masked and permits precise address selections", async () => {
   let captured;
   const provider = new GoogleLocationProvider("server-secret", async (url, init) => {
     captured = { url, init };
@@ -17,7 +17,7 @@ test("Google autocomplete is country-bounded, field-masked and provider-neutral"
   assert.equal(captured.init.cache, "no-store");
   const body = JSON.parse(captured.init.body);
   assert.deepEqual(body.includedRegionCodes, ["us", "ca", "mx", "gb", "fr"]);
-  assert.deepEqual(body.includedPrimaryTypes, ["(regions)"]);
+  assert.equal(body.includedPrimaryTypes, undefined);
   assert.equal(body.languageCode, "en-GB");
 });
 

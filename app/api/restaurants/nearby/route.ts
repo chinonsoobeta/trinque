@@ -22,6 +22,8 @@ export async function GET(request: Request) {
   const radiusMeters = url.searchParams.has("radiusMeters") ? Number(url.searchParams.get("radiusMeters")) : 5_000;
   const requestedLanguage = url.searchParams.get("language") as SupportedLanguage | null;
   const language = requestedLanguage && SUPPORTED_LANGUAGES.includes(requestedLanguage) ? requestedLanguage : "en-CA";
+  const dishName = (url.searchParams.get("dishName") ?? "").trim().replace(/\s+/g, " ").slice(0, 120);
+  const cuisine = (url.searchParams.get("cuisine") ?? "").trim().replace(/\s+/g, " ").slice(0, 100);
   if (rawLatitude === null || rawLongitude === null || !Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180 || !Number.isFinite(radiusMeters) || radiusMeters < 100 || radiusMeters > 50_000) {
     return placesErrorResponse(new PlacesProviderError("invalid_request", "Valid coordinates and a radius from 100 to 50000 metres are required.", 400));
   }
@@ -29,11 +31,13 @@ export async function GET(request: Request) {
     const provider = createPlacesProvider(await placesApiKey());
     const resolved = await provider.resolveCoordinates(latitude, longitude, language);
     const location = normalizeLocation({ ...resolved, latitude, longitude, source: "device" }, language);
-    const restaurants = await provider.nearbyRestaurants(location, { language, radiusMeters });
+    const dishQuery = dishName ? [dishName, cuisine, "restaurant"].filter(Boolean).join(" ") : undefined;
+    const restaurants = await provider.nearbyRestaurants(location, { language, radiusMeters, dishQuery });
     return Response.json({
       location,
       restaurants,
       attribution: "Google Maps",
+      queryMode: dishQuery ? "reviewed_dish" : "nearby",
       ranking: {
         factors: ["relevance", "distance", "prominence"],
         learnMoreUri: "https://support.google.com/business/answer/7091",

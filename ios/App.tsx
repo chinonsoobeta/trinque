@@ -56,6 +56,7 @@ type AnalysisEnvelope =
 
 type MatchResult = { kind: 'dish' | 'restaurant_alternative'; id: string; dishName: string | null; restaurantName: string; locality: string; distanceKm: number; score: number; reasonCode: 'semantic_and_distance' | 'nearby_alternative' | 'restaurant_only'; provenance: string; verificationStatus: string; lastConfirmedAt: string | null; dietaryCaveat: string; currentAvailabilityConfirmed: boolean; priceAmount: number | null; currencyCode: string | null; imageUrl: string | null; attribution?: 'Google Maps' };
 type MatchTiers = { confirmedNearbyDishes: MatchResult[]; communityOrInferredDishes: MatchResult[]; restaurantLevelAlternatives: MatchResult[] };
+type CommunityDish = { id: string; name: string; cuisine: string; description: string; confidence: number; imageUrl?: string | null; contributorLabel: string; restaurant?: { name: string } | null; provenance?: string; verificationStatus?: string; availabilityKnowledge?: string };
 type MobileGroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; explanation: string; conflicts: string[]; kind: 'published_dish' | 'provider_restaurant' | 'seed_demo'; provenance?: string | null; verificationStatus?: string | null; currentAvailabilityConfirmed: boolean; dietaryCaveat: string };
 type MobileGroup = { id: string; name: string; eventTime: string; neighborhood: string; budgetMax: number; maxDistanceKm: number; vegetarianRequired: number; allergies: string[]; inviteCode: string; inviteExpiresAt: string | null; inviteRevokedAt: string | null; status: 'voting' | 'finalized'; selectedCandidateId: string | null; candidates: MobileGroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number>; memberCount: number; viewerRole: 'owner' | 'participant'; viewerVote: string | null; viewerRsvp: string | null; timeZone: string | null; currencyCode: string | null; locale: string | null; locality: string | null; countryCode: string | null };
 
@@ -181,6 +182,7 @@ export default function App() {
   const [location, setLocation] = useState<MobileLocation | null>(null);
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [pendingInvite, setPendingInvite] = useState<string | null>(null);
+  const [communityFeed, setCommunityFeed] = useState<CommunityDish[]>([]);
   const t = useCallback<Translator>((key, values) => translate(language, key, values), [language]);
   const correctionTracked = useRef(false);
   const inviteHandled = useCallback(() => setPendingInvite(null), []);
@@ -260,6 +262,11 @@ export default function App() {
         if (savesResponse.ok) {
           const payload = await savesResponse.json() as { savedDishIds: number[] };
           if (active) setSavedIds(payload.savedDishIds);
+        }
+        const feedResponse = await fetch(`${remoteApi}/api/feed`, { headers: { Authorization: `Guest ${token}` } });
+        if (feedResponse.ok) {
+          const payload = await feedResponse.json() as { dishes: CommunityDish[] };
+          if (active) setCommunityFeed(payload.dishes);
         }
       } catch {
         // Keep the offline demo available; the next launch retries persistence.
@@ -412,7 +419,7 @@ export default function App() {
       <SafeAreaView style={styles.safeArea}>
         <StatusBar style={effectiveTheme === 'dark' ? 'light' : 'dark'} />
         <View style={styles.appShell}>
-          {tab === 'Discover' && <DiscoverScreen savedIds={savedIds} onSave={toggleSaved} onAnalyze={openAnalyzer} t={t} location={location} />}
+          {tab === 'Discover' && <DiscoverScreen savedIds={savedIds} onSave={toggleSaved} onAnalyze={openAnalyzer} t={t} location={location} feed={communityFeed} />}
           {tab === 'Groups' && <GroupsScreen guestToken={guestToken} t={t} location={location} language={language} inviteCode={pendingInvite} inviteHandled={inviteHandled} track={trackAnalytics} />}
           {tab === 'Saved' && <SavedScreen dishes={savedDishes} onSave={toggleSaved} onDiscover={() => setTab('Discover')} t={t} />}
           {tab === 'Profile' && <ProfileScreen guestToken={guestToken} t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} persist={persistPreferences} />}
@@ -457,7 +464,7 @@ export default function App() {
   );
 }
 
-function DiscoverScreen({ savedIds, onSave, onAnalyze, t, location }: { savedIds: number[]; onSave: (id: number) => void; onAnalyze: () => void; t: Translator; location: MobileLocation | null }) {
+function DiscoverScreen({ savedIds, onSave, onAnalyze, t, location, feed }: { savedIds: number[]; onSave: (id: number) => void; onAnalyze: () => void; t: Translator; location: MobileLocation | null; feed: CommunityDish[] }) {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
       <Header eyebrow={location ? `${location.locality} · ${location.countryCode}` : t('location.change')} />
@@ -476,10 +483,8 @@ function DiscoverScreen({ savedIds, onSave, onAnalyze, t, location }: { savedIds
       </View>
 
       <SectionHeading kicker={t('home.curated', { location: location?.locality ?? '—' }).toUpperCase()} title={t('home.gather')} action="" />
-      <View style={styles.seededNotice}><Text style={styles.seededNoticeText}>{t('home.seededNotice')}</Text></View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cardRow}>
-        {dishes.map((dish) => <DishCard key={dish.id} dish={dish} saved={savedIds.includes(dish.id)} onSave={() => onSave(dish.id)} />)}
-      </ScrollView>
+      <View style={styles.seededNotice}><Text style={styles.seededNoticeText}>{t('home.communityFeedNotice')}</Text></View>
+      {feed.length ? <View style={styles.communityFeed}>{feed.map((dish) => <CommunityDishCard key={dish.id} dish={dish} t={t} />)}</View> : <View style={styles.emptyFeed}><Text style={styles.emptyFeedText}>{t('match.noResults')}</Text></View>}
 
       <View style={styles.tasteCard}>
         <View style={styles.tasteTopLine}>
@@ -497,6 +502,10 @@ function DiscoverScreen({ savedIds, onSave, onAnalyze, t, location }: { savedIds
       <Text style={styles.editorialNote}>“{t('home.editorial')}”</Text>
     </ScrollView>
   );
+}
+
+function CommunityDishCard({ dish, t }: { dish: CommunityDish; t: Translator }) {
+  return <View style={styles.communityDish}><View style={styles.communityDishCopy}><Text style={styles.communityDishName}>{dish.name}</Text><Text style={styles.communityDishDescription}>{dish.description}</Text><Text style={styles.communityDishMeta}>{dish.restaurant?.name ?? t('analysis.review')} · {dish.contributorLabel}</Text><Text style={styles.communityDishMeta}>{t(`provenance.${dish.provenance ?? 'ai_identified'}` as MessageKey)} · {t(`verification.${dish.verificationStatus ?? 'unverified'}` as MessageKey)} · {t(dish.availabilityKnowledge === 'recently_confirmed' ? 'availability.confirmed' : 'availability.unknown')}</Text></View>{dish.imageUrl ? <Image source={{ uri: dish.imageUrl }} style={styles.communityDishImage} /> : <View style={[styles.communityDishImage, styles.mobileMatchPlaceholder]}><Text style={styles.mobileMatchPlaceholderText}>T</Text></View>}</View>;
 }
 
 function GroupsScreen({ guestToken, t, location, language, inviteCode, inviteHandled, track }: { guestToken: string | null; t: Translator; location: MobileLocation | null; language: UiLanguage; inviteCode: string | null; inviteHandled: () => void; track: (event: AnalyticsEvent, details?: { mode?: 'live' | 'demo'; outcome?: string; durationMs?: number }) => void }) {
@@ -814,10 +823,12 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
     if (!apiBase) { setRestaurantStatus(t('publish.providerUnavailable')); return; }
     setRestaurantStatus('');
     try {
-      const response = await fetch(`${apiBase}/api/restaurants/nearby?latitude=${location.latitude}&longitude=${location.longitude}&radiusMeters=5000&language=${language}`, { headers: guestToken ? { Authorization: `Guest ${guestToken}` } : undefined });
+      const query = new URLSearchParams({ latitude: String(location.latitude), longitude: String(location.longitude), radiusMeters: '5000', language, dishName: analysis.name, cuisine: analysis.cuisine });
+      const response = await fetch(`${apiBase}/api/restaurants/nearby?${query}`, { headers: guestToken ? { Authorization: `Guest ${guestToken}` } : undefined });
       const body = await response.json() as { restaurants?: MobileRestaurantPlace[]; error?: { code?: string } };
       if (!response.ok) { setRestaurantStatus(body.error?.code === 'credentials' ? t('publish.providerUnavailable') : t('location.providerError')); return; }
       setRestaurants(body.restaurants ?? []);
+      if (!(body.restaurants ?? []).length) setRestaurantStatus(t('publish.noDishMatches'));
     } catch { setRestaurantStatus(t('location.providerError')); }
   }
 
@@ -1162,4 +1173,13 @@ const styles = StyleSheet.create({
   mobileMatchReason: { color: palette.muted, fontSize: 9, lineHeight: 13, marginTop: 4 },
   mobileMatchMeta: { color: palette.terracotta, fontSize: 8, lineHeight: 12, marginTop: 2 },
   mobileMatchCaveat: { color: palette.warning, fontSize: 8, lineHeight: 12, marginTop: 3 },
+  communityFeed: { gap: 10 },
+  emptyFeed: { borderWidth: 1, borderColor: palette.line, borderStyle: 'dashed', borderRadius: 15, padding: 18 },
+  emptyFeedText: { color: palette.muted, textAlign: 'center', fontSize: 12 },
+  communityDish: { flexDirection: 'row', gap: 12, backgroundColor: palette.paper, borderWidth: 1, borderColor: palette.line, borderRadius: 17, padding: 12 },
+  communityDishCopy: { flex: 1, gap: 4 },
+  communityDishName: { color: palette.ink, fontFamily: Platform.select({ ios: 'Georgia-Bold', default: 'serif' }), fontSize: 17 },
+  communityDishDescription: { color: palette.muted, fontSize: 11, lineHeight: 16 },
+  communityDishMeta: { color: palette.terracotta, fontSize: 9, lineHeight: 13 },
+  communityDishImage: { width: 82, height: 82, borderRadius: 12, backgroundColor: palette.blush },
 });

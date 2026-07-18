@@ -20,6 +20,8 @@ export type AutocompleteContext = {
 export type RestaurantFilters = {
   radiusMeters?: number;
   language: SupportedLanguage;
+  /** A reviewed dish/cuisine query. Results remain restaurant-level suggestions, not menu claims. */
+  dishQuery?: string;
 };
 
 export type ProviderPhoto = {

@@ -73,6 +73,29 @@ test("nearby restaurant search excludes a cinema carrying a food-service tag", a
   assert.deepEqual(restaurants.map((restaurant) => restaurant.displayName), ["Verified restaurant category"]);
 });
 
+test("reviewed dish restaurant search uses Google Text Search without claiming menu availability", async () => {
+  let captured;
+  const provider = new GooglePlacesProvider("server-secret", async (url, init) => {
+    captured = { url, init };
+    return Response.json({ places: [googleRestaurant({ name: "La Maison des Crêpes" })] });
+  });
+  const location = normalizeLocation({ latitude: 48.8566, longitude: 2.3522, locality: "Paris", administrativeRegion: "Île-de-France", countryCode: "FR", timeZone: "Europe/Paris", source: "manual" }, "fr");
+  const [restaurant] = await provider.nearbyRestaurants(location, { language: "fr", radiusMeters: 3_000, dishQuery: "buckwheat galette Breton restaurant" });
+  assert.equal(captured.url, "https://places.googleapis.com/v1/places:searchText");
+  assert.equal(captured.init.headers["X-Goog-FieldMask"], googleLocationFieldMasks.nearbyRestaurants);
+  assert.deepEqual(JSON.parse(captured.init.body), {
+    textQuery: "buckwheat galette Breton restaurant",
+    includedType: "restaurant",
+    strictTypeFiltering: true,
+    locationBias: { circle: { center: { latitude: 48.8566, longitude: 2.3522 }, radius: 3_000 } },
+    rankPreference: "RELEVANCE",
+    pageSize: 20,
+    languageCode: "fr",
+    regionCode: "FR",
+  });
+  assert.equal(restaurant.displayName, "La Maison des Crêpes");
+});
+
 test("restaurant details rejects a venue that is not a restaurant", async () => {
   const provider = new GooglePlacesProvider("server-secret", async () => Response.json({
     ...googleRestaurant({ id: "ChIJCinema123", name: "Cinema with concessions" }),

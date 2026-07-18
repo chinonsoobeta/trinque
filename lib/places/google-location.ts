@@ -135,11 +135,22 @@ export class GooglePlacesProvider implements LocationResolver, PlacesProvider {
 
   async nearbyRestaurants(location: NormalizedLocation, filters: RestaurantFilters): Promise<RestaurantPlace[]> {
     const radius = Math.min(50_000, Math.max(100, Math.round(filters.radiusMeters ?? 5_000)));
+    const dishQuery = filters.dishQuery?.trim().replace(/\s+/g, " ").slice(0, 240);
+    const isDishSearch = Boolean(dishQuery);
     const payload = await this.requestJson<{ places?: GooglePlace[] }>(
-      `${GOOGLE_API}/places:searchNearby`,
+      `${GOOGLE_API}/${isDishSearch ? "places:searchText" : "places:searchNearby"}`,
       {
         method: "POST",
-        body: JSON.stringify({
+        body: JSON.stringify(isDishSearch ? {
+          textQuery: dishQuery,
+          includedType: "restaurant",
+          strictTypeFiltering: true,
+          locationBias: { circle: { center: { latitude: location.latitude, longitude: location.longitude }, radius } },
+          rankPreference: "RELEVANCE",
+          pageSize: 20,
+          languageCode: filters.language,
+          regionCode: location.countryCode,
+        } : {
           includedTypes: ["restaurant"],
           includedPrimaryTypes: ["restaurant"],
           locationRestriction: { circle: { center: { latitude: location.latitude, longitude: location.longitude }, radius } },

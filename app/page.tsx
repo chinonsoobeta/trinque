@@ -22,7 +22,7 @@ type MatchResult = { kind: "dish" | "restaurant_alternative"; id: string; dishNa
 type MatchTiers = { confirmedNearbyDishes: MatchResult[]; communityOrInferredDishes: MatchResult[]; restaurantLevelAlternatives: MatchResult[] };
 type PublishRestaurant = { provider: "google" | "community"; providerPlaceId?: string | null; name: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: NormalizedLocation["countryCode"]; address: string; currencyCode: string };
 type PublicationMetadata = { restaurant: PublishRestaurant; knowledge: { priceKnowledge: "unknown" | "exact" | "approximate"; priceAmount?: number; availabilityKnowledge: "unknown" | "recently_confirmed" | "historical"; lastConfirmedAt?: string }; retainImage: boolean; reviewConfirmed: true; restaurantConfirmed: true };
-type PublishedDish = Analysis & { id: string; sourceMode: "live" | "demo"; imageUrl?: string | null; localPreview?: string; provenance?: string; verificationStatus?: string; availabilityKnowledge?: string; restaurant?: { name: string } | null };
+type PublishedDish = Analysis & { id: string; sourceMode: "live" | "demo"; imageUrl?: string | null; localPreview?: string; provenance?: string; verificationStatus?: string; availabilityKnowledge?: string; contributorLabel?: string; isOwner?: boolean; restaurant?: { name: string } | null };
 type GroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; explanation: string; conflicts: string[]; kind: "published_dish" | "provider_restaurant" | "seed_demo"; provenance?: string | null; verificationStatus?: string | null; currentAvailabilityConfirmed: boolean; dietaryCaveat: string };
 type GroupSnapshot = { id: string; name: string; eventTime: string; neighborhood: string; budgetMax: number; maxDistanceKm: number; vegetarianRequired: number; allergies: string[]; inviteCode: string; inviteExpiresAt: string | null; inviteRevokedAt: string | null; status: "voting" | "finalized"; selectedCandidateId: string | null; candidates: GroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number>; memberCount: number; viewerRole: "owner" | "participant"; viewerVote: string | null; viewerRsvp: string | null; timeZone: string | null; currencyCode: string | null; locale: string | null; locality: string | null; countryCode: string | null };
 type Translator = (key: MessageKey, values?: Record<string, string | number>) => string;
@@ -73,7 +73,7 @@ export default function Home() {
   const [toast, setToast] = useState("");
   const [guestToken, setGuestToken] = useState<string | null>(null);
   const [identityLabel, setIdentityLabel] = useState("Guest");
-  const [publishedDishes, setPublishedDishes] = useState<PublishedDish[]>([]);
+  const [communityFeed, setCommunityFeed] = useState<PublishedDish[]>([]);
   const [nearbyMatches, setNearbyMatches] = useState<MatchTiers>(emptyMatchTiers);
   const [matchProviderUnavailable, setMatchProviderUnavailable] = useState(false);
   const [matchRecordsUnavailable, setMatchRecordsUnavailable] = useState(false);
@@ -154,10 +154,10 @@ export default function Home() {
           const payload = await savesResponse.json() as { savedDishIds: number[] };
           if (active) setSaved(new Set(payload.savedDishIds));
         }
-        const dishesResponse = await fetch("/api/dishes", { headers: token ? { Authorization: `Guest ${token}` } : undefined });
-        if (dishesResponse.ok) {
-          const payload = await dishesResponse.json() as { dishes: PublishedDish[] };
-          if (active) setPublishedDishes(payload.dishes);
+        const feedResponse = await fetch("/api/feed", { headers: token ? { Authorization: `Guest ${token}` } : undefined });
+        if (feedResponse.ok) {
+          const payload = await feedResponse.json() as { dishes: PublishedDish[] };
+          if (active) setCommunityFeed(payload.dishes);
         }
       } catch {
         // The visual demo remains usable while durable services recover.
@@ -243,7 +243,7 @@ export default function Home() {
     if (!guestToken || !window.confirm(imageOnly ? t("privacy.deleteImage") : t("privacy.deleteDish"))) return;
     const response = await fetch(`/api/dishes/${id}${imageOnly ? "/image" : ""}`, { method: "DELETE", headers: { Authorization: `Guest ${guestToken}` } });
     if (!response.ok) { flash(t("error.generic")); return; }
-    setPublishedDishes((current) => imageOnly ? current.map((dish) => dish.id === id ? { ...dish, imageUrl: null, localPreview: undefined } : dish) : current.filter((dish) => dish.id !== id));
+    setCommunityFeed((current) => imageOnly ? current.map((dish) => dish.id === id ? { ...dish, imageUrl: null, localPreview: undefined } : dish) : current.filter((dish) => dish.id !== id));
   }
   function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]; if (!file) return;
@@ -267,7 +267,7 @@ export default function Home() {
       const response = await fetch("/api/dishes", { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ analysis, sourceMode: analysisMode, imageDataUrl: pendingImage, language, ...metadata }) });
       if (!response.ok) throw new Error("publish failed");
       const payload = await response.json() as { dish: PublishedDish; matches: MatchTiers; providerStatus: { status: "live" | "unavailable" }; matchingStatus: { status: "live" | "unavailable" } };
-      setPublishedDishes((current) => [{ ...payload.dish, localPreview: preview }, ...current.filter((dish) => dish.id !== payload.dish.id)]);
+      setCommunityFeed((current) => [{ ...payload.dish, localPreview: preview, contributorLabel: "Community member" }, ...current.filter((dish) => dish.id !== payload.dish.id)]);
       setNearbyMatches(payload.matches);
       setMatchProviderUnavailable(payload.providerStatus.status === "unavailable");
       setMatchRecordsUnavailable(payload.matchingStatus.status === "unavailable");
@@ -325,10 +325,10 @@ export default function Home() {
                   {["For you", "Near you", "Hidden gems"].map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item}</button>)}
                 </div>}
               </div>
-              {view !== "saved" && <p className="seeded-notice">{t("home.seededNotice")}</p>}
-              {visible.length ? <div className="dish-grid">
-                {view === "discover" && publishedDishes.map((dish) => <PublishedDishCard key={dish.id} dish={dish} t={t} onDelete={deletePublishedDish} />)}
-                {visible.map((dish, index) => <DishCard key={dish.id} dish={dish} featured={index === 0 && view === "discover"} isSaved={saved.has(dish.id)} onSave={toggleSaved} t={t} />)}
+              {view === "discover" && <p className="seeded-notice">{t("home.communityFeedNotice")}</p>}
+              {(view === "discover" ? communityFeed.length : visible.length) ? <div className="dish-grid">
+                {view === "discover" && communityFeed.map((dish) => <PublishedDishCard key={dish.id} dish={dish} t={t} onDelete={dish.isOwner ? deletePublishedDish : undefined} />)}
+                {view === "saved" && visible.map((dish, index) => <DishCard key={dish.id} dish={dish} featured={index === 0} isSaved={saved.has(dish.id)} onSave={toggleSaved} t={t} />)}
               </div> : <div className="empty-state"><span>♡</span><h3>{t("home.emptyTitle")}</h3><p>{t("home.emptyBody")}</p><button className="primary" onClick={() => setView("discover")}>{t("home.explore")}</button></div>}
             </section>
 
@@ -370,10 +370,10 @@ function DishCard({ dish, featured, isSaved, onSave, t }: { dish: Dish; featured
   </article>;
 }
 
-function PublishedDishCard({ dish, t, onDelete }: { dish: PublishedDish; t: Translator; onDelete: (id: string, imageOnly?: boolean) => void }) {
+function PublishedDishCard({ dish, t, onDelete }: { dish: PublishedDish; t: Translator; onDelete?: (id: string, imageOnly?: boolean) => void }) {
   return <article className="dish-card published-card">
     <div className="dish-image" style={{ backgroundImage: `linear-gradient(180deg,transparent 55%,rgba(22,13,10,.68)),url(${dish.localPreview ?? dish.imageUrl ?? dishes[0].image})` }}><span className="match"><b>NEW</b> {t("analysis.publishedTitle")}</span><div className="photo-caption"><b>{dish.sourceMode === "live" ? t("analysis.live") : t("analysis.demo")}</b><small>{t("analysis.review")}</small></div></div>
-    <div className="dish-body"><div className="dish-title"><div><h3>{dish.name}</h3><p>{dish.description}</p></div><strong>{dish.confidence}%</strong></div><div className="dish-meta"><div><span>{dish.cuisine}</span></div><small>{dish.restaurant?.name ?? t("analysis.review")}</small></div>{dish.provenance && <p className="record-honesty">{t(`provenance.${dish.provenance}` as MessageKey)} · {t(`verification.${dish.verificationStatus ?? "unverified"}` as MessageKey)} · {t(dish.availabilityKnowledge === "recently_confirmed" ? "availability.confirmed" : "availability.unknown")}</p>}<div className="modal-actions">{dish.imageUrl && <button className="text-button" onClick={() => onDelete(dish.id, true)}>{t("privacy.deleteImage")}</button>}<button className="text-button" onClick={() => onDelete(dish.id)}>{t("privacy.deleteDish")}</button></div></div>
+    <div className="dish-body"><div className="dish-title"><div><h3>{dish.name}</h3><p>{dish.description}</p></div><strong>{dish.confidence}%</strong></div><div className="dish-meta"><div><span>{dish.cuisine}</span></div><small>{dish.restaurant?.name ?? t("analysis.review")}{dish.contributorLabel ? ` · ${dish.contributorLabel}` : ""}</small></div>{dish.provenance && <p className="record-honesty">{t(`provenance.${dish.provenance}` as MessageKey)} · {t(`verification.${dish.verificationStatus ?? "unverified"}` as MessageKey)} · {t(dish.availabilityKnowledge === "recently_confirmed" ? "availability.confirmed" : "availability.unknown")}</p>}{onDelete && <div className="modal-actions">{dish.imageUrl && <button className="text-button" onClick={() => onDelete(dish.id, true)}>{t("privacy.deleteImage")}</button>}<button className="text-button" onClick={() => onDelete(dish.id)}>{t("privacy.deleteDish")}</button></div>}</div>
   </article>;
 }
 
@@ -395,10 +395,12 @@ function Analyzer({ guestToken, preview, phase, analysis, analysisMode, warning,
     if (!location) { setRestaurantStatus(t("publish.noLocation")); return; }
     setRestaurantStatus("");
     try {
-      const response = await fetch(`/api/restaurants/nearby?latitude=${location.latitude}&longitude=${location.longitude}&radiusMeters=5000&language=${language}`, { headers: guestToken ? { Authorization: `Guest ${guestToken}` } : undefined });
+      const query = new URLSearchParams({ latitude: String(location.latitude), longitude: String(location.longitude), radiusMeters: "5000", language, dishName: analysis.name, cuisine: analysis.cuisine });
+      const response = await fetch(`/api/restaurants/nearby?${query}`, { headers: guestToken ? { Authorization: `Guest ${guestToken}` } : undefined });
       const body = await response.json() as { restaurants?: RestaurantPlace[]; error?: { code?: string } };
       if (!response.ok) { setRestaurantStatus(body.error?.code === "credentials" ? t("publish.providerUnavailable") : t("location.providerError")); return; }
       setRestaurants(body.restaurants ?? []);
+      if (!(body.restaurants ?? []).length) setRestaurantStatus(t("publish.noDishMatches"));
     } catch { setRestaurantStatus(t("location.providerError")); }
   }
 
@@ -441,7 +443,7 @@ function Analyzer({ guestToken, preview, phase, analysis, analysisMode, warning,
         </div>
         <p className="canonical-note">{t("analysis.canonicalNotice")}</p>
         <section className="publication-section"><h3>{t("publish.restaurantTitle")}</h3><p>{t("publish.restaurantHelp")}</p>
-          <button type="button" className="secondary" onClick={() => void findRestaurants()}>{t("publish.findRestaurants")}</button>
+          <button type="button" className="secondary" onClick={() => void findRestaurants()}>{t("publish.findRestaurants")}</button><p className="restaurant-search-note">{t("publish.dishSearchNotice")}</p>
           {restaurants.length > 0 && <div className="restaurant-results">{restaurants.map((place) => <button type="button" key={place.providerPlaceId} onClick={() => selectProviderRestaurant(place)} className={selectedRestaurant?.providerPlaceId === place.providerPlaceId ? "selected" : ""}><b>{place.displayName}{place.rating != null && <span className="place-rating" aria-label={`${place.rating.toFixed(1)} out of 5 stars`}>{"★".repeat(Math.round(place.rating))}{"☆".repeat(5 - Math.round(place.rating))} <em>{place.rating.toFixed(1)}</em></span>}</b><small>{place.address}</small></button>)}<small className="google-attribution" translate="no">{t("publish.googleAttribution")}</small></div>}
           {restaurantStatus && <p className="publication-status">{restaurantStatus}</p>}
           <div className="manual-restaurant"><b>{t("publish.manualRestaurant")}</b><input aria-label={t("publish.restaurantName")} placeholder={t("publish.restaurantName")} value={manualName} onChange={(event) => setManualName(event.target.value)} /><input aria-label={t("publish.restaurantAddress")} placeholder={t("publish.restaurantAddress")} value={manualAddress} onChange={(event) => setManualAddress(event.target.value)} /><button type="button" className="secondary" onClick={useManualRestaurant}>{t("publish.selectRestaurant")}</button></div>

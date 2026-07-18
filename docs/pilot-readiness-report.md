@@ -1,6 +1,6 @@
 # Trinque regional pilot readiness report
 
-Report date: 2026-07-18  ·  Source baseline: `main` commit `fef02ba`  ·  Recommendation: **NO-GO**
+Report date: 2026-07-18  ·  Validated source: `main` commit `57a0136`  ·  Recommendation: **NO-GO**
 
 ## Scope and validation anchors
 
@@ -8,7 +8,7 @@ Runtime support is dynamic for every locality in US, CA, MX, GB and FR. The 15 a
 
 ## Automated evidence
 
-- `npm run verify`: 70 tests passed; production web build passed; iOS TypeScript check and Expo export passed.
+- `npm run verify`: 72 tests passed; production web build passed; iOS TypeScript check and Expo export passed.
 - `npm run lint`: 0 errors; seven pre-existing accessibility/performance warnings remain (image alt text and the existing web `<img>` path).
 - Secret scan: no API-key/token/private-key signatures found.
 - D1 migrations `0001` through `0008` apply in sequence; the latest migration adds consent-aware analytics, feedback, and client diagnostics.

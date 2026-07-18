@@ -32,6 +32,9 @@ type MeasurementSystem = 'metric' | 'imperial';
 type Translator = (key: MessageKey, values?: Record<string, string | number>) => string;
 type MobileLocation = { latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: 'US' | 'CA' | 'MX' | 'GB' | 'FR'; timeZone: string; currencyCode: string; locale: string; language: UiLanguage; measurementSystem: MeasurementSystem; source: 'device' | 'manual' };
 type MobileLocationSuggestion = { id: string; provider: 'google'; providerPlaceId: string; label: string; secondaryLabel: string; attribution: 'Google Maps' };
+type MobileRestaurantPlace = { provider: 'google'; providerPlaceId: string; displayName: string; address: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: MobileLocation['countryCode']; currencyCode: string; attribution: 'Google Maps' };
+type PublishRestaurant = { provider: 'google' | 'community'; providerPlaceId?: string | null; name: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: MobileLocation['countryCode']; address: string; currencyCode: string };
+type PublicationMetadata = { restaurant: PublishRestaurant; knowledge: { priceKnowledge: 'unknown' | 'exact' | 'approximate'; priceAmount?: number; availabilityKnowledge: 'unknown' | 'recently_confirmed' | 'historical'; lastConfirmedAt?: string }; reviewConfirmed: true; restaurantConfirmed: true };
 
 type Analysis = {
   name: string;
@@ -40,6 +43,7 @@ type Analysis = {
   dietary: string;
   confidence: number;
   description: string;
+  canonical: { dishName: string; cuisine: string; ingredients: string[]; flavours: string[]; metadataSource: 'ai_normalized' | 'user_reviewed' };
 };
 
 type AnalysisEnvelope =
@@ -87,6 +91,7 @@ const sampleAnalysis: Analysis = {
   dietary: 'Vegetarian · Contains dairy and gluten',
   confidence: 94,
   description: 'Tender filled pasta with toasted butter, herbs and a bright citrus finish.',
+  canonical: { dishName: 'agnolotti', cuisine: 'northern italian', ingredients: ['filled pasta', 'butter', 'sage', 'lemon', 'parmesan'], flavours: ['nutty', 'herbal', 'bright'], metadataSource: 'user_reviewed' },
 };
 
 const dishes: Dish[] = [
@@ -290,7 +295,7 @@ export default function App() {
         const response = await fetch(`${remoteApi}/api/analyze`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageDataUrl: dataUrl, demo }),
+          body: JSON.stringify({ imageDataUrl: dataUrl, demo, language }),
         });
         const envelope = (await response.json()) as AnalysisEnvelope;
         if (!response.ok || !envelope.ok) {
@@ -317,7 +322,7 @@ export default function App() {
     }
   };
 
-  const publishDish = async () => {
+  const publishDish = async (metadata: PublicationMetadata) => {
     if (!remoteApi || !guestToken || !analysisMode) {
       setAnalysisError(t('analysis.sessionError'));
       setPhase('error');
@@ -325,7 +330,7 @@ export default function App() {
     }
     setPublishing(true);
     try {
-      const response = await fetch(`${remoteApi}/api/dishes`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ analysis, sourceMode: analysisMode, imageDataUrl }) });
+      const response = await fetch(`${remoteApi}/api/dishes`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ analysis, sourceMode: analysisMode, imageDataUrl, language, ...metadata }) });
       if (!response.ok) throw new Error('publish failed');
       const payload = await response.json() as { matches: NearbyMatch[] };
       setNearbyMatches(payload.matches);
@@ -352,6 +357,7 @@ export default function App() {
           <TabBar active={tab} onSelect={setTab} onAnalyze={openAnalyzer} t={t} />
         </View>
         <AnalyzerModal
+          key={`${imageDataUrl ?? 'demo'}-${analysisMode ?? 'pending'}`}
           visible={analyzerOpen}
           phase={phase}
           preview={preview}
@@ -376,6 +382,8 @@ export default function App() {
           t={t}
           language={language}
           measurementSystem={measurementSystem}
+          location={location}
+          apiBase={remoteApi}
         />
       </SafeAreaView>
     </SafeAreaProvider>
@@ -636,7 +644,7 @@ function TabButton({ tab, icon, active, onPress, t }: { tab: Tab; icon: string; 
   return <Pressable style={styles.tabButton} onPress={onPress}><Text style={[styles.tabIcon, active && styles.tabActive]}>{icon}</Text><Text style={[styles.tabLabel, active && styles.tabActive]}>{t(key)}</Text></Pressable>;
 }
 
-function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analysisMode, warning, error, matches, publishing, onAnalysisChange, onChoose, onDemo, onRetry, onPublish, onClose, onReset, t, language, measurementSystem }: {
+function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analysisMode, warning, error, matches, publishing, onAnalysisChange, onChoose, onDemo, onRetry, onPublish, onClose, onReset, t, language, measurementSystem, location, apiBase }: {
   visible: boolean;
   phase: AnalyzerPhase;
   preview: string | null;
@@ -651,13 +659,55 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
   onChoose: (camera: boolean) => void;
   onDemo: () => void;
   onRetry: () => void;
-  onPublish: () => void;
+  onPublish: (metadata: PublicationMetadata) => void;
   onClose: () => void;
   onReset: () => void;
   t: Translator;
   language: UiLanguage;
   measurementSystem: MeasurementSystem;
+  location: MobileLocation | null;
+  apiBase: string | null | undefined;
 }) {
+  const [restaurants, setRestaurants] = useState<MobileRestaurantPlace[]>([]);
+  const [selectedRestaurant, setSelectedRestaurant] = useState<PublishRestaurant | null>(null);
+  const [restaurantStatus, setRestaurantStatus] = useState('');
+  const [manualName, setManualName] = useState('');
+  const [manualAddress, setManualAddress] = useState('');
+  const [priceKnowledge, setPriceKnowledge] = useState<'' | 'unknown' | 'exact' | 'approximate'>('');
+  const [priceAmount, setPriceAmount] = useState('');
+  const [availabilityKnowledge, setAvailabilityKnowledge] = useState<'' | 'unknown' | 'recently_confirmed' | 'historical'>('');
+  const [lastConfirmedAt, setLastConfirmedAt] = useState('');
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
+  const [restaurantConfirmed, setRestaurantConfirmed] = useState(false);
+
+  async function findRestaurants() {
+    if (!location) { setRestaurantStatus(t('publish.noLocation')); return; }
+    if (!apiBase) { setRestaurantStatus(t('publish.providerUnavailable')); return; }
+    setRestaurantStatus('');
+    try {
+      const response = await fetch(`${apiBase}/api/restaurants/nearby?latitude=${location.latitude}&longitude=${location.longitude}&radiusMeters=5000&language=${language}`);
+      const body = await response.json() as { restaurants?: MobileRestaurantPlace[]; error?: { code?: string } };
+      if (!response.ok) { setRestaurantStatus(body.error?.code === 'credentials' ? t('publish.providerUnavailable') : t('location.providerError')); return; }
+      setRestaurants(body.restaurants ?? []);
+    } catch { setRestaurantStatus(t('location.providerError')); }
+  }
+
+  function selectProviderRestaurant(place: MobileRestaurantPlace) {
+    setSelectedRestaurant({ provider: 'google', providerPlaceId: place.providerPlaceId, name: place.displayName, latitude: place.latitude, longitude: place.longitude, locality: place.locality, administrativeRegion: place.administrativeRegion, countryCode: place.countryCode, address: place.address, currencyCode: place.currencyCode });
+    setRestaurantConfirmed(false);
+  }
+
+  function useManualRestaurant() {
+    if (!location || !manualName.trim() || !manualAddress.trim()) { setRestaurantStatus(location ? t('publish.requirements') : t('publish.noLocation')); return; }
+    setSelectedRestaurant({ provider: 'community', name: manualName.trim(), latitude: location.latitude, longitude: location.longitude, locality: location.locality, administrativeRegion: location.administrativeRegion, countryCode: location.countryCode, address: manualAddress.trim(), currencyCode: location.currencyCode });
+    setRestaurantConfirmed(false);
+  }
+
+  const ready = Boolean(selectedRestaurant && priceKnowledge && availabilityKnowledge && (priceKnowledge === 'unknown' || Number(priceAmount) > 0) && (availabilityKnowledge !== 'historical' || lastConfirmedAt) && reviewConfirmed && restaurantConfirmed);
+  function publishReviewed() {
+    if (!ready || !selectedRestaurant || !priceKnowledge || !availabilityKnowledge) { setRestaurantStatus(t('publish.requirements')); return; }
+    onPublish({ restaurant: selectedRestaurant, knowledge: { priceKnowledge, priceAmount: priceKnowledge === 'unknown' ? undefined : Number(priceAmount), availabilityKnowledge, lastConfirmedAt: availabilityKnowledge === 'historical' ? lastConfirmedAt : undefined }, reviewConfirmed: true, restaurantConfirmed: true });
+  }
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
@@ -698,7 +748,24 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
               <Field label={t('analysis.field.dietary')} value={analysis.dietary} onChangeText={(dietary) => onAnalysisChange({ ...analysis, dietary })} />
               <Field label={t('analysis.field.ingredients')} value={analysis.ingredients} onChangeText={(ingredients) => onAnalysisChange({ ...analysis, ingredients })} multiline />
               <Field label={t('analysis.field.description')} value={analysis.description} onChangeText={(description) => onAnalysisChange({ ...analysis, description })} multiline />
-              <Pressable disabled={publishing} style={({ pressed }) => [styles.primaryButton, styles.publishButton, pressed && styles.pressed, publishing && styles.disabledButton]} onPress={onPublish}><Text style={styles.primaryButtonText}>{publishing ? t('analysis.publishing') : t('analysis.publish')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable>
+              <Text style={styles.canonicalNotice}>{t('analysis.canonicalNotice')}</Text>
+              <View style={styles.publicationSection}><Text style={styles.publicationTitle}>{t('publish.restaurantTitle')}</Text><Text style={styles.publicationHelp}>{t('publish.restaurantHelp')}</Text>
+                <Pressable style={styles.secondaryButton} onPress={() => void findRestaurants()}><Text style={styles.secondaryButtonText}>{t('publish.findRestaurants')}</Text></Pressable>
+                {restaurants.map((place) => <Pressable key={place.providerPlaceId} style={[styles.restaurantOption, selectedRestaurant?.providerPlaceId === place.providerPlaceId && styles.restaurantOptionSelected]} onPress={() => selectProviderRestaurant(place)}><Text style={styles.restaurantName}>{place.displayName}</Text><Text style={styles.restaurantAddress}>{place.address}</Text></Pressable>)}
+                {restaurants.length > 0 ? <Text style={styles.googleAttribution}>{t('publish.googleAttribution')}</Text> : null}
+                {restaurantStatus ? <Text style={styles.publicationStatus}>{restaurantStatus}</Text> : null}
+                <Text style={styles.fieldLabel}>{t('publish.manualRestaurant')}</Text><TextInput style={styles.fieldInput} placeholder={t('publish.restaurantName')} placeholderTextColor={palette.muted} value={manualName} onChangeText={setManualName} /><TextInput style={styles.fieldInput} placeholder={t('publish.restaurantAddress')} placeholderTextColor={palette.muted} value={manualAddress} onChangeText={setManualAddress} />
+                <Pressable style={styles.secondaryButton} onPress={useManualRestaurant}><Text style={styles.secondaryButtonText}>{t('publish.selectRestaurant')}</Text></Pressable>
+                {selectedRestaurant ? <Text style={styles.selectedRestaurant}>✓ {t('publish.selectedRestaurant', { restaurant: selectedRestaurant.name })}</Text> : null}
+              </View>
+              <View style={styles.publicationSection}><Text style={styles.publicationTitle}>{t('publish.knowledgeTitle')}</Text><Text style={styles.fieldLabel}>{t('publish.priceKnowledge')}</Text><View style={styles.choiceRow}>{(['unknown', 'exact', 'approximate'] as const).map((value) => <Choice key={value} selected={priceKnowledge === value} label={t(value === 'unknown' ? 'publish.priceUnknown' : value === 'exact' ? 'publish.priceExact' : 'publish.priceApproximate')} onPress={() => setPriceKnowledge(value)} />)}</View>
+                {priceKnowledge === 'exact' || priceKnowledge === 'approximate' ? <Field label={t('publish.priceAmount', { currency: location?.currencyCode ?? selectedRestaurant?.currencyCode ?? '' })} value={priceAmount} onChangeText={setPriceAmount} /> : null}
+                <Text style={styles.fieldLabel}>{t('publish.availabilityKnowledge')}</Text><View style={styles.choiceRow}>{(['unknown', 'recently_confirmed', 'historical'] as const).map((value) => <Choice key={value} selected={availabilityKnowledge === value} label={t(value === 'unknown' ? 'publish.availabilityUnknown' : value === 'recently_confirmed' ? 'publish.availabilityRecent' : 'publish.availabilityHistorical')} onPress={() => setAvailabilityKnowledge(value)} />)}</View>
+                {availabilityKnowledge === 'historical' ? <Field label={t('publish.lastSeen')} value={lastConfirmedAt} onChangeText={setLastConfirmedAt} /> : null}
+                <Text style={styles.provenancePreview}>{t('publish.provenancePreview', { provenance: t(analysisMode === 'demo' ? 'provenance.seed_demo' : 'provenance.ai_identified'), verification: t('verification.unverified'), availability: t(availabilityKnowledge === 'recently_confirmed' ? 'availability.confirmed' : 'availability.unknown') })}</Text>
+                <Toggle selected={reviewConfirmed} label={t('publish.reviewConfirm')} onPress={() => setReviewConfirmed((value) => !value)} /><Toggle selected={restaurantConfirmed} disabled={!selectedRestaurant} label={t('publish.restaurantConfirm')} onPress={() => setRestaurantConfirmed((value) => !value)} />
+              </View>
+              <Pressable disabled={publishing || !ready} style={({ pressed }) => [styles.primaryButton, styles.publishButton, pressed && styles.pressed, (publishing || !ready) && styles.disabledButton]} onPress={publishReviewed}><Text style={styles.primaryButtonText}>{publishing ? t('analysis.publishing') : t('analysis.publish')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable>
             </ScrollView>
           )}
           {phase === 'published' && (
@@ -717,6 +784,14 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
 
 function Field({ label, value, onChangeText, multiline = false }: { label: string; value: string; onChangeText: (value: string) => void; multiline?: boolean }) {
   return <View style={styles.field}><Text style={styles.fieldLabel}>{label}</Text><TextInput style={[styles.fieldInput, multiline && styles.fieldTextarea]} value={value} onChangeText={onChangeText} multiline={multiline} textAlignVertical={multiline ? 'top' : 'center'} selectionColor={palette.terracotta} /></View>;
+}
+
+function Choice({ selected, label, onPress }: { selected: boolean; label: string; onPress: () => void }) {
+  return <Pressable style={[styles.choice, selected && styles.choiceSelected]} onPress={onPress}><Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{label}</Text></Pressable>;
+}
+
+function Toggle({ selected, disabled = false, label, onPress }: { selected: boolean; disabled?: boolean; label: string; onPress: () => void }) {
+  return <Pressable disabled={disabled} style={[styles.confirmation, disabled && styles.disabledButton]} onPress={onPress}><Text style={styles.confirmationMark}>{selected ? '✓' : '○'}</Text><Text style={styles.confirmationText}>{label}</Text></Pressable>;
 }
 
 const styles = StyleSheet.create({
@@ -888,6 +963,25 @@ const styles = StyleSheet.create({
   fieldLabel: { color: palette.burgundy, fontSize: 10, fontWeight: '900', letterSpacing: 0.7, marginBottom: 6, textTransform: 'uppercase' },
   fieldInput: { minHeight: 51, backgroundColor: palette.paper, borderWidth: 1, borderColor: palette.line, borderRadius: 14, paddingHorizontal: 14, color: palette.ink, fontSize: 14 },
   fieldTextarea: { minHeight: 84, paddingTop: 13, lineHeight: 20 },
+  canonicalNotice: { color: palette.muted, fontSize: 11, lineHeight: 17, marginBottom: 16 },
+  publicationSection: { borderTopWidth: 1, borderTopColor: palette.line, paddingTop: 18, marginTop: 10, gap: 10 },
+  publicationTitle: { color: palette.ink, fontFamily: Platform.select({ ios: 'Georgia-Bold', default: 'serif' }), fontSize: 22 },
+  publicationHelp: { color: palette.muted, fontSize: 11, lineHeight: 17 },
+  restaurantOption: { borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper, borderRadius: 14, padding: 12 },
+  restaurantOptionSelected: { borderColor: palette.burgundy, borderWidth: 2 },
+  restaurantName: { color: palette.ink, fontSize: 14, fontWeight: '800' },
+  restaurantAddress: { color: palette.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
+  publicationStatus: { color: palette.warning, fontSize: 11, lineHeight: 16 },
+  selectedRestaurant: { color: palette.success, fontSize: 11, fontWeight: '800' },
+  choiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginBottom: 7 },
+  choice: { borderWidth: 1, borderColor: palette.line, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: palette.paper },
+  choiceSelected: { borderColor: palette.burgundy, backgroundColor: palette.blush },
+  choiceText: { color: palette.muted, fontSize: 10, maxWidth: 180 },
+  choiceTextSelected: { color: palette.burgundy, fontWeight: '800' },
+  provenancePreview: { color: palette.success, backgroundColor: palette.sage, padding: 11, borderRadius: 12, fontSize: 11, lineHeight: 16 },
+  confirmation: { flexDirection: 'row', alignItems: 'flex-start', gap: 9, paddingVertical: 5 },
+  confirmationMark: { color: palette.burgundy, fontSize: 18, width: 20 },
+  confirmationText: { flex: 1, color: palette.ink, fontSize: 11, lineHeight: 17 },
   publishButton: { marginTop: 8, justifyContent: 'center' },
   publishedPanel: { flex: 1, justifyContent: 'center', padding: 28 },
   successMark: { width: 79, height: 79, borderRadius: 40, backgroundColor: palette.olive, alignItems: 'center', justifyContent: 'center', marginBottom: 25 },

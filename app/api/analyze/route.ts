@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { analyzeDishWithOpenAI, demoEnvelope, type AnalysisFailure } from "@/lib/dish-analysis";
 import { getRuntimeEnv, selectOpenAIKey } from "@/lib/runtime-env";
+import { SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/lib/regions";
 
 export const runtime = "edge";
 
@@ -17,7 +18,7 @@ export function OPTIONS() {
 export async function POST(request: Request) {
   const requestId = crypto.randomUUID();
   try {
-    const body = await request.json() as { imageDataUrl?: string; demo?: boolean; demoFixture?: string };
+    const body = await request.json() as { imageDataUrl?: string; demo?: boolean; demoFixture?: string; language?: SupportedLanguage };
     if (body.demo) return json(demoEnvelope(requestId, body.demoFixture));
 
     if (!body.imageDataUrl || !body.imageDataUrl.startsWith("data:image/") || body.imageDataUrl.length > 7_000_000) {
@@ -30,7 +31,8 @@ export async function POST(request: Request) {
       return json(failure(requestId, "live_not_configured", "Live identification is not configured yet. You can still choose the clearly labeled demo."), 503);
     }
 
-    const result = await analyzeDishWithOpenAI({ imageDataUrl: body.imageDataUrl, apiKey, requestId });
+    const language = body.language && SUPPORTED_LANGUAGES.includes(body.language) ? body.language : "en-CA";
+    const result = await analyzeDishWithOpenAI({ imageDataUrl: body.imageDataUrl, apiKey, requestId, language });
     return json(result, result.ok ? 200 : 502);
   } catch {
     return json(failure(requestId, "provider_error", "The identifier could not process this request. Retry or choose the labeled demo."), 500);

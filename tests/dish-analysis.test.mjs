@@ -9,6 +9,7 @@ const liveResult = {
   dietary: "Confirm stock ingredients and cross-contact",
   confidence: 92,
   description: "Smoky tomato rice paired with deeply seasoned grilled chicken.",
+  canonical: { dishName: "jollof rice with grilled chicken", cuisine: "west african", ingredients: ["rice", "tomato", "pepper", "chicken"], flavours: ["smoky", "spiced"], metadataSource: "ai_normalized" },
 };
 
 test("labels deterministic fixtures as demo data", () => {
@@ -25,6 +26,7 @@ test("returns a distinctly labeled live vision result", async () => {
     imageDataUrl: "data:image/jpeg;base64,dGVzdA==",
     apiKey: "test-key",
     requestId: "req-live",
+    language: "en-GB",
     fetcher: async (_url, init) => {
       requestBody = JSON.parse(init.body);
       return new Response(JSON.stringify({ output: [{ content: [{ type: "output_text", text: JSON.stringify(liveResult) }] }] }), { status: 200 });
@@ -35,6 +37,8 @@ test("returns a distinctly labeled live vision result", async () => {
   assert.equal(result.result.name, liveResult.name);
   assert.equal(requestBody.input[0].content[1].detail, "high");
   assert.equal(requestBody.model, "gpt-5.6-sol");
+  assert.match(requestBody.instructions, /en-GB/);
+  assert.equal(requestBody.text.format.schema.properties.canonical.properties.metadataSource.enum[0], "ai_normalized");
 });
 
 test("does not silently substitute demo data after provider failure", async () => {

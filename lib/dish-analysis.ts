@@ -1,3 +1,5 @@
+import type { SupportedLanguage } from "./regions.ts";
+
 export type DishAnalysis = {
   name: string;
   cuisine: string;
@@ -5,6 +7,13 @@ export type DishAnalysis = {
   dietary: string;
   confidence: number;
   description: string;
+  canonical: {
+    dishName: string;
+    cuisine: string;
+    ingredients: string[];
+    flavours: string[];
+    metadataSource: "ai_normalized" | "user_reviewed";
+  };
 };
 
 export type AnalysisSuccess = {
@@ -36,6 +45,7 @@ const demoAnalyses: Record<string, DishAnalysis> = {
     dietary: "Vegetarian · Contains dairy and gluten",
     confidence: 94,
     description: "Tender filled pasta with toasted butter, herbs and a bright citrus finish.",
+    canonical: { dishName: "agnolotti", cuisine: "northern italian", ingredients: ["filled pasta", "butter", "sage", "lemon", "parmesan"], flavours: ["nutty", "herbal", "bright"], metadataSource: "user_reviewed" },
   },
   ramen: {
     name: "Charred miso ramen",
@@ -44,6 +54,7 @@ const demoAnalyses: Record<string, DishAnalysis> = {
     dietary: "Likely contains gluten and soy · Confirm broth ingredients",
     confidence: 91,
     description: "Springy noodles in a smoky, fermented broth with sweet charred corn.",
+    canonical: { dishName: "miso ramen", cuisine: "japanese", ingredients: ["wheat noodles", "miso", "corn", "scallion", "chile oil"], flavours: ["smoky", "fermented", "umami"], metadataSource: "user_reviewed" },
   },
   tacos: {
     name: "Crispy oyster mushroom tacos",
@@ -52,6 +63,7 @@ const demoAnalyses: Record<string, DishAnalysis> = {
     dietary: "Plant-based appearance · Confirm fryer cross-contact",
     confidence: 88,
     description: "Crunchy mushrooms layered with bright lime, chile heat and fresh cabbage.",
+    canonical: { dishName: "oyster mushroom tacos", cuisine: "mexican inspired", ingredients: ["oyster mushroom", "corn tortilla", "cabbage", "chile", "lime"], flavours: ["crunchy", "bright", "spicy"], metadataSource: "user_reviewed" },
   },
 };
 
@@ -74,11 +86,13 @@ export async function analyzeDishWithOpenAI({
   apiKey,
   requestId,
   fetcher = fetch,
+  language = "en-CA",
 }: {
   imageDataUrl: string;
   apiKey: string;
   requestId: string;
   fetcher?: typeof fetch;
+  language?: SupportedLanguage;
 }): Promise<AnalysisEnvelope> {
   let response: Response;
   try {
@@ -93,7 +107,7 @@ export async function analyzeDishWithOpenAI({
         reasoning: { effort: "low" },
         store: false,
         safety_identifier: "trinque-guest",
-        instructions: "Analyze only what is visibly supported by the food photo. Identify the most likely dish and cuisine, list likely ingredients, and clearly label uncertainty. Never claim allergen or dietary safety. Use 'unknown' when visual evidence is insufficient. Keep each field concise and useful for restaurant discovery.",
+        instructions: `Analyze only what is visibly supported by the food photo. Return the user-facing name, cuisine, ingredients, dietary caveats, and description in ${language}; preserve an established original-language dish name rather than translating it away. Clearly label uncertainty, never claim allergen or dietary safety, and use the selected language for every warning. Also return concise canonical English matching concepts that remain stable if UI language changes. Canonical metadata is AI-normalized and must not weaken allergen uncertainty. Use 'unknown' when visual evidence is insufficient.`,
         input: [{
           role: "user",
           content: [
@@ -116,8 +130,20 @@ export async function analyzeDishWithOpenAI({
                 dietary: { type: "string" },
                 confidence: { type: "number", minimum: 0, maximum: 100 },
                 description: { type: "string" },
+                canonical: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    dishName: { type: "string" },
+                    cuisine: { type: "string" },
+                    ingredients: { type: "array", items: { type: "string" } },
+                    flavours: { type: "array", items: { type: "string" } },
+                    metadataSource: { type: "string", enum: ["ai_normalized"] },
+                  },
+                  required: ["dishName", "cuisine", "ingredients", "flavours", "metadataSource"],
+                },
               },
-              required: ["name", "cuisine", "ingredients", "dietary", "confidence", "description"],
+              required: ["name", "cuisine", "ingredients", "dietary", "confidence", "description", "canonical"],
             },
           },
         },
@@ -164,6 +190,9 @@ function isDishAnalysis(value: DishAnalysis): boolean {
     value && typeof value.name === "string" && typeof value.cuisine === "string" &&
     typeof value.ingredients === "string" && typeof value.dietary === "string" &&
     typeof value.confidence === "number" && value.confidence >= 0 && value.confidence <= 100 &&
-    typeof value.description === "string",
+    typeof value.description === "string" && value.canonical && typeof value.canonical.dishName === "string" &&
+    typeof value.canonical.cuisine === "string" && Array.isArray(value.canonical.ingredients) && value.canonical.ingredients.every((item) => typeof item === "string") &&
+    Array.isArray(value.canonical.flavours) && value.canonical.flavours.every((item) => typeof item === "string") &&
+    ["ai_normalized", "user_reviewed"].includes(value.canonical.metadataSource),
   );
 }

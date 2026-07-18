@@ -2,7 +2,7 @@
 
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { coarseLocation, normalizeLocation, type NormalizedLocation } from "@/lib/location";
-import type { LocationSuggestion } from "@/lib/places/types";
+import type { LocationSuggestion, RestaurantPlace } from "@/lib/places/types";
 import { REGIONAL_DEFAULTS, type MeasurementSystem, type ThemePreference } from "@/lib/regions";
 import { LANGUAGE_LABEL_KEYS, resolveUiLanguage, translate, UI_LANGUAGES, type MessageKey, type UiLanguage } from "@/ios/i18n";
 
@@ -13,12 +13,15 @@ type Dish = {
 type Analysis = {
   name: string; cuisine: string; ingredients: string; dietary: string;
   confidence: number; description: string;
+  canonical: { dishName: string; cuisine: string; ingredients: string[]; flavours: string[]; metadataSource: "ai_normalized" | "user_reviewed" };
 };
 type AnalysisEnvelope =
   | { ok: true; mode: "live" | "demo"; requestId: string; result: Analysis; warning?: string }
   | { ok: false; mode: "unavailable"; requestId: string; error: { code: string; message: string }; demoAvailable: true };
 type NearbyMatch = { id: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; dietary: string; score: number; explanation: string };
-type PublishedDish = Analysis & { id: string; sourceMode: "live" | "demo"; imageUrl?: string | null; localPreview?: string };
+type PublishRestaurant = { provider: "google" | "community"; providerPlaceId?: string | null; name: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: NormalizedLocation["countryCode"]; address: string; currencyCode: string };
+type PublicationMetadata = { restaurant: PublishRestaurant; knowledge: { priceKnowledge: "unknown" | "exact" | "approximate"; priceAmount?: number; availabilityKnowledge: "unknown" | "recently_confirmed" | "historical"; lastConfirmedAt?: string }; reviewConfirmed: true; restaurantConfirmed: true };
+type PublishedDish = Analysis & { id: string; sourceMode: "live" | "demo"; imageUrl?: string | null; localPreview?: string; provenance?: string; verificationStatus?: string; availabilityKnowledge?: string; restaurant?: { name: string } | null };
 type GroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; explanation: string; conflicts: string[] };
 type GroupSnapshot = { id: string; name: string; eventTime: string; neighborhood: string; budgetMax: number; maxDistanceKm: number; vegetarianRequired: number; allergies: string[]; inviteCode: string; status: "voting" | "finalized"; selectedCandidateId: string | null; candidates: GroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number> };
 type Translator = (key: MessageKey, values?: Record<string, string | number>) => string;
@@ -34,6 +37,7 @@ const sample: Analysis = {
   ingredients: "Filled pasta, brown butter, sage, lemon, parmesan",
   dietary: "Vegetarian · Contains dairy and gluten", confidence: 94,
   description: "Tender filled pasta with toasted butter, herbs and a bright citrus finish.",
+  canonical: { dishName: "agnolotti", cuisine: "northern italian", ingredients: ["filled pasta", "butter", "sage", "lemon", "parmesan"], flavours: ["nutty", "herbal", "bright"], metadataSource: "user_reviewed" },
 };
 const colors = ["#7a263a", "#c7654f", "#667449", "#b9772d"];
 
@@ -177,7 +181,7 @@ export default function Home() {
     try {
       const response = await fetch("/api/analyze", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageDataUrl, demo, demoFixture: "pasta" }),
+        body: JSON.stringify({ imageDataUrl, demo, demoFixture: "pasta", language }),
       });
       const envelope = await response.json() as AnalysisEnvelope;
       if (!response.ok || !envelope.ok) {
@@ -198,10 +202,10 @@ export default function Home() {
     reader.onload = () => { const value = String(reader.result); setPreview(value); void analyze(value); };
     reader.readAsDataURL(file);
   }
-  function update(field: keyof Analysis, value: string) {
-    setAnalysis((current) => ({ ...current, [field]: field === "confidence" ? Number(value) : value }));
+  function update(field: "name" | "cuisine" | "ingredients" | "dietary" | "description", value: string) {
+    setAnalysis((current) => ({ ...current, [field]: value }));
   }
-  async function publish(event: FormEvent) {
+  async function publish(event: FormEvent, metadata: PublicationMetadata) {
     event.preventDefault();
     if (!guestToken || !analysisMode) {
       setAnalysisError(t("analysis.sessionError"));
@@ -210,13 +214,13 @@ export default function Home() {
     }
     setPublishing(true);
     try {
-      const response = await fetch("/api/dishes", { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ analysis, sourceMode: analysisMode, imageDataUrl: pendingImage }) });
+      const response = await fetch("/api/dishes", { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ analysis, sourceMode: analysisMode, imageDataUrl: pendingImage, language, ...metadata }) });
       if (!response.ok) throw new Error("publish failed");
       const payload = await response.json() as { dish: PublishedDish; matches: NearbyMatch[] };
       setPublishedDishes((current) => [{ ...payload.dish, localPreview: preview }, ...current.filter((dish) => dish.id !== payload.dish.id)]);
       setNearbyMatches(payload.matches);
       setPhase("published");
-      flash(`Dish published — ${payload.matches.length} nearby matches ready`);
+      flash(t("analysis.publishedBody", { count: payload.matches.length }));
     } catch {
       setAnalysisError(t("analysis.publishError"));
       setPhase("error");
@@ -290,7 +294,7 @@ export default function Home() {
         <button className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}><span>♡</span>{t("nav.saved")}</button>
         <button onClick={() => setSettingsOpen(true)}><span>○</span>{t("nav.profile")}</button>
       </nav>
-      {modal && <Analyzer preview={preview} phase={phase} analysis={analysis} analysisMode={analysisMode} warning={analysisWarning} error={analysisError} matches={nearbyMatches} publishing={publishing} close={() => setModal(false)} update={update} publish={publish} retry={() => void analyze(pendingImage, false)} demo={() => void analyze(undefined, true)} t={t} language={language} measurementSystem={measurementSystem} />}
+      {modal && <Analyzer key={`${pendingImage ?? "demo"}-${analysisMode ?? "pending"}`} preview={preview} phase={phase} analysis={analysis} analysisMode={analysisMode} warning={analysisWarning} error={analysisError} matches={nearbyMatches} publishing={publishing} close={() => setModal(false)} update={update} publish={publish} retry={() => void analyze(pendingImage, false)} demo={() => void analyze(undefined, true)} t={t} language={language} measurementSystem={measurementSystem} location={location} />}
       {settingsOpen && <SettingsPanel t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} close={() => setSettingsOpen(false)} persist={persistPreferences} />}
       {toast && <div className="toast" role="status">✓ {toast}</div>}
     </div>
@@ -315,11 +319,53 @@ function DishCard({ dish, featured, isSaved, onSave, t }: { dish: Dish; featured
 function PublishedDishCard({ dish, t }: { dish: PublishedDish; t: Translator }) {
   return <article className="dish-card published-card">
     <div className="dish-image" style={{ backgroundImage: `linear-gradient(180deg,transparent 55%,rgba(22,13,10,.68)),url(${dish.localPreview ?? dish.imageUrl ?? dishes[0].image})` }}><span className="match"><b>NEW</b> {t("analysis.publishedTitle")}</span><div className="photo-caption"><b>{dish.sourceMode === "live" ? t("analysis.live") : t("analysis.demo")}</b><small>{t("analysis.review")}</small></div></div>
-    <div className="dish-body"><div className="dish-title"><div><h3>{dish.name}</h3><p>{dish.description}</p></div><strong>{dish.confidence}%</strong></div><div className="dish-meta"><div><span>{dish.cuisine}</span></div><small>{t("analysis.review")}</small></div></div>
+    <div className="dish-body"><div className="dish-title"><div><h3>{dish.name}</h3><p>{dish.description}</p></div><strong>{dish.confidence}%</strong></div><div className="dish-meta"><div><span>{dish.cuisine}</span></div><small>{dish.restaurant?.name ?? t("analysis.review")}</small></div>{dish.provenance && <p className="record-honesty">{t(`provenance.${dish.provenance}` as MessageKey)} · {t(`verification.${dish.verificationStatus ?? "unverified"}` as MessageKey)} · {t(dish.availabilityKnowledge === "recently_confirmed" ? "availability.confirmed" : "availability.unknown")}</p>}</div>
   </article>;
 }
 
-function Analyzer({ preview, phase, analysis, analysisMode, warning, error, matches, publishing, close, update, publish, retry, demo, t, language, measurementSystem }: { preview: string; phase: string; analysis: Analysis; analysisMode: "live" | "demo" | null; warning: string; error: string; matches: NearbyMatch[]; publishing: boolean; close: () => void; update: (field: keyof Analysis, value: string) => void; publish: (event: FormEvent) => void; retry: () => void; demo: () => void; t: Translator; language: UiLanguage; measurementSystem: MeasurementSystem }) {
+function Analyzer({ preview, phase, analysis, analysisMode, warning, error, matches, publishing, close, update, publish, retry, demo, t, language, measurementSystem, location }: { preview: string; phase: string; analysis: Analysis; analysisMode: "live" | "demo" | null; warning: string; error: string; matches: NearbyMatch[]; publishing: boolean; close: () => void; update: (field: "name" | "cuisine" | "ingredients" | "dietary" | "description", value: string) => void; publish: (event: FormEvent, metadata: PublicationMetadata) => void; retry: () => void; demo: () => void; t: Translator; language: UiLanguage; measurementSystem: MeasurementSystem; location: NormalizedLocation | null }) {
+  const [restaurants, setRestaurants] = useState<RestaurantPlace[]>([]);
+  const [selectedRestaurant, setSelectedRestaurant] = useState<PublishRestaurant | null>(null);
+  const [restaurantStatus, setRestaurantStatus] = useState("");
+  const [manualName, setManualName] = useState("");
+  const [manualAddress, setManualAddress] = useState("");
+  const [priceKnowledge, setPriceKnowledge] = useState<"" | "unknown" | "exact" | "approximate">("");
+  const [priceAmount, setPriceAmount] = useState("");
+  const [availabilityKnowledge, setAvailabilityKnowledge] = useState<"" | "unknown" | "recently_confirmed" | "historical">("");
+  const [lastConfirmedAt, setLastConfirmedAt] = useState("");
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
+  const [restaurantConfirmed, setRestaurantConfirmed] = useState(false);
+
+  async function findRestaurants() {
+    if (!location) { setRestaurantStatus(t("publish.noLocation")); return; }
+    setRestaurantStatus("");
+    try {
+      const response = await fetch(`/api/restaurants/nearby?latitude=${location.latitude}&longitude=${location.longitude}&radiusMeters=5000&language=${language}`);
+      const body = await response.json() as { restaurants?: RestaurantPlace[]; error?: { code?: string } };
+      if (!response.ok) { setRestaurantStatus(body.error?.code === "credentials" ? t("publish.providerUnavailable") : t("location.providerError")); return; }
+      setRestaurants(body.restaurants ?? []);
+    } catch { setRestaurantStatus(t("location.providerError")); }
+  }
+
+  function selectProviderRestaurant(place: RestaurantPlace) {
+    setSelectedRestaurant({ provider: "google", providerPlaceId: place.providerPlaceId, name: place.displayName, latitude: place.latitude, longitude: place.longitude, locality: place.locality, administrativeRegion: place.administrativeRegion, countryCode: place.countryCode, address: place.address, currencyCode: place.currencyCode });
+    setRestaurantConfirmed(false);
+  }
+
+  function useManualRestaurant() {
+    if (!location || !manualName.trim() || !manualAddress.trim()) { setRestaurantStatus(location ? t("publish.requirements") : t("publish.noLocation")); return; }
+    setSelectedRestaurant({ provider: "community", name: manualName.trim(), latitude: location.latitude, longitude: location.longitude, locality: location.locality, administrativeRegion: location.administrativeRegion, countryCode: location.countryCode, address: manualAddress.trim(), currencyCode: location.currencyCode });
+    setRestaurantConfirmed(false);
+  }
+
+  const validPrice = priceKnowledge === "unknown" || ((priceKnowledge === "exact" || priceKnowledge === "approximate") && Number(priceAmount) > 0);
+  const validAvailability = availabilityKnowledge === "unknown" || availabilityKnowledge === "recently_confirmed" || (availabilityKnowledge === "historical" && Boolean(lastConfirmedAt));
+  const ready = Boolean(selectedRestaurant && priceKnowledge && availabilityKnowledge && validPrice && validAvailability && reviewConfirmed && restaurantConfirmed);
+  function submit(event: FormEvent) {
+    if (!ready || !selectedRestaurant || !priceKnowledge || !availabilityKnowledge) { event.preventDefault(); setRestaurantStatus(t("publish.requirements")); return; }
+    publish(event, { restaurant: selectedRestaurant, knowledge: { priceKnowledge, priceAmount: priceKnowledge === "unknown" ? undefined : Number(priceAmount), availabilityKnowledge, lastConfirmedAt: availabilityKnowledge === "historical" ? lastConfirmedAt : undefined }, reviewConfirmed: true, restaurantConfirmed: true });
+  }
+
   return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="analyzer-title"><div className="analyzer">
     <button className="modal-close" onClick={close} aria-label="Close analyzer">×</button>
     <div className="analyzer-image" style={{ backgroundImage: "url(" + preview + ")" }}><span>✦ GPT-5.6 vision</span></div>
@@ -327,7 +373,7 @@ function Analyzer({ preview, phase, analysis, analysisMode, warning, error, matc
       {phase === "loading" ? <div className="loading-state"><div className="scan"><span /></div><em>{t("analysis.loadingKicker")}</em><h2 id="analyzer-title">{t("analysis.loadingTitle")}</h2><div><span>{t("analysis.field.name")}</span><span>{t("analysis.field.ingredients")}</span><span>{t("analysis.field.dietary")}</span></div></div>
       : phase === "error" ? <div className="identifier-error"><span>!</span><p className="kicker">{t("analysis.unavailableKicker")}</p><h2 id="analyzer-title">{t("analysis.unavailableTitle")}</h2><p>{error}</p><div className="modal-actions"><button type="button" className="secondary" onClick={demo}>{t("analysis.useDemo")}</button><button type="button" className="primary" onClick={retry}>{t("analysis.retry")}</button></div></div>
       : phase === "published" ? <div className="published"><span>✓</span><h2 id="analyzer-title">{t("analysis.publishedTitle")}</h2><p>{t("analysis.publishedBody", { count: matches.length })}</p><div className="nearby-results">{matches.slice(0, 3).map((match) => <article key={match.id}><img src={match.image} alt="" /><div><b>{match.name}</b><small>{match.restaurant} · {new Intl.NumberFormat(language, { style: "unit", unit: measurementSystem === "imperial" ? "mile" : "kilometer", unitDisplay: "short", maximumFractionDigits: 1 }).format(measurementSystem === "imperial" ? match.distanceKm * .621371 : match.distanceKm)}</small><p>{match.score}% · {match.explanation}</p></div></article>)}</div><div className="modal-actions"><button className="primary" onClick={close}>{t("analysis.explore")} →</button></div></div>
-      : <form onSubmit={publish}><div className={`analysis-mode ${analysisMode ?? ""}`}>{analysisMode === "live" ? `● ${t("analysis.live")}` : `◇ ${t("analysis.demo")}`}</div><span className="kicker">{t("analysis.review")}</span><div className="confidence"><h2 id="analyzer-title">{t("analysis.reviewTitle")}</h2><span>{t("analysis.confident", { confidence: analysis.confidence })}</span></div>
+      : <form onSubmit={submit}><div className={`analysis-mode ${analysisMode ?? ""}`}>{analysisMode === "live" ? `● ${t("analysis.live")}` : `◇ ${t("analysis.demo")}`}</div><span className="kicker">{t("analysis.review")}</span><div className="confidence"><h2 id="analyzer-title">{t("analysis.reviewTitle")}</h2><span>{t("analysis.confident", { confidence: analysis.confidence })}</span></div>
         {warning && <p className="demo-warning">{warning}</p>}
         <p className="review-note">{t("analysis.warning")}</p>
         <div className="form-grid">
@@ -336,7 +382,20 @@ function Analyzer({ preview, phase, analysis, analysisMode, warning, error, matc
           <label>{t("analysis.field.dietary")}<input value={analysis.dietary} onChange={(e) => update("dietary", e.target.value)} /></label>
           <label className="wide">{t("analysis.field.ingredients")}<textarea value={analysis.ingredients} onChange={(e) => update("ingredients", e.target.value)} /></label>
           <label className="wide">{t("analysis.field.description")}<textarea value={analysis.description} onChange={(e) => update("description", e.target.value)} /></label>
-        </div><div className="modal-actions"><button type="button" className="secondary" onClick={close}>{t("analysis.keepPrivate")}</button><button className="primary" type="submit" disabled={publishing}>{publishing ? t("analysis.publishing") : `${t("analysis.publish")} →`}</button></div>
+        </div>
+        <p className="canonical-note">{t("analysis.canonicalNotice")}</p>
+        <section className="publication-section"><h3>{t("publish.restaurantTitle")}</h3><p>{t("publish.restaurantHelp")}</p>
+          <button type="button" className="secondary" onClick={() => void findRestaurants()}>{t("publish.findRestaurants")}</button>
+          {restaurants.length > 0 && <div className="restaurant-results">{restaurants.map((place) => <button type="button" key={place.providerPlaceId} onClick={() => selectProviderRestaurant(place)} className={selectedRestaurant?.providerPlaceId === place.providerPlaceId ? "selected" : ""}><b>{place.displayName}</b><small>{place.address}</small></button>)}<small className="google-attribution" translate="no">{t("publish.googleAttribution")}</small></div>}
+          {restaurantStatus && <p className="publication-status">{restaurantStatus}</p>}
+          <div className="manual-restaurant"><b>{t("publish.manualRestaurant")}</b><input aria-label={t("publish.restaurantName")} placeholder={t("publish.restaurantName")} value={manualName} onChange={(event) => setManualName(event.target.value)} /><input aria-label={t("publish.restaurantAddress")} placeholder={t("publish.restaurantAddress")} value={manualAddress} onChange={(event) => setManualAddress(event.target.value)} /><button type="button" className="secondary" onClick={useManualRestaurant}>{t("publish.selectRestaurant")}</button></div>
+          {selectedRestaurant && <p className="selected-restaurant">✓ {t("publish.selectedRestaurant", { restaurant: selectedRestaurant.name })}</p>}
+        </section>
+        <section className="publication-section"><h3>{t("publish.knowledgeTitle")}</h3><div className="knowledge-grid"><label>{t("publish.priceKnowledge")}<select value={priceKnowledge} onChange={(event) => setPriceKnowledge(event.target.value as typeof priceKnowledge)}><option value="">—</option><option value="unknown">{t("publish.priceUnknown")}</option><option value="exact">{t("publish.priceExact")}</option><option value="approximate">{t("publish.priceApproximate")}</option></select></label>{(priceKnowledge === "exact" || priceKnowledge === "approximate") && <label>{t("publish.priceAmount", { currency: location?.currencyCode ?? selectedRestaurant?.currencyCode ?? "" })}<input type="number" min="0.01" step="0.01" value={priceAmount} onChange={(event) => setPriceAmount(event.target.value)} /></label>}<label>{t("publish.availabilityKnowledge")}<select value={availabilityKnowledge} onChange={(event) => setAvailabilityKnowledge(event.target.value as typeof availabilityKnowledge)}><option value="">—</option><option value="unknown">{t("publish.availabilityUnknown")}</option><option value="recently_confirmed">{t("publish.availabilityRecent")}</option><option value="historical">{t("publish.availabilityHistorical")}</option></select></label>{availabilityKnowledge === "historical" && <label>{t("publish.lastSeen")}<input type="date" max={new Date().toISOString().slice(0, 10)} value={lastConfirmedAt} onChange={(event) => setLastConfirmedAt(event.target.value)} /></label>}</div>
+          <p className="provenance-preview">{t("publish.provenancePreview", { provenance: t(analysisMode === "demo" ? "provenance.seed_demo" : "provenance.ai_identified"), verification: t("verification.unverified"), availability: t(availabilityKnowledge === "recently_confirmed" ? "availability.confirmed" : "availability.unknown") })}</p>
+          <label className="confirmation"><input type="checkbox" checked={reviewConfirmed} onChange={(event) => setReviewConfirmed(event.target.checked)} />{t("publish.reviewConfirm")}</label><label className="confirmation"><input type="checkbox" checked={restaurantConfirmed} onChange={(event) => setRestaurantConfirmed(event.target.checked)} disabled={!selectedRestaurant} />{t("publish.restaurantConfirm")}</label>
+        </section>
+        <div className="modal-actions"><button type="button" className="secondary" onClick={close}>{t("analysis.keepPrivate")}</button><button className="primary" type="submit" disabled={publishing || !ready}>{publishing ? t("analysis.publishing") : `${t("analysis.publish")} →`}</button></div>
       </form>}
     </div>
   </div></div>;

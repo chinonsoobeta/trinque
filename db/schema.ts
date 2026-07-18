@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -41,6 +41,28 @@ export const preferences = sqliteTable("preferences", {
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const restaurants = sqliteTable("restaurants", {
+  id: text("id").primaryKey(),
+  provider: text("provider", { enum: ["google", "community"] }).notNull(),
+  providerPlaceId: text("provider_place_id"),
+  name: text("name").notNull(),
+  latitude: real("latitude").notNull(),
+  longitude: real("longitude").notNull(),
+  locality: text("locality").notNull(),
+  administrativeRegion: text("administrative_region").notNull(),
+  countryCode: text("country_code", { enum: ["US", "CA", "MX", "GB", "FR"] }).notNull(),
+  address: text("address").notNull(),
+  currencyCode: text("currency_code", { enum: ["USD", "CAD", "MXN", "GBP", "EUR"] }).notNull(),
+  recordSource: text("record_source", { enum: ["community_submitted"] }).notNull().default("community_submitted"),
+  createdById: text("created_by_id").references(() => users.id, { onDelete: "set null" }),
+  providerUpdatedAt: text("provider_updated_at"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("restaurants_provider_place_unique").on(table.provider, table.providerPlaceId),
+  index("restaurants_country_location_idx").on(table.countryCode, table.latitude, table.longitude),
+]);
+
 export const publishedDishes = sqliteTable("published_dishes", {
   id: text("id").primaryKey(),
   ownerId: text("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
@@ -52,8 +74,30 @@ export const publishedDishes = sqliteTable("published_dishes", {
   confidence: integer("confidence").notNull(),
   description: text("description").notNull(),
   imageKey: text("image_key"),
+  restaurantId: text("restaurant_id").references(() => restaurants.id, { onDelete: "set null" }),
+  contributorId: text("contributor_id").references(() => users.id, { onDelete: "set null" }),
+  priceAmount: real("price_amount"),
+  currencyCode: text("currency_code", { enum: ["USD", "CAD", "MXN", "GBP", "EUR"] }),
+  priceKnowledge: text("price_knowledge", { enum: ["unknown", "exact", "approximate"] }).notNull().default("unknown"),
+  provenance: text("provenance", { enum: ["ai_identified", "community_submitted", "restaurant_verified", "menu_imported", "seed_demo"] }).notNull().default("ai_identified"),
+  verificationStatus: text("verification_status", { enum: ["unverified", "community_confirmed", "restaurant_verified", "stale", "disputed"] }).notNull().default("unverified"),
+  availabilityKnowledge: text("availability_knowledge", { enum: ["unknown", "recently_confirmed", "historical"] }).notNull().default("unknown"),
+  availabilityConfidence: integer("availability_confidence").notNull().default(0),
+  lastConfirmedAt: text("last_confirmed_at"),
+  latitude: real("latitude"),
+  longitude: real("longitude"),
+  countryCode: text("country_code", { enum: ["US", "CA", "MX", "GB", "FR"] }),
+  language: text("language", { enum: ["en-CA", "en-US", "en-GB", "fr", "es"] }).notNull().default("en-CA"),
+  originalName: text("original_name"),
+  canonicalCuisine: text("canonical_cuisine"),
+  canonicalIngredients: text("canonical_ingredients"),
+  canonicalFlavours: text("canonical_flavours"),
+  canonicalMetadataSource: text("canonical_metadata_source", { enum: ["user_reviewed", "ai_normalized"] }).notNull().default("user_reviewed"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-});
+}, (table) => [
+  index("published_dishes_restaurant_idx").on(table.restaurantId),
+  index("published_dishes_country_location_idx").on(table.countryCode, table.latitude, table.longitude),
+]);
 
 export const groups = sqliteTable("groups", {
   id: text("id").primaryKey(),

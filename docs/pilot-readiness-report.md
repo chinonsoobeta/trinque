@@ -1,6 +1,6 @@
 # Trinque regional pilot readiness report
 
-Report date: 2026-07-18  ·  Validated source: `main` commit `57a0136`  ·  Recommendation: **NO-GO**
+Report date: 2026-07-18  ·  Validated source: `main` commit `63343b3`  ·  Recommendation: **NO-GO**
 
 ## Scope and validation anchors
 
@@ -8,7 +8,7 @@ Runtime support is dynamic for every locality in US, CA, MX, GB and FR. The 15 a
 
 ## Automated evidence
 
-- `npm run verify`: 72 tests passed; production web build passed; iOS TypeScript check and Expo export passed.
+- `npm run verify`: 74 tests passed; production web build passed; iOS TypeScript check and Expo export passed.
 - `npm run lint`: 0 errors; seven pre-existing accessibility/performance warnings remain (image alt text and the existing web `<img>` path).
 - Secret scan: no API-key/token/private-key signatures found.
 - D1 migrations `0001` through `0008` apply in sequence; the latest migration adds consent-aware analytics, feedback, and client diagnostics.
@@ -16,11 +16,11 @@ Runtime support is dynamic for every locality in US, CA, MX, GB and FR. The 15 a
 
 ## Provider and production checks
 
-Mocked provider contracts cover all five countries, normalized addresses/coordinates/currency/time zones, attribution, retry/error taxonomy, and unsupported-country behavior. A live Google Places smoke test has not run: Sites production metadata currently exposes only the presence of `OPENAI_API_KEY`; `GOOGLE_PLACES_API_KEY` is not configured. The production Sites host is `https://trinque-dish-discovery.r7bv67rgkk.chatgpt.site` and remains custom owner-only.
+Mocked provider contracts cover all five countries, normalized addresses/coordinates/currency/time zones, attribution, retry/error taxonomy, and unsupported-country behavior. `GOOGLE_PLACES_API_KEY` is configured as a server-side Sites secret. On 2026-07-18, deployed live nearby searches returned restaurant results and correct country/currency/time-zone/measurement normalization for New York (US), Toronto (CA), Mexico City (MX), London (GB), and Paris (FR); a Paris restaurant-detail response included Google Maps attribution. A follow-up provider guard filters non-restaurant primary types before the normalized response. The production Sites host is `https://trinque-dish-discovery.r7bv67rgkk.chatgpt.site` and remains custom owner-only.
 
 ## Privacy, operations, and group journey
 
-Rate limits, request IDs, upload signatures, consent withdrawal, export/deletion, analytics/diagnostics consent gating, feedback, and three-session group authorization are covered by automated tests. A real three-device group journey, live provider search, live identifier smoke test, and physical-device/TestFlight run remain unexecuted because they require the owner’s configured production access/credentials and devices.
+Rate limits, request IDs, upload signatures, consent withdrawal, export/deletion, analytics/diagnostics consent gating, feedback, and three-session group authorization are covered by automated tests. The live provider search is complete. A temporary production guest used for this read-only check was deleted through Trinque’s privacy deletion endpoint immediately afterward. A real three-device group journey, live identifier smoke test, and physical-device/TestFlight run remain unexecuted because they require approved fixture rights, production access for participants, and owner devices/accounts.
 
 ## iOS/TestFlight
 
@@ -28,4 +28,4 @@ Rate limits, request IDs, upload signatures, consent withdrawal, export/deletion
 
 ## Go/no-go
 
-NO-GO until the owner supplies/configures: Google Places production key and applicable provider agreement; an approved public/authenticated production API and AASA access design without weakening access accidentally; Apple Team ID; approved evaluation image fixtures; physical iPhone/TestFlight validation; and a real three-session group smoke test. The implementation is pilot-ready in code and test scaffolding, but these external checks are required before claiming a live regional pilot.
+NO-GO until the owner confirms Google billing, API restrictions, and applicable provider/EEA terms; approves a participant-facing production API and AASA access design without weakening access accidentally; supplies Apple Team ID; provides approved evaluation image fixtures; completes physical iPhone/TestFlight validation; and runs a real three-session group smoke test. The implementation is pilot-ready in code and test scaffolding, but these external checks are required before claiming a live regional pilot.

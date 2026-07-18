@@ -13,7 +13,8 @@
     "test:ios": "cd ios && npx tsc --noEmit && npx expo export --platform ios --output-dir dist-ios",
     "verify": "npm test && npm run test:ios",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "evaluate:identifier": "node --experimental-strip-types scripts/evaluate-identifier.mjs"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",

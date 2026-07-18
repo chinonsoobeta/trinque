@@ -50,6 +50,13 @@
       "when": 1784361765313,
       "tag": "0006_flimsy_kitty_pryde",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1784363307018,
+      "tag": "0007_elite_black_bolt",
+      "breakpoints": true
     }
   ]
 }

@@ -26,6 +26,8 @@ type PublishedDish = Analysis & { id: string; sourceMode: "live" | "demo"; image
 type GroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; explanation: string; conflicts: string[]; kind: "published_dish" | "provider_restaurant" | "seed_demo"; provenance?: string | null; verificationStatus?: string | null; currentAvailabilityConfirmed: boolean; dietaryCaveat: string };
 type GroupSnapshot = { id: string; name: string; eventTime: string; neighborhood: string; budgetMax: number; maxDistanceKm: number; vegetarianRequired: number; allergies: string[]; inviteCode: string; inviteExpiresAt: string | null; inviteRevokedAt: string | null; status: "voting" | "finalized"; selectedCandidateId: string | null; candidates: GroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number>; memberCount: number; viewerRole: "owner" | "participant"; viewerVote: string | null; viewerRsvp: string | null; timeZone: string | null; currencyCode: string | null; locale: string | null; locality: string | null; countryCode: string | null };
 type Translator = (key: MessageKey, values?: Record<string, string | number>) => string;
+type AnalyticsEvent = "analysis_started" | "analysis_completed" | "analysis_failed" | "analysis_corrected" | "dish_published" | "match_opened" | "group_created" | "invite_joined" | "vote_cast" | "plan_finalized" | "rsvp_submitted";
+type FeedbackReason = "wrong_identification" | "stale_dish" | "closed_restaurant";
 
 function groupConflictLabel(t: Translator, conflict: string): string {
   const [code, detail = ""] = conflict.split(":", 2);
@@ -66,6 +68,7 @@ export default function Home() {
   const [analysisMode, setAnalysisMode] = useState<"live" | "demo" | null>(null);
   const [analysisWarning, setAnalysisWarning] = useState("");
   const [analysisError, setAnalysisError] = useState("");
+  const [analysisRequestId, setAnalysisRequestId] = useState<string | null>(null);
   const [pendingImage, setPendingImage] = useState<string | undefined>();
   const [toast, setToast] = useState("");
   const [guestToken, setGuestToken] = useState<string | null>(null);
@@ -81,6 +84,7 @@ export default function Home() {
   const [location, setLocation] = useState<NormalizedLocation | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const correctionTracked = useRef(false);
   const visible = useMemo(() => view === "saved" ? dishes.filter((d) => saved.has(d.id)) : dishes, [saved, view]);
   const t = useCallback<Translator>((key, values) => translate(language, key, values), [language]);
 
@@ -185,6 +189,15 @@ export default function Home() {
     setToast(text);
     window.setTimeout(() => setToast(""), 2200);
   }, []);
+  const trackAnalytics = useCallback((event: AnalyticsEvent, details: { mode?: "live" | "demo"; outcome?: string; durationMs?: number } = {}) => {
+    if (!guestToken) return;
+    void fetch("/api/analytics", { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ event, language, countryCode: location?.countryCode, ...details }) }).catch(() => undefined);
+  }, [guestToken, language, location?.countryCode]);
+  const reportFeedback = useCallback(async (reason: FeedbackReason, targetType: "analysis" | "published_dish" | "restaurant", targetId?: string | null) => {
+    if (!guestToken) return;
+    const response = await fetch("/api/feedback", { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ reason, targetType, targetId, countryCode: location?.countryCode }) }).catch(() => null);
+    flash(response?.ok ? t("feedback.thanks") : t("error.generic"));
+  }, [flash, guestToken, location?.countryCode, t]);
   function toggleSaved(id: number) {
     const shouldSave = !saved.has(id);
     setSaved((current) => {
@@ -200,8 +213,10 @@ export default function Home() {
     }
   }
   async function analyze(imageDataUrl?: string, demo = false) {
+    const startedAt = performance.now();
+    trackAnalytics("analysis_started", { mode: demo ? "demo" : "live" });
     setModal(true); setPhase("loading");
-    setPendingImage(imageDataUrl); setAnalysisError(""); setAnalysisWarning(""); setAnalysisMode(null);
+    setPendingImage(imageDataUrl); setAnalysisError(""); setAnalysisWarning(""); setAnalysisMode(null); setAnalysisRequestId(null); correctionTracked.current = false;
     try {
       const response = await fetch("/api/analyze", {
         method: "POST", headers: { "Content-Type": "application/json", ...(guestToken ? { Authorization: `Guest ${guestToken}` } : {}) },
@@ -209,13 +224,17 @@ export default function Home() {
       });
       const envelope = await response.json() as AnalysisEnvelope;
       if (!response.ok || !envelope.ok) {
+        trackAnalytics("analysis_failed", { mode: demo ? "demo" : "live", outcome: envelope.ok ? "provider_error" : envelope.error.code, durationMs: Math.round(performance.now() - startedAt) });
         setAnalysisError(envelope.ok ? "Live identification failed." : envelope.error.message);
         setPhase("error");
         return;
       }
       setAnalysis(envelope.result); setAnalysisMode(envelope.mode); setAnalysisWarning(envelope.warning ?? "");
+      setAnalysisRequestId(envelope.requestId);
+      trackAnalytics("analysis_completed", { mode: envelope.mode, outcome: "success", durationMs: Math.round(performance.now() - startedAt) });
       setPhase("review");
     } catch {
+      trackAnalytics("analysis_failed", { mode: demo ? "demo" : "live", outcome: "network_error", durationMs: Math.round(performance.now() - startedAt) });
       setAnalysisError(t("analysis.networkError"));
       setPhase("error");
     }
@@ -233,6 +252,7 @@ export default function Home() {
     reader.readAsDataURL(file);
   }
   function update(field: "name" | "cuisine" | "ingredients" | "dietary" | "description", value: string) {
+    if (!correctionTracked.current) { correctionTracked.current = true; trackAnalytics("analysis_corrected", { mode: analysisMode ?? undefined }); }
     setAnalysis((current) => ({ ...current, [field]: value, canonical: { ...current.canonical, ...(field === "name" ? { dishName: value.trim().toLowerCase() } : {}), ...(field === "cuisine" ? { cuisine: value.trim().toLowerCase() } : {}), ...(field === "ingredients" ? { ingredients: value.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean) } : {}), metadataSource: "user_reviewed" } }));
   }
   async function publish(event: FormEvent, metadata: PublicationMetadata) {
@@ -252,6 +272,7 @@ export default function Home() {
       setMatchProviderUnavailable(payload.providerStatus.status === "unavailable");
       setMatchRecordsUnavailable(payload.matchingStatus.status === "unavailable");
       setPhase("published");
+      trackAnalytics("dish_published", { mode: analysisMode, outcome: "success" });
       const count = payload.matches.confirmedNearbyDishes.length + payload.matches.communityOrInferredDishes.length + payload.matches.restaurantLevelAlternatives.length;
       flash(t("analysis.publishedBody", { count }));
     } catch {
@@ -276,7 +297,7 @@ export default function Home() {
 
       <main>
         {view === "groups" ? (
-          <GroupPlanner guestToken={guestToken} flash={flash} t={t} location={location} language={language} />
+          <GroupPlanner guestToken={guestToken} flash={flash} t={t} location={location} language={language} track={trackAnalytics} />
         ) : (
           <>
             <section className="hero">
@@ -327,7 +348,7 @@ export default function Home() {
         <button className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}><span>♡</span>{t("nav.saved")}</button>
         <button onClick={() => setSettingsOpen(true)}><span>○</span>{t("nav.profile")}</button>
       </nav>
-      {modal && <Analyzer key={`${pendingImage ?? "demo"}-${analysisMode ?? "pending"}`} guestToken={guestToken} preview={preview} phase={phase} analysis={analysis} analysisMode={analysisMode} warning={analysisWarning} error={analysisError} matches={nearbyMatches} matchProviderUnavailable={matchProviderUnavailable} matchRecordsUnavailable={matchRecordsUnavailable} publishing={publishing} close={() => setModal(false)} update={update} publish={publish} retry={() => void analyze(pendingImage, false)} demo={() => void analyze(undefined, true)} t={t} language={language} measurementSystem={measurementSystem} location={location} />}
+      {modal && <Analyzer key={`${pendingImage ?? "demo"}-${analysisMode ?? "pending"}`} guestToken={guestToken} preview={preview} phase={phase} analysis={analysis} analysisMode={analysisMode} warning={analysisWarning} error={analysisError} matches={nearbyMatches} matchProviderUnavailable={matchProviderUnavailable} matchRecordsUnavailable={matchRecordsUnavailable} publishing={publishing} close={() => setModal(false)} update={update} publish={publish} retry={() => void analyze(pendingImage, false)} demo={() => void analyze(undefined, true)} t={t} language={language} measurementSystem={measurementSystem} location={location} onMatchOpened={() => trackAnalytics("match_opened", { mode: analysisMode ?? undefined })} onFeedback={(reason, targetType, targetId) => void reportFeedback(reason, targetType, targetId ?? analysisRequestId)} />}
       {settingsOpen && <SettingsPanel guestToken={guestToken} t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} close={() => setSettingsOpen(false)} persist={persistPreferences} />}
       {toast && <div className="toast" role="status">✓ {toast}</div>}
     </div>
@@ -356,7 +377,7 @@ function PublishedDishCard({ dish, t, onDelete }: { dish: PublishedDish; t: Tran
   </article>;
 }
 
-function Analyzer({ guestToken, preview, phase, analysis, analysisMode, warning, error, matches, matchProviderUnavailable, matchRecordsUnavailable, publishing, close, update, publish, retry, demo, t, language, measurementSystem, location }: { guestToken: string | null; preview: string; phase: string; analysis: Analysis; analysisMode: "live" | "demo" | null; warning: string; error: string; matches: MatchTiers; matchProviderUnavailable: boolean; matchRecordsUnavailable: boolean; publishing: boolean; close: () => void; update: (field: "name" | "cuisine" | "ingredients" | "dietary" | "description", value: string) => void; publish: (event: FormEvent, metadata: PublicationMetadata) => void; retry: () => void; demo: () => void; t: Translator; language: UiLanguage; measurementSystem: MeasurementSystem; location: NormalizedLocation | null }) {
+function Analyzer({ guestToken, preview, phase, analysis, analysisMode, warning, error, matches, matchProviderUnavailable, matchRecordsUnavailable, publishing, close, update, publish, retry, demo, t, language, measurementSystem, location, onMatchOpened, onFeedback }: { guestToken: string | null; preview: string; phase: string; analysis: Analysis; analysisMode: "live" | "demo" | null; warning: string; error: string; matches: MatchTiers; matchProviderUnavailable: boolean; matchRecordsUnavailable: boolean; publishing: boolean; close: () => void; update: (field: "name" | "cuisine" | "ingredients" | "dietary" | "description", value: string) => void; publish: (event: FormEvent, metadata: PublicationMetadata) => void; retry: () => void; demo: () => void; t: Translator; language: UiLanguage; measurementSystem: MeasurementSystem; location: NormalizedLocation | null; onMatchOpened: () => void; onFeedback: (reason: FeedbackReason, targetType: "analysis" | "published_dish" | "restaurant", targetId?: string | null) => void }) {
   const [restaurants, setRestaurants] = useState<RestaurantPlace[]>([]);
   const [selectedRestaurant, setSelectedRestaurant] = useState<PublishRestaurant | null>(null);
   const [restaurantStatus, setRestaurantStatus] = useState("");
@@ -406,10 +427,11 @@ function Analyzer({ guestToken, preview, phase, analysis, analysisMode, warning,
     <div className="analyzer-content">
       {phase === "loading" ? <div className="loading-state"><div className="scan"><span /></div><em>{t("analysis.loadingKicker")}</em><h2 id="analyzer-title">{t("analysis.loadingTitle")}</h2><div><span>{t("analysis.field.name")}</span><span>{t("analysis.field.ingredients")}</span><span>{t("analysis.field.dietary")}</span></div></div>
       : phase === "error" ? <div className="identifier-error"><span>!</span><p className="kicker">{t("analysis.unavailableKicker")}</p><h2 id="analyzer-title">{t("analysis.unavailableTitle")}</h2><p>{error}</p><div className="modal-actions"><button type="button" className="secondary" onClick={demo}>{t("analysis.useDemo")}</button><button type="button" className="primary" onClick={retry}>{t("analysis.retry")}</button></div></div>
-      : phase === "published" ? <div className="published"><span>✓</span><h2 id="analyzer-title">{t("analysis.publishedTitle")}</h2><p>{t("analysis.publishedBody", { count: matches.confirmedNearbyDishes.length + matches.communityOrInferredDishes.length + matches.restaurantLevelAlternatives.length })}</p>{matchRecordsUnavailable && <p className="publication-status">{t("match.recordsUnavailable")}</p>}{matchProviderUnavailable && <p className="publication-status">{t("match.providerUnavailable")}</p>}<MatchTier title={t("match.confirmedTier")} results={matches.confirmedNearbyDishes} t={t} language={language} measurementSystem={measurementSystem} /><MatchTier title={t("match.communityTier")} results={matches.communityOrInferredDishes} t={t} language={language} measurementSystem={measurementSystem} /><MatchTier title={t("match.restaurantTier")} results={matches.restaurantLevelAlternatives} t={t} language={language} measurementSystem={measurementSystem} /><div className="modal-actions"><button className="primary" onClick={close}>{t("analysis.explore")} →</button></div></div>
+      : phase === "published" ? <div className="published"><span>✓</span><h2 id="analyzer-title">{t("analysis.publishedTitle")}</h2><p>{t("analysis.publishedBody", { count: matches.confirmedNearbyDishes.length + matches.communityOrInferredDishes.length + matches.restaurantLevelAlternatives.length })}</p>{matchRecordsUnavailable && <p className="publication-status">{t("match.recordsUnavailable")}</p>}{matchProviderUnavailable && <p className="publication-status">{t("match.providerUnavailable")}</p>}<MatchTier title={t("match.confirmedTier")} results={matches.confirmedNearbyDishes} t={t} language={language} measurementSystem={measurementSystem} onFeedback={onFeedback} /><MatchTier title={t("match.communityTier")} results={matches.communityOrInferredDishes} t={t} language={language} measurementSystem={measurementSystem} onFeedback={onFeedback} /><MatchTier title={t("match.restaurantTier")} results={matches.restaurantLevelAlternatives} t={t} language={language} measurementSystem={measurementSystem} onFeedback={onFeedback} /><div className="modal-actions"><button className="primary" onClick={() => { onMatchOpened(); close(); }}>{t("analysis.explore")} →</button></div></div>
       : <form onSubmit={submit}><div className={`analysis-mode ${analysisMode ?? ""}`}>{analysisMode === "live" ? `● ${t("analysis.live")}` : `◇ ${t("analysis.demo")}`}</div><span className="kicker">{t("analysis.review")}</span><div className="confidence"><h2 id="analyzer-title">{t("analysis.reviewTitle")}</h2><span>{t("analysis.confident", { confidence: analysis.confidence })}</span></div>
         {warning && <p className="demo-warning">{warning}</p>}
         <p className="review-note">{t("analysis.warning")}</p>
+        <button type="button" className="text-button" onClick={() => onFeedback("wrong_identification", "analysis")}>{t("feedback.wrongIdentification")}</button>
         <div className="form-grid">
           <label className="wide">{t("analysis.field.name")}<input value={analysis.name} onChange={(e) => update("name", e.target.value)} /></label>
           <label>{t("analysis.field.cuisine")}<input value={analysis.cuisine} onChange={(e) => update("cuisine", e.target.value)} /></label>
@@ -436,14 +458,14 @@ function Analyzer({ guestToken, preview, phase, analysis, analysisMode, warning,
   </div></div>;
 }
 
-function MatchTier({ title, results, t, language, measurementSystem }: { title: string; results: MatchResult[]; t: Translator; language: UiLanguage; measurementSystem: MeasurementSystem }) {
+function MatchTier({ title, results, t, language, measurementSystem, onFeedback }: { title: string; results: MatchResult[]; t: Translator; language: UiLanguage; measurementSystem: MeasurementSystem; onFeedback: (reason: FeedbackReason, targetType: "analysis" | "published_dish" | "restaurant", targetId?: string | null) => void }) {
   return <section className="match-tier"><h3>{title}</h3>{results.length === 0 ? <p className="empty-tier">{t("match.noResults")}</p> : <div className="nearby-results">{results.slice(0, 4).map((match) => {
     const distance = new Intl.NumberFormat(language, { style: "unit", unit: measurementSystem === "imperial" ? "mile" : "kilometer", unitDisplay: "short", maximumFractionDigits: 1 }).format(measurementSystem === "imperial" ? match.distanceKm * .621371 : match.distanceKm);
     const provenance = match.provenance === "provider_place" ? t("match.providerPlace") : t(`provenance.${match.provenance}` as MessageKey);
     const verification = match.verificationStatus === "not_applicable" ? t("match.notApplicable") : t(`verification.${match.verificationStatus}` as MessageKey);
     const reason = t(match.reasonCode === "restaurant_only" ? "match.restaurantReason" : match.reasonCode === "semantic_and_distance" ? "match.semanticReason" : "match.nearbyReason");
     const price = match.priceAmount != null && match.currencyCode ? new Intl.NumberFormat(language, { style: "currency", currency: match.currencyCode }).format(match.priceAmount) : null;
-    return <article key={match.id}>{match.imageUrl ? <img src={match.imageUrl} alt="" /> : <div className="match-placeholder">T</div>}<div><b>{match.dishName ?? match.restaurantName}</b><small>{match.dishName ? `${match.restaurantName} · ` : ""}{distance} · {match.score}%{price ? ` · ${price}` : ""}</small><p>{reason}</p><small>{provenance} · {verification}</small><small>{match.lastConfirmedAt ? t("match.lastConfirmed", { date: new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(new Date(match.lastConfirmedAt)) }) : t("match.neverConfirmed")}</small><small>{match.currentAvailabilityConfirmed ? t("availability.confirmed") : t("availability.unknown")}</small><p className="dietary-caveat">{match.dietaryCaveat}</p>{match.attribution && <small translate="no">Google Maps</small>}</div></article>;
+    return <article key={match.id}>{match.imageUrl ? <img src={match.imageUrl} alt="" /> : <div className="match-placeholder">T</div>}<div><b>{match.dishName ?? match.restaurantName}</b><small>{match.dishName ? `${match.restaurantName} · ` : ""}{distance} · {match.score}%{price ? ` · ${price}` : ""}</small><p>{reason}</p><small>{provenance} · {verification}</small><small>{match.lastConfirmedAt ? t("match.lastConfirmed", { date: new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(new Date(match.lastConfirmedAt)) }) : t("match.neverConfirmed")}</small><small>{match.currentAvailabilityConfirmed ? t("availability.confirmed") : t("availability.unknown")}</small><p className="dietary-caveat">{match.dietaryCaveat}</p>{match.attribution && <small translate="no">Google Maps</small>}<button className="text-button" onClick={() => onFeedback(match.kind === "dish" ? "stale_dish" : "closed_restaurant", match.kind === "dish" ? "published_dish" : "restaurant", match.id)}>{t(match.kind === "dish" ? "feedback.staleDish" : "feedback.closedRestaurant")}</button></div></article>;
   })}</div>}</section>;
 }
 
@@ -525,7 +547,7 @@ function SettingsPanel({ guestToken, t, language, theme, measurementSystem, loca
   </aside></div>;
 }
 
-function GroupPlanner({ guestToken, flash, t, location, language }: { guestToken: string | null; flash: (text: string) => void; t: Translator; location: NormalizedLocation | null; language: UiLanguage }) {
+function GroupPlanner({ guestToken, flash, t, location, language, track }: { guestToken: string | null; flash: (text: string) => void; t: Translator; location: NormalizedLocation | null; language: UiLanguage; track: (event: AnalyticsEvent, details?: { mode?: "live" | "demo"; outcome?: string; durationMs?: number }) => void }) {
   const [group, setGroup] = useState<GroupSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [placesUnavailable, setPlacesUnavailable] = useState(false);
@@ -547,11 +569,11 @@ function GroupPlanner({ guestToken, flash, t, location, language }: { guestToken
     const inviteCode = new URLSearchParams(window.location.search).get("join");
     if (inviteCode && !joinAttempted.current) {
       joinAttempted.current = true;
-      void fetch("/api/groups/join", { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ inviteCode, language }) }).then(async (response) => { if (!response.ok) { flash(t("group.inviteInvalid")); return; } setGroup(((await response.json()) as { group: GroupSnapshot }).group); window.history.replaceState({}, "", window.location.pathname); flash(t("group.joined")); });
+      void fetch("/api/groups/join", { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ inviteCode, language }) }).then(async (response) => { if (!response.ok) { flash(t("group.inviteInvalid")); return; } setGroup(((await response.json()) as { group: GroupSnapshot }).group); window.history.replaceState({}, "", window.location.pathname); track("invite_joined", { outcome: "success" }); flash(t("group.joined")); });
       return;
     }
     void fetch("/api/groups", { headers: { Authorization: `Guest ${guestToken}` } }).then(async (response) => { if (response.ok) setGroup(((await response.json()) as { group: GroupSnapshot | null }).group); });
-  }, [flash, guestToken, language, t]);
+  }, [flash, guestToken, language, t, track]);
 
   async function createGroup() {
     if (!guestToken) { flash("Guest session is still connecting"); return; }
@@ -564,6 +586,7 @@ function GroupPlanner({ guestToken, flash, t, location, language }: { guestToken
       if (!response.ok) throw new Error();
       const payload = await response.json() as { group: GroupSnapshot; providerStatus?: { status: "live" | "unavailable" } };
       setGroup(payload.group); setPlacesUnavailable(payload.providerStatus?.status === "unavailable"); flash(t("group.rank"));
+      track("group_created", { outcome: "success" });
     } catch { flash(t("error.generic")); } finally { setBusy(false); }
   }
 
@@ -575,6 +598,7 @@ function GroupPlanner({ guestToken, flash, t, location, language }: { guestToken
       if (!response.ok) throw new Error((await response.json() as { error?: string }).error);
       const payload = await response.json() as { group: GroupSnapshot };
       setGroup(payload.group); flash(path === "vote" ? t("group.voteSaved") : path === "finalize" ? t("group.finalized") : t("group.rsvpSaved"));
+      if (path === "vote") track("vote_cast", { outcome: "success" }); else if (path === "finalize") track("plan_finalized", { outcome: "success" }); else if (path === "rsvp") track("rsvp_submitted", { outcome: "success" });
     } catch { flash(t("error.generic")); } finally { setBusy(false); }
   }
 

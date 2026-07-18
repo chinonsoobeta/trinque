@@ -59,6 +59,31 @@ export const usageCounters = sqliteTable("usage_counters", {
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [primaryKey({ columns: [table.action, table.scope, table.windowStart] }), index("usage_counters_cleanup_idx").on(table.windowStart)]);
 
+export const analyticsEvents = sqliteTable("analytics_events", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  event: text("event", { enum: ["analysis_started", "analysis_completed", "analysis_failed", "analysis_corrected", "dish_published", "match_opened", "group_created", "invite_joined", "vote_cast", "plan_finalized", "rsvp_submitted"] }).notNull(),
+  language: text("language", { enum: ["en-CA", "en-US", "en-GB", "fr", "es"] }),
+  countryCode: text("country_code", { enum: ["US", "CA", "MX", "GB", "FR"] }),
+  mode: text("mode", { enum: ["live", "demo"] }),
+  outcome: text("outcome"),
+  durationMs: integer("duration_ms"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [index("analytics_events_user_created_idx").on(table.userId, table.createdAt), index("analytics_events_event_created_idx").on(table.event, table.createdAt)]);
+
+export const feedbackReports = sqliteTable("feedback_reports", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  reason: text("reason", { enum: ["wrong_identification", "stale_dish", "closed_restaurant"] }).notNull(),
+  targetType: text("target_type", { enum: ["analysis", "published_dish", "restaurant"] }).notNull(),
+  targetId: text("target_id"),
+  comment: text("comment"),
+  countryCode: text("country_code", { enum: ["US", "CA", "MX", "GB", "FR"] }),
+  status: text("status", { enum: ["open", "resolved"] }).notNull().default("open"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  resolvedAt: text("resolved_at"),
+}, (table) => [index("feedback_reports_target_idx").on(table.targetType, table.targetId, table.createdAt), index("feedback_reports_status_idx").on(table.status, table.createdAt)]);
+
 export const restaurants = sqliteTable("restaurants", {
   id: text("id").primaryKey(),
   provider: text("provider", { enum: ["google", "community"] }).notNull(),

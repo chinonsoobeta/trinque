@@ -3,7 +3,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ExpoLocation from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LANGUAGE_LABEL_KEYS, resolveUiLanguage, translate, UI_LANGUAGES, type MessageKey, type UiLanguage } from './i18n';
 import {
   ActivityIndicator,
@@ -31,6 +31,8 @@ type AnalyzerPhase = 'choose' | 'analyzing' | 'review' | 'error' | 'published';
 type ThemePreference = 'system' | 'light' | 'dark';
 type MeasurementSystem = 'metric' | 'imperial';
 type Translator = (key: MessageKey, values?: Record<string, string | number>) => string;
+type AnalyticsEvent = 'analysis_started' | 'analysis_completed' | 'analysis_failed' | 'analysis_corrected' | 'dish_published' | 'match_opened' | 'group_created' | 'invite_joined' | 'vote_cast' | 'plan_finalized' | 'rsvp_submitted';
+type FeedbackReason = 'wrong_identification' | 'stale_dish' | 'closed_restaurant';
 type MobileLocation = { latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: 'US' | 'CA' | 'MX' | 'GB' | 'FR'; timeZone: string; currencyCode: string; locale: string; language: UiLanguage; measurementSystem: MeasurementSystem; source: 'device' | 'manual' };
 type MobileLocationSuggestion = { id: string; provider: 'google'; providerPlaceId: string; label: string; secondaryLabel: string; attribution: 'Google Maps' };
 type MobileRestaurantPlace = { provider: 'google'; providerPlaceId: string; displayName: string; address: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: MobileLocation['countryCode']; currencyCode: string; attribution: 'Google Maps' };
@@ -166,6 +168,7 @@ export default function App() {
   const [analysisMode, setAnalysisMode] = useState<'live' | 'demo' | null>(null);
   const [analysisWarning, setAnalysisWarning] = useState('');
   const [analysisError, setAnalysisError] = useState('');
+  const [analysisRequestId, setAnalysisRequestId] = useState<string | null>(null);
   const [guestToken, setGuestToken] = useState<string | null>(null);
   const [nearbyMatches, setNearbyMatches] = useState<MatchTiers>(emptyMatchTiers);
   const [matchProviderUnavailable, setMatchProviderUnavailable] = useState(false);
@@ -178,8 +181,18 @@ export default function App() {
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [pendingInvite, setPendingInvite] = useState<string | null>(null);
   const t = useCallback<Translator>((key, values) => translate(language, key, values), [language]);
+  const correctionTracked = useRef(false);
   const inviteHandled = useCallback(() => setPendingInvite(null), []);
   const effectiveTheme = theme === 'system' ? (systemScheme ?? 'light') : theme;
+  const trackAnalytics = useCallback((event: AnalyticsEvent, details: { mode?: 'live' | 'demo'; outcome?: string; durationMs?: number } = {}) => {
+    if (!remoteApi || !guestToken) return;
+    void fetch(`${remoteApi}/api/analytics`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ event, language, countryCode: location?.countryCode, ...details }) }).catch(() => undefined);
+  }, [guestToken, language, location?.countryCode]);
+  const reportFeedback = useCallback(async (reason: FeedbackReason, targetType: 'analysis' | 'published_dish' | 'restaurant', targetId?: string | null) => {
+    if (!remoteApi || !guestToken) return;
+    const response = await fetch(`${remoteApi}/api/feedback`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ reason, targetType, targetId, countryCode: location?.countryCode }) }).catch(() => null);
+    Alert.alert(response?.ok ? t('feedback.thanks') : t('error.generic'));
+  }, [guestToken, location?.countryCode, t]);
 
   useEffect(() => {
     Appearance.setColorScheme(theme === 'system' ? 'unspecified' : theme);
@@ -285,6 +298,8 @@ export default function App() {
     setAnalysisMode(null);
     setAnalysisWarning('');
     setAnalysisError('');
+    setAnalysisRequestId(null);
+    correctionTracked.current = false;
     setAnalyzerOpen(true);
   };
 
@@ -309,6 +324,8 @@ export default function App() {
   };
 
   const analyze = async (dataUrl: string | null, demo = false) => {
+    const startedAt = performance.now();
+    trackAnalytics('analysis_started', { mode: demo ? 'demo' : 'live' });
     setPhase('analyzing');
     setAnalysisMode(null);
     setAnalysisWarning('');
@@ -317,6 +334,7 @@ export default function App() {
       if (!remoteApi) {
         await new Promise((resolve) => setTimeout(resolve, 650));
         if (!demo) {
+          trackAnalytics('analysis_failed', { mode: 'live', outcome: 'api_not_configured', durationMs: Math.round(performance.now() - startedAt) });
           setAnalysisError(t('analysis.networkError'));
           setPhase('error');
           return;
@@ -332,6 +350,7 @@ export default function App() {
         });
         const envelope = (await response.json()) as AnalysisEnvelope;
         if (!response.ok || !envelope.ok) {
+          trackAnalytics('analysis_failed', { mode: demo ? 'demo' : 'live', outcome: envelope.ok ? 'provider_error' : envelope.error.code, durationMs: Math.round(performance.now() - startedAt) });
           setAnalysisError(envelope.ok ? 'Live identification failed.' : envelope.error.message);
           setPhase('error');
           return;
@@ -339,9 +358,13 @@ export default function App() {
         setAnalysis(envelope.result);
         setAnalysisMode(envelope.mode);
         setAnalysisWarning(envelope.warning ?? '');
+        setAnalysisRequestId(envelope.requestId);
+        trackAnalytics('analysis_completed', { mode: envelope.mode, outcome: 'success', durationMs: Math.round(performance.now() - startedAt) });
       }
+      if (!remoteApi && demo) trackAnalytics('analysis_completed', { mode: 'demo', outcome: 'success', durationMs: Math.round(performance.now() - startedAt) });
       setPhase('review');
     } catch {
+      trackAnalytics('analysis_failed', { mode: demo ? 'demo' : 'live', outcome: 'network_error', durationMs: Math.round(performance.now() - startedAt) });
       setAnalysisError(t('analysis.networkError'));
       setPhase('error');
     }
@@ -370,6 +393,7 @@ export default function App() {
       setMatchProviderUnavailable(payload.providerStatus.status === 'unavailable');
       setMatchRecordsUnavailable(payload.matchingStatus.status === 'unavailable');
       setPhase('published');
+      trackAnalytics('dish_published', { mode: analysisMode, outcome: 'success' });
     } catch {
       setAnalysisError(t('analysis.publishError'));
       setPhase('error');
@@ -386,7 +410,7 @@ export default function App() {
         <StatusBar style={effectiveTheme === 'dark' ? 'light' : 'dark'} />
         <View style={styles.appShell}>
           {tab === 'Discover' && <DiscoverScreen savedIds={savedIds} onSave={toggleSaved} onAnalyze={openAnalyzer} t={t} location={location} />}
-          {tab === 'Groups' && <GroupsScreen guestToken={guestToken} t={t} location={location} language={language} inviteCode={pendingInvite} inviteHandled={inviteHandled} />}
+          {tab === 'Groups' && <GroupsScreen guestToken={guestToken} t={t} location={location} language={language} inviteCode={pendingInvite} inviteHandled={inviteHandled} track={trackAnalytics} />}
           {tab === 'Saved' && <SavedScreen dishes={savedDishes} onSave={toggleSaved} onDiscover={() => setTab('Discover')} t={t} />}
           {tab === 'Profile' && <ProfileScreen guestToken={guestToken} t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} persist={persistPreferences} />}
           <TabBar active={tab} onSelect={setTab} onAnalyze={openAnalyzer} t={t} />
@@ -405,7 +429,7 @@ export default function App() {
           matchProviderUnavailable={matchProviderUnavailable}
           matchRecordsUnavailable={matchRecordsUnavailable}
           publishing={publishing}
-          onAnalysisChange={setAnalysis}
+          onAnalysisChange={(value) => { setAnalysis(value); if (!correctionTracked.current) { correctionTracked.current = true; trackAnalytics('analysis_corrected', { mode: analysisMode ?? undefined }); } }}
           onChoose={choosePhoto}
           onDemo={() => analyze(null, true)}
           onRetry={() => analyze(imageDataUrl, false)}
@@ -422,6 +446,8 @@ export default function App() {
           location={location}
           apiBase={remoteApi}
           guestToken={guestToken}
+          onMatchOpened={() => trackAnalytics('match_opened', { mode: analysisMode ?? undefined })}
+          onFeedback={(reason, targetType, targetId) => void reportFeedback(reason, targetType, targetId ?? analysisRequestId)}
         />
       </SafeAreaView>
     </SafeAreaProvider>
@@ -470,7 +496,7 @@ function DiscoverScreen({ savedIds, onSave, onAnalyze, t, location }: { savedIds
   );
 }
 
-function GroupsScreen({ guestToken, t, location, language, inviteCode, inviteHandled }: { guestToken: string | null; t: Translator; location: MobileLocation | null; language: UiLanguage; inviteCode: string | null; inviteHandled: () => void }) {
+function GroupsScreen({ guestToken, t, location, language, inviteCode, inviteHandled, track }: { guestToken: string | null; t: Translator; location: MobileLocation | null; language: UiLanguage; inviteCode: string | null; inviteHandled: () => void; track: (event: AnalyticsEvent, details?: { mode?: 'live' | 'demo'; outcome?: string; durationMs?: number }) => void }) {
   const [group, setGroup] = useState<MobileGroup | null>(null);
   const [busy, setBusy] = useState(false);
   const [placesUnavailable, setPlacesUnavailable] = useState(!remoteApi);
@@ -486,9 +512,10 @@ function GroupsScreen({ guestToken, t, location, language, inviteCode, inviteHan
   useEffect(() => {
     if (!remoteApi || !guestToken) return;
     if (inviteCode) {
-      void fetch(`${remoteApi}/api/groups/join`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ code: inviteCode, language }) }).then(async (response) => {
+      void fetch(`${remoteApi}/api/groups/join`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ inviteCode, language }) }).then(async (response) => {
         if (!response.ok) { Alert.alert(t('group.inviteInvalid')); return; }
         setGroup(((await response.json()) as { group: MobileGroup }).group);
+        track('invite_joined', { outcome: 'success' });
         Alert.alert(t('group.joined'));
       }).catch(() => Alert.alert(t('error.generic'))).finally(inviteHandled);
       return;
@@ -496,7 +523,7 @@ function GroupsScreen({ guestToken, t, location, language, inviteCode, inviteHan
     void fetch(`${remoteApi}/api/groups`, { headers: { Authorization: `Guest ${guestToken}` } }).then(async (response) => {
       if (response.ok) setGroup(((await response.json()) as { group: MobileGroup | null }).group);
     });
-  }, [guestToken, inviteCode, inviteHandled, language, t]);
+  }, [guestToken, inviteCode, inviteHandled, language, t, track]);
 
   const createGroup = async () => {
     if (!remoteApi || !guestToken) { Alert.alert(t('auth.connecting'), t('analysis.sessionError')); return; }
@@ -509,6 +536,7 @@ function GroupsScreen({ guestToken, t, location, language, inviteCode, inviteHan
       if (!response.ok) throw new Error();
       const payload = await response.json() as { group: MobileGroup; providerStatus?: { status: 'live' | 'unavailable' } };
       setGroup(payload.group); setPlacesUnavailable(payload.providerStatus?.status === 'unavailable');
+      track('group_created', { outcome: 'success' });
     } catch { Alert.alert(t('error.generic')); } finally { setBusy(false); }
   };
 
@@ -519,6 +547,7 @@ function GroupsScreen({ guestToken, t, location, language, inviteCode, inviteHan
       const response = await fetch(`${remoteApi}/api/groups/${group.id}/${path}`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!response.ok) throw new Error(((await response.json()) as { error?: string }).error);
       setGroup(((await response.json()) as { group: MobileGroup }).group);
+      if (path === 'vote') track('vote_cast', { outcome: 'success' }); else if (path === 'finalize') track('plan_finalized', { outcome: 'success' }); else if (path === 'rsvp') track('rsvp_submitted', { outcome: 'success' });
     } catch { Alert.alert(t('error.generic')); } finally { setBusy(false); }
   };
 
@@ -735,7 +764,7 @@ function TabButton({ tab, icon, active, onPress, t }: { tab: Tab; icon: string; 
   return <Pressable style={styles.tabButton} onPress={onPress}><Text style={[styles.tabIcon, active && styles.tabActive]}>{icon}</Text><Text style={[styles.tabLabel, active && styles.tabActive]}>{t(key)}</Text></Pressable>;
 }
 
-function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analysisMode, warning, error, matches, matchProviderUnavailable, matchRecordsUnavailable, publishing, onAnalysisChange, onChoose, onDemo, onRetry, onPublish, onClose, onReset, t, language, measurementSystem, location, apiBase, guestToken }: {
+function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analysisMode, warning, error, matches, matchProviderUnavailable, matchRecordsUnavailable, publishing, onAnalysisChange, onChoose, onDemo, onRetry, onPublish, onClose, onReset, t, language, measurementSystem, location, apiBase, guestToken, onMatchOpened, onFeedback }: {
   visible: boolean;
   phase: AnalyzerPhase;
   preview: string | null;
@@ -761,6 +790,8 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
   location: MobileLocation | null;
   apiBase: string | null | undefined;
   guestToken: string | null;
+  onMatchOpened: () => void;
+  onFeedback: (reason: FeedbackReason, targetType: 'analysis' | 'published_dish' | 'restaurant', targetId?: string | null) => void;
 }) {
   const [restaurants, setRestaurants] = useState<MobileRestaurantPlace[]>([]);
   const [selectedRestaurant, setSelectedRestaurant] = useState<PublishRestaurant | null>(null);
@@ -840,6 +871,7 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
               <Text style={styles.modalKicker}>{t('analysis.review').toUpperCase()}</Text>
               <View style={styles.confidenceLine}><Text style={styles.reviewTitle}>{t('analysis.reviewTitle')}</Text><Text style={styles.confidenceBadge}>{t('analysis.confident', { confidence: analysis.confidence })}</Text></View>
               <View style={styles.warningBox}><Text style={styles.warningIcon}>!</Text><Text style={styles.warningText}>{t('analysis.warning')}</Text></View>
+              <Pressable onPress={() => onFeedback('wrong_identification', 'analysis')}><Text style={styles.demoLink}>{t('feedback.wrongIdentification')}</Text></Pressable>
               {warning ? <View style={styles.demoWarning}><Text style={styles.demoWarningText}>{warning}</Text></View> : null}
               <Field label={t('analysis.field.name')} value={analysis.name} onChangeText={(value) => editAnalysis('name', value)} />
               <Field label={t('analysis.field.cuisine')} value={analysis.cuisine} onChangeText={(value) => editAnalysis('cuisine', value)} />
@@ -872,8 +904,8 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
               <View style={styles.successMark}><Text style={styles.successMarkText}>✓</Text></View><Text style={styles.modalKicker}>{t('analysis.publishedTitle').toUpperCase()}</Text><Text style={styles.modalTitle}>{analysis.name}</Text><Text style={styles.modalBody}>{t('analysis.publishedBody', { count: matches.confirmedNearbyDishes.length + matches.communityOrInferredDishes.length + matches.restaurantLevelAlternatives.length })}</Text>
               {matchProviderUnavailable ? <Text style={styles.publicationStatus}>{t('match.providerUnavailable')}</Text> : null}
               {matchRecordsUnavailable ? <Text style={styles.publicationStatus}>{t('match.recordsUnavailable')}</Text> : null}
-              <ScrollView style={styles.mobileMatches}><MobileMatchTier title={t('match.confirmedTier')} results={matches.confirmedNearbyDishes} t={t} language={language} measurementSystem={measurementSystem} /><MobileMatchTier title={t('match.communityTier')} results={matches.communityOrInferredDishes} t={t} language={language} measurementSystem={measurementSystem} /><MobileMatchTier title={t('match.restaurantTier')} results={matches.restaurantLevelAlternatives} t={t} language={language} measurementSystem={measurementSystem} /></ScrollView>
-              <Pressable style={({ pressed }) => [styles.primaryButton, styles.modalButton, pressed && styles.pressed]} onPress={onClose}><Text style={styles.primaryButtonText}>{t('analysis.explore')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable>
+              <ScrollView style={styles.mobileMatches}><MobileMatchTier title={t('match.confirmedTier')} results={matches.confirmedNearbyDishes} t={t} language={language} measurementSystem={measurementSystem} onFeedback={onFeedback} /><MobileMatchTier title={t('match.communityTier')} results={matches.communityOrInferredDishes} t={t} language={language} measurementSystem={measurementSystem} onFeedback={onFeedback} /><MobileMatchTier title={t('match.restaurantTier')} results={matches.restaurantLevelAlternatives} t={t} language={language} measurementSystem={measurementSystem} onFeedback={onFeedback} /></ScrollView>
+              <Pressable style={({ pressed }) => [styles.primaryButton, styles.modalButton, pressed && styles.pressed]} onPress={() => { onMatchOpened(); onClose(); }}><Text style={styles.primaryButtonText}>{t('analysis.explore')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable>
               <Pressable onPress={onReset}><Text style={styles.demoLink}>{t('analysis.another')}</Text></Pressable>
             </View>
           )}
@@ -883,14 +915,14 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
   );
 }
 
-function MobileMatchTier({ title, results, t, language, measurementSystem }: { title: string; results: MatchResult[]; t: Translator; language: UiLanguage; measurementSystem: MeasurementSystem }) {
+function MobileMatchTier({ title, results, t, language, measurementSystem, onFeedback }: { title: string; results: MatchResult[]; t: Translator; language: UiLanguage; measurementSystem: MeasurementSystem; onFeedback: (reason: FeedbackReason, targetType: 'analysis' | 'published_dish' | 'restaurant', targetId?: string | null) => void }) {
   return <View style={styles.mobileMatchTier}><Text style={styles.mobileMatchTierTitle}>{title}</Text>{results.length === 0 ? <Text style={styles.mobileMatchEmpty}>{t('match.noResults')}</Text> : results.slice(0, 4).map((match) => {
     const distance = new Intl.NumberFormat(language, { style: 'unit', unit: measurementSystem === 'imperial' ? 'mile' : 'kilometer', unitDisplay: 'short', maximumFractionDigits: 1 }).format(measurementSystem === 'imperial' ? match.distanceKm * .621371 : match.distanceKm);
     const provenance = match.provenance === 'provider_place' ? t('match.providerPlace') : t(`provenance.${match.provenance}` as MessageKey);
     const verification = match.verificationStatus === 'not_applicable' ? t('match.notApplicable') : t(`verification.${match.verificationStatus}` as MessageKey);
     const reason = t(match.reasonCode === 'restaurant_only' ? 'match.restaurantReason' : match.reasonCode === 'semantic_and_distance' ? 'match.semanticReason' : 'match.nearbyReason');
     const price = match.priceAmount != null && match.currencyCode ? new Intl.NumberFormat(language, { style: 'currency', currency: match.currencyCode }).format(match.priceAmount) : null;
-    return <View key={match.id} style={styles.mobileMatch}>{match.imageUrl ? <Image source={{ uri: match.imageUrl }} style={styles.mobileMatchImage} /> : <View style={[styles.mobileMatchImage, styles.mobileMatchPlaceholder]}><Text style={styles.mobileMatchPlaceholderText}>T</Text></View>}<View style={styles.mobileMatchCopy}><View style={styles.mobileMatchTitle}><Text style={styles.mobileMatchName}>{match.dishName ?? match.restaurantName}</Text><Text style={styles.mobileMatchScore}>{match.score}%</Text></View><Text style={styles.mobileMatchPlace}>{match.dishName ? `${match.restaurantName} · ` : ''}{distance}{price ? ` · ${price}` : ''}</Text><Text style={styles.mobileMatchReason}>{reason}</Text><Text style={styles.mobileMatchMeta}>{provenance} · {verification}</Text><Text style={styles.mobileMatchMeta}>{match.lastConfirmedAt ? t('match.lastConfirmed', { date: new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(match.lastConfirmedAt)) }) : t('match.neverConfirmed')}</Text><Text style={styles.mobileMatchMeta}>{match.currentAvailabilityConfirmed ? t('availability.confirmed') : t('availability.unknown')}</Text><Text style={styles.mobileMatchCaveat}>{match.dietaryCaveat}</Text>{match.attribution ? <Text style={styles.googleAttribution}>Google Maps</Text> : null}</View></View>;
+    return <View key={match.id} style={styles.mobileMatch}>{match.imageUrl ? <Image source={{ uri: match.imageUrl }} style={styles.mobileMatchImage} /> : <View style={[styles.mobileMatchImage, styles.mobileMatchPlaceholder]}><Text style={styles.mobileMatchPlaceholderText}>T</Text></View>}<View style={styles.mobileMatchCopy}><View style={styles.mobileMatchTitle}><Text style={styles.mobileMatchName}>{match.dishName ?? match.restaurantName}</Text><Text style={styles.mobileMatchScore}>{match.score}%</Text></View><Text style={styles.mobileMatchPlace}>{match.dishName ? `${match.restaurantName} · ` : ''}{distance}{price ? ` · ${price}` : ''}</Text><Text style={styles.mobileMatchReason}>{reason}</Text><Text style={styles.mobileMatchMeta}>{provenance} · {verification}</Text><Text style={styles.mobileMatchMeta}>{match.lastConfirmedAt ? t('match.lastConfirmed', { date: new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(match.lastConfirmedAt)) }) : t('match.neverConfirmed')}</Text><Text style={styles.mobileMatchMeta}>{match.currentAvailabilityConfirmed ? t('availability.confirmed') : t('availability.unknown')}</Text><Text style={styles.mobileMatchCaveat}>{match.dietaryCaveat}</Text>{match.attribution ? <Text style={styles.googleAttribution}>Google Maps</Text> : null}<Pressable onPress={() => onFeedback(match.kind === 'dish' ? 'stale_dish' : 'closed_restaurant', match.kind === 'dish' ? 'published_dish' : 'restaurant', match.id)}><Text style={styles.demoLink}>{t(match.kind === 'dish' ? 'feedback.staleDish' : 'feedback.closedRestaurant')}</Text></Pressable></View></View>;
   })}</View>;
 }
 

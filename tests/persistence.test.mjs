@@ -11,6 +11,7 @@ test("D1 migrations preserve durable identities and independent three-member gro
   const dishGraphSql = await readFile(new URL("../drizzle/0004_wandering_marvex.sql", import.meta.url), "utf8");
   const groupMembershipSql = await readFile(new URL("../drizzle/0005_bored_sabra.sql", import.meta.url), "utf8");
   const operationsSql = await readFile(new URL("../drizzle/0006_flimsy_kitty_pryde.sql", import.meta.url), "utf8");
+  const evaluationSql = await readFile(new URL("../drizzle/0007_elite_black_bolt.sql", import.meta.url), "utf8");
   const db = new DatabaseSync(":memory:");
   db.exec("PRAGMA foreign_keys = ON");
   for (const statement of sql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
@@ -23,6 +24,7 @@ test("D1 migrations preserve durable identities and independent three-member gro
   for (const statement of groupMembershipSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
   db.prepare("INSERT INTO preferences (user_id, location_latitude, location_longitude, location_updated_at) VALUES (?, ?, ?, ?)").run("legacy-owner", 49.28, -123.12, "2026-07-18T12:05:00.000Z");
   for (const statement of operationsSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
+  for (const statement of evaluationSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
 
   db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("guest-1", "guest", "Guest explorer", "hash-1");
   db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("guest-b", "guest", "Guest B", "hash-b");
@@ -72,6 +74,10 @@ test("D1 migrations preserve durable identities and independent three-member gro
   const incremented = db.prepare("INSERT INTO usage_counters (action, scope, window_start, count) VALUES (?, ?, ?, 1) ON CONFLICT(action, scope, window_start) DO UPDATE SET count = count + 1 RETURNING count").get("publish", "user:opaque", "2026-07-18T12:00:00.000Z");
   assert.deepEqual({ ...db.prepare("SELECT location_consent, analytics_consent, image_retention_consent FROM user_consents WHERE user_id = ?").get("guest-1") }, { location_consent: 1, analytics_consent: 0, image_retention_consent: 1 });
   assert.equal(incremented.count, 2);
+  db.prepare("INSERT INTO analytics_events (id, user_id, event, language, country_code, mode, outcome) VALUES (?, ?, ?, ?, ?, ?, ?)").run("event-1", "guest-1", "dish_published", "fr", "CA", "live", "success");
+  db.prepare("INSERT INTO feedback_reports (id, user_id, reason, target_type, target_id) VALUES (?, ?, ?, ?, ?)").run("feedback-1", "guest-1", "stale_dish", "published_dish", "dish-1");
+  assert.deepEqual({ ...db.prepare("SELECT event, language, country_code FROM analytics_events WHERE id = ?").get("event-1") }, { event: "dish_published", language: "fr", country_code: "CA" });
+  assert.deepEqual({ ...db.prepare("SELECT reason, target_type, status FROM feedback_reports WHERE id = ?").get("feedback-1") }, { reason: "stale_dish", target_type: "published_dish", status: "open" });
   assert.throws(() => db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("guest-2", "guest", "Other guest", "hash-1"));
   db.close();
 });

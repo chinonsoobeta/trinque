@@ -1,0 +1,169 @@
+export type DishAnalysis = {
+  name: string;
+  cuisine: string;
+  ingredients: string;
+  dietary: string;
+  confidence: number;
+  description: string;
+};
+
+export type AnalysisSuccess = {
+  ok: true;
+  mode: "live" | "demo";
+  requestId: string;
+  result: DishAnalysis;
+  warning?: string;
+};
+
+export type AnalysisFailure = {
+  ok: false;
+  mode: "unavailable";
+  requestId: string;
+  error: {
+    code: "invalid_image" | "live_not_configured" | "provider_error" | "invalid_provider_response";
+    message: string;
+  };
+  demoAvailable: true;
+};
+
+export type AnalysisEnvelope = AnalysisSuccess | AnalysisFailure;
+
+const demoAnalyses: Record<string, DishAnalysis> = {
+  pasta: {
+    name: "Brown butter agnolotti",
+    cuisine: "Northern Italian",
+    ingredients: "Filled pasta, brown butter, sage, lemon, parmesan",
+    dietary: "Vegetarian · Contains dairy and gluten",
+    confidence: 94,
+    description: "Tender filled pasta with toasted butter, herbs and a bright citrus finish.",
+  },
+  ramen: {
+    name: "Charred miso ramen",
+    cuisine: "Japanese",
+    ingredients: "Wheat noodles, miso broth, charred corn, scallion, chile oil",
+    dietary: "Likely contains gluten and soy · Confirm broth ingredients",
+    confidence: 91,
+    description: "Springy noodles in a smoky, fermented broth with sweet charred corn.",
+  },
+  tacos: {
+    name: "Crispy oyster mushroom tacos",
+    cuisine: "Mexican-inspired",
+    ingredients: "Oyster mushrooms, corn tortillas, cabbage, salsa roja, lime",
+    dietary: "Plant-based appearance · Confirm fryer cross-contact",
+    confidence: 88,
+    description: "Crunchy mushrooms layered with bright lime, chile heat and fresh cabbage.",
+  },
+};
+
+export function demoAnalysis(fixture = "pasta"): DishAnalysis {
+  return demoAnalyses[fixture] ?? demoAnalyses.pasta;
+}
+
+export function demoEnvelope(requestId: string, fixture?: string): AnalysisSuccess {
+  return {
+    ok: true,
+    mode: "demo",
+    requestId,
+    result: demoAnalysis(fixture),
+    warning: "This is seeded demo data, not an analysis of the uploaded photo.",
+  };
+}
+
+export async function analyzeDishWithOpenAI({
+  imageDataUrl,
+  apiKey,
+  requestId,
+  fetcher = fetch,
+}: {
+  imageDataUrl: string;
+  apiKey: string;
+  requestId: string;
+  fetcher?: typeof fetch;
+}): Promise<AnalysisEnvelope> {
+  let response: Response;
+  try {
+    response = await fetcher("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5.6-sol",
+        reasoning: { effort: "low" },
+        store: false,
+        safety_identifier: "trinque-guest",
+        instructions: "Analyze only what is visibly supported by the food photo. Identify the most likely dish and cuisine, list likely ingredients, and clearly label uncertainty. Never claim allergen or dietary safety. Use 'unknown' when visual evidence is insufficient. Keep each field concise and useful for restaurant discovery.",
+        input: [{
+          role: "user",
+          content: [
+            { type: "input_text", text: "Identify this photographed dish. Return its most likely name, cuisine, visible or likely ingredients, dietary caveats, calibrated confidence from 0 to 100, and a one-sentence sensory description." },
+            { type: "input_image", image_url: imageDataUrl, detail: "high" },
+          ],
+        }],
+        text: {
+          format: {
+            type: "json_schema",
+            name: "dish_analysis",
+            strict: true,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                name: { type: "string" },
+                cuisine: { type: "string" },
+                ingredients: { type: "string" },
+                dietary: { type: "string" },
+                confidence: { type: "number", minimum: 0, maximum: 100 },
+                description: { type: "string" },
+              },
+              required: ["name", "cuisine", "ingredients", "dietary", "confidence", "description"],
+            },
+          },
+        },
+      }),
+    });
+  } catch {
+    return providerFailure(requestId, "The live identifier could not reach OpenAI. Retry or choose the labeled demo.");
+  }
+
+  if (!response.ok) {
+    return providerFailure(requestId, "OpenAI could not analyze this image. Retry or choose the labeled demo.");
+  }
+
+  try {
+    const payload = await response.json() as { output?: Array<{ content?: Array<{ type?: string; text?: string }> }> };
+    const outputText = payload.output?.flatMap((item) => item.content ?? []).find((part) => part.type === "output_text")?.text;
+    if (!outputText) throw new Error("missing output text");
+    const result = JSON.parse(outputText) as DishAnalysis;
+    if (!isDishAnalysis(result)) throw new Error("invalid analysis shape");
+    return { ok: true, mode: "live", requestId, result };
+  } catch {
+    return {
+      ok: false,
+      mode: "unavailable",
+      requestId,
+      error: { code: "invalid_provider_response", message: "OpenAI returned an unreadable result. Retry or choose the labeled demo." },
+      demoAvailable: true,
+    };
+  }
+}
+
+function providerFailure(requestId: string, message: string): AnalysisFailure {
+  return {
+    ok: false,
+    mode: "unavailable",
+    requestId,
+    error: { code: "provider_error", message },
+    demoAvailable: true,
+  };
+}
+
+function isDishAnalysis(value: DishAnalysis): boolean {
+  return Boolean(
+    value && typeof value.name === "string" && typeof value.cuisine === "string" &&
+    typeof value.ingredients === "string" && typeof value.dietary === "string" &&
+    typeof value.confidence === "number" && value.confidence >= 0 && value.confidence <= 100 &&
+    typeof value.description === "string",
+  );
+}

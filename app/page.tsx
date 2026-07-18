@@ -10,6 +10,9 @@ type Analysis = {
   name: string; cuisine: string; ingredients: string; dietary: string;
   confidence: number; description: string;
 };
+type AnalysisEnvelope =
+  | { ok: true; mode: "live" | "demo"; requestId: string; result: Analysis; warning?: string }
+  | { ok: false; mode: "unavailable"; requestId: string; error: { code: string; message: string }; demoAvailable: true };
 
 const dishes: Dish[] = [
   { id: 1, name: "Brown butter agnolotti", restaurant: "Bar Susu", area: "Mount Pleasant", distance: "0.8 km", price: "$24", image: "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=1400&q=86", match: 96, note: "Silky, nutty, bright with lemon", tags: ["Pasta", "Vegetarian"], likes: 284 },
@@ -30,9 +33,13 @@ export default function Home() {
   const [filter, setFilter] = useState("For you");
   const [saved, setSaved] = useState<Set<number>>(new Set([2]));
   const [modal, setModal] = useState(false);
-  const [phase, setPhase] = useState<"idle" | "loading" | "review" | "published">("idle");
+  const [phase, setPhase] = useState<"idle" | "loading" | "review" | "error" | "published">("idle");
   const [preview, setPreview] = useState(dishes[0].image);
   const [analysis, setAnalysis] = useState(sample);
+  const [analysisMode, setAnalysisMode] = useState<"live" | "demo" | null>(null);
+  const [analysisWarning, setAnalysisWarning] = useState("");
+  const [analysisError, setAnalysisError] = useState("");
+  const [pendingImage, setPendingImage] = useState<string | undefined>();
   const [plan, setPlan] = useState(false);
   const [toast, setToast] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -50,17 +57,26 @@ export default function Home() {
       return next;
     });
   }
-  async function analyze(imageDataUrl?: string) {
+  async function analyze(imageDataUrl?: string, demo = false) {
     setModal(true); setPhase("loading");
+    setPendingImage(imageDataUrl); setAnalysisError(""); setAnalysisWarning(""); setAnalysisMode(null);
     try {
       const response = await fetch("/api/analyze", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageDataUrl, demo: !imageDataUrl }),
+        body: JSON.stringify({ imageDataUrl, demo, demoFixture: "pasta" }),
       });
-      if (!response.ok) throw new Error("Analysis unavailable");
-      setAnalysis(await response.json() as Analysis);
-    } catch { setAnalysis(sample); }
-    setPhase("review");
+      const envelope = await response.json() as AnalysisEnvelope;
+      if (!response.ok || !envelope.ok) {
+        setAnalysisError(envelope.ok ? "Live identification failed." : envelope.error.message);
+        setPhase("error");
+        return;
+      }
+      setAnalysis(envelope.result); setAnalysisMode(envelope.mode); setAnalysisWarning(envelope.warning ?? "");
+      setPhase("review");
+    } catch {
+      setAnalysisError("The identifier could not be reached. Check your connection and retry, or use the labeled demo.");
+      setPhase("error");
+    }
   }
   function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]; if (!file) return;
@@ -102,7 +118,7 @@ export default function Home() {
                 <p>{view === "saved" ? "The dishes worth crossing town for, all in one place." : "Snap a dish, understand what makes it special, and find your next version nearby."}</p>
                 {view === "discover" && <div className="hero-actions">
                   <button className="primary" onClick={() => fileRef.current?.click()}>＋ Analyze a dish</button>
-                  <button className="text-button" onClick={() => { setPreview(dishes[0].image); void analyze(); }}>Try the demo →</button>
+                  <button className="text-button" onClick={() => { setPreview(dishes[0].image); void analyze(undefined, true); }}>Try the labeled demo →</button>
                   <input ref={fileRef} className="sr-only" type="file" accept="image/*" onChange={handleFile} />
                 </div>}
               </div>
@@ -141,7 +157,7 @@ export default function Home() {
         <button className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}><span>♡</span>Saved</button>
         <button><span>○</span>Profile</button>
       </nav>
-      {modal && <Analyzer preview={preview} phase={phase} analysis={analysis} close={() => setModal(false)} update={update} publish={publish} />}
+      {modal && <Analyzer preview={preview} phase={phase} analysis={analysis} analysisMode={analysisMode} warning={analysisWarning} error={analysisError} close={() => setModal(false)} update={update} publish={publish} retry={() => void analyze(pendingImage, false)} demo={() => void analyze(undefined, true)} />}
       {toast && <div className="toast" role="status">✓ {toast}</div>}
     </div>
   );
@@ -162,14 +178,16 @@ function DishCard({ dish, featured, isSaved, onSave }: { dish: Dish; featured: b
   </article>;
 }
 
-function Analyzer({ preview, phase, analysis, close, update, publish }: { preview: string; phase: string; analysis: Analysis; close: () => void; update: (field: keyof Analysis, value: string) => void; publish: (event: FormEvent) => void }) {
+function Analyzer({ preview, phase, analysis, analysisMode, warning, error, close, update, publish, retry, demo }: { preview: string; phase: string; analysis: Analysis; analysisMode: "live" | "demo" | null; warning: string; error: string; close: () => void; update: (field: keyof Analysis, value: string) => void; publish: (event: FormEvent) => void; retry: () => void; demo: () => void }) {
   return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="analyzer-title"><div className="analyzer">
     <button className="modal-close" onClick={close} aria-label="Close analyzer">×</button>
     <div className="analyzer-image" style={{ backgroundImage: "url(" + preview + ")" }}><span>✦ GPT-5.6 vision</span></div>
     <div className="analyzer-content">
       {phase === "loading" ? <div className="loading-state"><div className="scan"><span /></div><em>Reading the plate</em><h2 id="analyzer-title">Finding the details that make this dish special…</h2><div><span>Dish family</span><span>Ingredients</span><span>Dietary notes</span></div></div>
+      : phase === "error" ? <div className="identifier-error"><span>!</span><p className="kicker">LIVE IDENTIFIER UNAVAILABLE</p><h2 id="analyzer-title">We didn’t identify this photo.</h2><p>{error}</p><div className="modal-actions"><button type="button" className="secondary" onClick={demo}>Use labeled demo</button><button type="button" className="primary" onClick={retry}>Retry photo</button></div></div>
       : phase === "published" ? <div className="published"><span>✓</span><h2 id="analyzer-title">Added to Trinque</h2><p>We found 12 nearby dishes with a similar taste profile.</p></div>
-      : <form onSubmit={publish}><span className="kicker">Review before publishing</span><div className="confidence"><h2 id="analyzer-title">Trinque thinks it knows this dish.</h2><span>{analysis.confidence}% confident</span></div>
+      : <form onSubmit={publish}><div className={`analysis-mode ${analysisMode ?? ""}`}>{analysisMode === "live" ? "● Live GPT-5.6 analysis" : "◇ Seeded demo result"}</div><span className="kicker">Review before publishing</span><div className="confidence"><h2 id="analyzer-title">Trinque thinks it knows this dish.</h2><span>{analysis.confidence}% confident</span></div>
+        {warning && <p className="demo-warning">{warning}</p>}
         <p className="review-note">AI can miss ingredients. Confirm the details—especially allergens—before sharing.</p>
         <div className="form-grid">
           <label className="wide">Dish name<input value={analysis.name} onChange={(e) => update("name", e.target.value)} /></label>

@@ -38,7 +38,9 @@ To enable live photo analysis, copy .env.example to .env.local and add an OpenAI
 
 ## GPT-5.6 integration
 
-POST /api/analyze uses the OpenAI Responses API with gpt-5.6-sol, low reasoning effort, image input, and a strict JSON schema. The prompt explicitly treats ingredient and allergen inference as uncertain. If the API is unavailable or no key is configured, the route returns a deterministic seed result so judges can still complete the experience.
+POST /api/analyze uses the OpenAI Responses API with gpt-5.6-sol, low reasoning effort, high-detail image input, and a strict JSON schema. The prompt explicitly treats ingredient and allergen inference as uncertain. A deterministic seed provider remains available through the separate labeled demo action so judges can still complete the experience without credentials.
+
+Live and demo results are explicitly labeled. A failed or unconfigured live request never silently substitutes the demo dish: the API returns a structured error and the interface offers separate Retry and Use labeled demo actions.
 
 ## How Codex accelerated the build
 

@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 
 type Tab = 'Discover' | 'Groups' | 'Saved' | 'Profile';
-type AnalyzerPhase = 'choose' | 'analyzing' | 'review' | 'published';
+type AnalyzerPhase = 'choose' | 'analyzing' | 'review' | 'error' | 'published';
 
 type Analysis = {
   name: string;
@@ -29,6 +29,10 @@ type Analysis = {
   confidence: number;
   description: string;
 };
+
+type AnalysisEnvelope =
+  | { ok: true; mode: 'live' | 'demo'; requestId: string; result: Analysis; warning?: string }
+  | { ok: false; mode: 'unavailable'; requestId: string; error: { code: string; message: string }; demoAvailable: true };
 
 type Dish = {
   id: number;
@@ -118,6 +122,9 @@ export default function App() {
   const [preview, setPreview] = useState<string | null>(null);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<Analysis>(sampleAnalysis);
+  const [analysisMode, setAnalysisMode] = useState<'live' | 'demo' | null>(null);
+  const [analysisWarning, setAnalysisWarning] = useState('');
+  const [analysisError, setAnalysisError] = useState('');
 
   const savedDishes = useMemo(
     () => dishes.filter((dish) => savedIds.includes(dish.id)),
@@ -129,6 +136,9 @@ export default function App() {
     setPreview(null);
     setImageDataUrl(null);
     setAnalysis(sampleAnalysis);
+    setAnalysisMode(null);
+    setAnalysisWarning('');
+    setAnalysisError('');
     setAnalyzerOpen(true);
   };
 
@@ -154,24 +164,40 @@ export default function App() {
 
   const analyze = async (dataUrl: string | null, demo = false) => {
     setPhase('analyzing');
+    setAnalysisMode(null);
+    setAnalysisWarning('');
+    setAnalysisError('');
     try {
       if (!remoteApi) {
-        await new Promise((resolve) => setTimeout(resolve, 950));
+        await new Promise((resolve) => setTimeout(resolve, 650));
+        if (!demo) {
+          setAnalysisError('Live identification needs EXPO_PUBLIC_TRINQUE_API_URL. Configure the server URL, retry, or use the labeled demo.');
+          setPhase('error');
+          return;
+        }
         setAnalysis(sampleAnalysis);
+        setAnalysisMode('demo');
+        setAnalysisWarning('This is seeded demo data, not an analysis of the uploaded photo.');
       } else {
         const response = await fetch(`${remoteApi}/api/analyze`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageDataUrl: dataUrl, demo }),
         });
-        if (!response.ok) throw new Error('Analysis unavailable');
-        setAnalysis((await response.json()) as Analysis);
+        const envelope = (await response.json()) as AnalysisEnvelope;
+        if (!response.ok || !envelope.ok) {
+          setAnalysisError(envelope.ok ? 'Live identification failed.' : envelope.error.message);
+          setPhase('error');
+          return;
+        }
+        setAnalysis(envelope.result);
+        setAnalysisMode(envelope.mode);
+        setAnalysisWarning(envelope.warning ?? '');
       }
       setPhase('review');
     } catch {
-      setAnalysis(sampleAnalysis);
-      setPhase('review');
-      Alert.alert('Demo analysis loaded', 'Live analysis was unavailable, so Trinque loaded its judge-safe demo result.');
+      setAnalysisError('The live identifier could not be reached. Check your connection and retry, or use the labeled demo.');
+      setPhase('error');
     }
   };
 
@@ -196,9 +222,13 @@ export default function App() {
           preview={preview}
           imageDataUrl={imageDataUrl}
           analysis={analysis}
+          analysisMode={analysisMode}
+          warning={analysisWarning}
+          error={analysisError}
           onAnalysisChange={setAnalysis}
           onChoose={choosePhoto}
           onDemo={() => analyze(null, true)}
+          onRetry={() => analyze(imageDataUrl, false)}
           onPublish={() => setPhase('published')}
           onClose={() => setAnalyzerOpen(false)}
           onReset={() => {
@@ -390,15 +420,19 @@ function TabButton({ tab, icon, active, onPress }: { tab: Tab; icon: string; act
   return <Pressable style={styles.tabButton} onPress={onPress}><Text style={[styles.tabIcon, active && styles.tabActive]}>{icon}</Text><Text style={[styles.tabLabel, active && styles.tabActive]}>{tab}</Text></Pressable>;
 }
 
-function AnalyzerModal({ visible, phase, preview, analysis, onAnalysisChange, onChoose, onDemo, onPublish, onClose, onReset }: {
+function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analysisMode, warning, error, onAnalysisChange, onChoose, onDemo, onRetry, onPublish, onClose, onReset }: {
   visible: boolean;
   phase: AnalyzerPhase;
   preview: string | null;
   imageDataUrl: string | null;
   analysis: Analysis;
+  analysisMode: 'live' | 'demo' | null;
+  warning: string;
+  error: string;
   onAnalysisChange: (value: Analysis) => void;
   onChoose: (camera: boolean) => void;
   onDemo: () => void;
+  onRetry: () => void;
   onPublish: () => void;
   onClose: () => void;
   onReset: () => void;
@@ -420,12 +454,24 @@ function AnalyzerModal({ visible, phase, preview, analysis, onAnalysisChange, on
           {phase === 'analyzing' && (
             <View style={styles.analyzingPanel}>{preview ? <Image source={{ uri: preview }} style={styles.analysisPreview} /> : <View style={[styles.analysisPreview, styles.demoPreview]}><Text style={styles.demoPreviewText}>T</Text></View>}<View style={styles.analysisScrim}><ActivityIndicator color={palette.cream} size="large" /><Text style={styles.analyzingTitle}>Reading the dish…</Text><Text style={styles.analyzingBody}>Looking at texture, preparation and likely ingredients</Text></View></View>
           )}
+          {phase === 'error' && (
+            <View style={styles.publishedPanel}>
+              <View style={styles.errorMark}><Text style={styles.successMarkText}>!</Text></View>
+              <Text style={styles.modalKicker}>LIVE IDENTIFIER UNAVAILABLE</Text>
+              <Text style={styles.modalTitle}>We didn’t identify this photo.</Text>
+              <Text style={styles.modalBody}>{error}</Text>
+              <Pressable disabled={!imageDataUrl} style={({ pressed }) => [styles.primaryButton, styles.modalButton, pressed && styles.pressed, !imageDataUrl && styles.disabledButton]} onPress={onRetry}><Text style={styles.primaryButtonText}>Retry photo</Text><Text style={styles.primaryArrow}>→</Text></Pressable>
+              <Pressable style={({ pressed }) => [styles.secondaryButton, styles.modalButton, pressed && styles.pressed]} onPress={onDemo}><Text style={styles.secondaryButtonText}>Use labeled demo</Text></Pressable>
+            </View>
+          )}
           {phase === 'review' && (
             <ScrollView style={styles.reviewScroll} contentContainerStyle={styles.reviewContent} keyboardShouldPersistTaps="handled">
               {preview ? <Image source={{ uri: preview }} style={styles.reviewImage} /> : null}
+              <View style={[styles.modeBadge, analysisMode === 'demo' && styles.modeBadgeDemo]}><Text style={[styles.modeBadgeText, analysisMode === 'demo' && styles.modeBadgeTextDemo]}>{analysisMode === 'live' ? '● LIVE GPT-5.6 ANALYSIS' : '◇ SEEDED DEMO RESULT'}</Text></View>
               <Text style={styles.modalKicker}>REVIEW BEFORE PUBLISHING</Text>
               <View style={styles.confidenceLine}><Text style={styles.reviewTitle}>Trinque thinks it knows this dish.</Text><Text style={styles.confidenceBadge}>{analysis.confidence}%</Text></View>
               <View style={styles.warningBox}><Text style={styles.warningIcon}>!</Text><Text style={styles.warningText}>AI can miss ingredients. Confirm the details—especially allergens—before sharing.</Text></View>
+              {warning ? <View style={styles.demoWarning}><Text style={styles.demoWarningText}>{warning}</Text></View> : null}
               <Field label="Dish name" value={analysis.name} onChangeText={(name) => onAnalysisChange({ ...analysis, name })} />
               <Field label="Cuisine" value={analysis.cuisine} onChangeText={(cuisine) => onAnalysisChange({ ...analysis, cuisine })} />
               <Field label="Dietary notes" value={analysis.dietary} onChangeText={(dietary) => onAnalysisChange({ ...analysis, dietary })} />
@@ -606,9 +652,16 @@ const styles = StyleSheet.create({
   publishButton: { marginTop: 8, justifyContent: 'center' },
   publishedPanel: { flex: 1, justifyContent: 'center', padding: 28 },
   successMark: { width: 79, height: 79, borderRadius: 40, backgroundColor: palette.olive, alignItems: 'center', justifyContent: 'center', marginBottom: 25 },
+  errorMark: { width: 79, height: 79, borderRadius: 40, backgroundColor: palette.terracotta, alignItems: 'center', justifyContent: 'center', marginBottom: 25 },
   successMarkText: { color: '#FFFFFF', fontSize: 38, fontWeight: '500' },
   resultStrip: { flexDirection: 'row', backgroundColor: palette.paper, borderRadius: 18, borderWidth: 1, borderColor: palette.line, paddingVertical: 17, marginVertical: 20 },
   resultItem: { flex: 1, alignItems: 'center' },
   resultValue: { color: palette.burgundy, fontFamily: Platform.select({ ios: 'Georgia-Bold', default: 'serif' }), fontSize: 21 },
   resultLabel: { color: palette.muted, fontSize: 9, marginTop: 3 },
+  modeBadge: { alignSelf: 'flex-start', backgroundColor: palette.sage, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 14, marginBottom: 13 },
+  modeBadgeDemo: { backgroundColor: palette.blush },
+  modeBadgeText: { color: palette.olive, fontSize: 9, fontWeight: '900', letterSpacing: 0.7 },
+  modeBadgeTextDemo: { color: palette.terracotta },
+  demoWarning: { backgroundColor: palette.blush, borderRadius: 14, padding: 12, marginTop: -6, marginBottom: 15 },
+  demoWarningText: { color: palette.burgundy, fontSize: 11, lineHeight: 16 },
 });

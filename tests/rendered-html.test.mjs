@@ -29,6 +29,22 @@ test("returns deterministic analysis without credentials", async () => {
   }), env, ctx);
   assert.equal(response.status, 200);
   const result = await response.json();
-  assert.equal(result.name, "Brown butter agnolotti");
-  assert.equal(result.confidence, 94);
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, "demo");
+  assert.equal(result.result.name, "Brown butter agnolotti");
+  assert.equal(result.result.confidence, 94);
+  assert.match(result.warning, /seeded demo/i);
+});
+
+test("does not silently return demo data when live analysis is not configured", async () => {
+  const app = await worker();
+  const response = await app.fetch(new Request("http://localhost/api/analyze", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ imageDataUrl: "data:image/jpeg;base64,dGVzdA==" }),
+  }), env, ctx);
+  assert.equal(response.status, 503);
+  const result = await response.json();
+  assert.equal(result.ok, false);
+  assert.equal(result.mode, "unavailable");
+  assert.equal(result.error.code, "live_not_configured");
+  assert.equal("result" in result, false);
 });

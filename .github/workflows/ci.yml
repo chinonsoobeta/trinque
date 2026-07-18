@@ -1,0 +1,23 @@
+name: Verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  web-and-ios:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            ios/package-lock.json
+      - run: npm ci
+      - run: npm ci
+        working-directory: ios
+      - run: npm run verify

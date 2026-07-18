@@ -38,6 +38,8 @@ Guest sessions are created server-side and stored as an opaque token on the devi
 
 To enable live photo analysis, copy .env.example to .env.local and add an OpenAI API key. Never commit the key.
 
+For production, add `OPENAI_API_KEY` as a secret in the Sites environment. The public client never receives it. `GET /api/health` reports whether live analysis, D1 persistence, and R2 uploads are available without exposing secret values.
+
 ## GPT-5.6 integration
 
 POST /api/analyze uses the OpenAI Responses API with gpt-5.6-sol, low reasoning effort, high-detail image input, and a strict JSON schema. The prompt explicitly treats ingredient and allergen inference as uncertain. A deterministic seed provider remains available through the separate labeled demo action so judges can still complete the experience without credentials.
@@ -50,8 +52,11 @@ Codex translated the product thesis into a working demo, shaped the PRD and tech
 
 ## Validation
 
-    npm run build
-    npm test
+    npm run verify
+
+This runs the production web build and regression suite, then type-checks and exports the iOS app. The same gate runs in GitHub Actions on every push and pull request.
+
+See [checklist.md](./checklist.md) for the phased acceptance evidence and [build-notes.md](./build-notes.md) for deployment configuration.
 
 ## Stack
 

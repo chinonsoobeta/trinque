@@ -13,18 +13,5 @@
   },
   "images": {
     "binding": "IMAGES"
-  },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "trinque",
-      "database_id": "e8ef636a-0684-4dcb-bdf1-d49fe5716243"
-    }
-  ],
-  "migrations": [
-    {
-      "tag": "initial",
-      "path": "./drizzle"
-    }
-  ]
+  }
 }

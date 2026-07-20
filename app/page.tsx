@@ -6,6 +6,7 @@ import type { LocationSuggestion, RestaurantPlace } from "@/lib/places/types";
 import { REGIONAL_DEFAULTS, type MeasurementSystem, type ThemePreference } from "@/lib/regions";
 import { LANGUAGE_LABEL_KEYS, resolveUiLanguage, translate, UI_LANGUAGES, type MessageKey, type UiLanguage } from "@/ios/i18n";
 import { AuthControls } from "@/components/AuthControls";
+import { NotificationBell } from "@/components/NotificationBell";
 
 type Dish = {
   id: number; name: string; restaurant: string; area: string; distance: string;
@@ -131,15 +132,41 @@ export default function Home() {
     let active = true;
     async function restoreSession() {
       try {
-        const storedToken = window.localStorage.getItem("trinque.guestToken");
-        const sessionResponse = await fetch("/api/session", { method: "POST", headers: storedToken ? { Authorization: `Guest ${storedToken}` } : undefined });
-        if (!sessionResponse.ok) return;
-        const session = await sessionResponse.json() as { identity: { displayName: string; authType?: "guest" | "chatgpt" }; guestToken?: string };
-        const token = session.guestToken ?? storedToken ?? (session.identity.authType === "chatgpt" ? "chatgpt-session" : null);
+        const storedSessionToken = window.localStorage.getItem("trinque.sessionToken");
+        const storedLegacyToken = window.localStorage.getItem("trinque.guestToken");
+        let token: string | null = null;
+        let displayName = "Guest";
+
+        if (storedSessionToken) {
+          const authResponse = await fetch("/api/auth/session", {
+            headers: { Authorization: `Session ${storedSessionToken}` },
+            cache: "no-store",
+          });
+          if (authResponse.ok) {
+            const payload = await authResponse.json() as { authenticated: boolean; identity: { displayName: string } | null };
+            if (payload.authenticated && payload.identity) {
+              token = storedSessionToken;
+              displayName = payload.identity.displayName;
+            } else {
+              window.localStorage.removeItem("trinque.sessionToken");
+              if (storedLegacyToken === storedSessionToken) window.localStorage.removeItem("trinque.guestToken");
+            }
+          }
+        }
+
+        if (!token && storedLegacyToken && storedLegacyToken !== storedSessionToken) {
+          const legacyResponse = await fetch("/api/session", { method: "POST", headers: { Authorization: `Guest ${storedLegacyToken}` } });
+          if (legacyResponse.ok) {
+            const session = await legacyResponse.json() as { identity: { displayName: string; authType?: "guest" | "chatgpt" | "supabase" }; guestToken?: string };
+            token = session.guestToken ?? storedLegacyToken ?? (session.identity.authType === "chatgpt" ? "chatgpt-session" : null);
+            displayName = session.identity.displayName;
+            if (session.guestToken) window.localStorage.setItem("trinque.guestToken", session.guestToken);
+          }
+        }
+
         if (!active) return;
-        if (session.guestToken) window.localStorage.setItem("trinque.guestToken", session.guestToken);
         setGuestToken(token);
-        setIdentityLabel(session.identity.displayName);
+        setIdentityLabel(displayName);
         const preferencesResponse = await fetch("/api/preferences", { headers: token ? { Authorization: `Guest ${token}` } : undefined });
         if (preferencesResponse.ok) {
           const payload = await preferencesResponse.json() as { preferences: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: NormalizedLocation | null } | null };
@@ -293,7 +320,7 @@ export default function Home() {
             </button>
           ))}
         </nav>
-        <div className="top-actions"><button onClick={() => setSettingsOpen(true)} aria-label={t("settings.title")}>⚙</button><button aria-label={`Profile: ${identityLabel}`}>{identityLabel === "Guest explorer" ? "GE" : identityLabel.slice(0, 2).toUpperCase()}</button></div>
+        <div className="top-actions"><NotificationBell /><button onClick={() => setSettingsOpen(true)} aria-label={t("settings.title")}>⚙</button><button aria-label={`Profile: ${identityLabel}`}>{identityLabel === "Guest explorer" ? "GE" : identityLabel.slice(0, 2).toUpperCase()}</button></div>
       </header>
 
       <main>

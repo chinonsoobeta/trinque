@@ -1,17 +1,62 @@
 import { sql } from "drizzle-orm";
-import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   authType: text("auth_type", { enum: ["guest", "chatgpt", "supabase"] }).notNull(),
   displayName: text("display_name").notNull(),
   email: text("email"),
+  normalizedEmail: text("normalized_email"),
+  authSubjectHash: text("auth_subject_hash"),
+  deletedAt: text("deleted_at"),
+  emailVerifiedAt: text("email_verified_at"),
+  avatarUrl: text("avatar_url"),
+  lastLoginAt: text("last_login_at"),
   guestTokenHash: text("guest_token_hash"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [
   uniqueIndex("users_email_unique").on(table.email),
+  uniqueIndex("users_normalized_email_unique").on(table.normalizedEmail),
+  uniqueIndex("users_auth_subject_hash_unique").on(table.authSubjectHash),
   uniqueIndex("users_guest_token_hash_unique").on(table.guestTokenHash),
+]);
+
+
+export const sessions = sqliteTable("sessions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  lastUsedAt: text("last_used_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  userAgent: text("user_agent"),
+}, (table) => [
+  uniqueIndex("sessions_token_hash_unique").on(table.tokenHash),
+  index("sessions_user_expires_idx").on(table.userId, table.expiresAt),
+  index("sessions_expires_idx").on(table.expiresAt),
+]);
+
+export const profiles = sqliteTable("profiles", {
+  userId: text("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  displayName: text("display_name").notNull(),
+  handle: text("handle").notNull(),
+  bio: text("bio").notNull().default(""),
+  avatarUrl: text("avatar_url"),
+  location: text("location"),
+  joinedAt: text("joined_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [uniqueIndex("profiles_handle_unique").on(table.handle)]);
+
+export const follows = sqliteTable("follows", {
+  followerId: text("follower_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  followingId: text("following_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  primaryKey({ columns: [table.followerId, table.followingId] }),
+  check("follows_no_self", sql`${table.followerId} <> ${table.followingId}`),
+  index("follows_following_created_idx").on(table.followingId, table.createdAt),
+  index("follows_follower_created_idx").on(table.followerId, table.createdAt),
 ]);
 
 export const saves = sqliteTable("saves", {
@@ -151,6 +196,44 @@ export const publishedDishes = sqliteTable("published_dishes", {
 }, (table) => [
   index("published_dishes_restaurant_idx").on(table.restaurantId),
   index("published_dishes_country_location_idx").on(table.countryCode, table.latitude, table.longitude),
+]);
+
+
+export const likes = sqliteTable("likes", {
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  dishId: text("dish_id").notNull().references(() => publishedDishes.id, { onDelete: "cascade" }),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.dishId] }),
+  index("likes_dish_created_idx").on(table.dishId, table.createdAt),
+  index("likes_user_created_idx").on(table.userId, table.createdAt),
+]);
+
+export const comments = sqliteTable("comments", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  dishId: text("dish_id").notNull().references(() => publishedDishes.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  index("comments_dish_created_idx").on(table.dishId, table.createdAt),
+  index("comments_user_created_idx").on(table.userId, table.createdAt),
+]);
+
+export const notifications = sqliteTable("notifications", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  actorId: text("actor_id").references(() => users.id, { onDelete: "set null" }),
+  type: text("type", { enum: ["like", "comment", "follow", "group_invite"] }).notNull(),
+  targetId: text("target_id"),
+  dedupeKey: text("dedupe_key").notNull(),
+  read: integer("read", { mode: "boolean" }).notNull().default(false),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("notifications_dedupe_unique").on(table.dedupeKey),
+  index("notifications_user_unread_idx").on(table.userId, table.read, table.createdAt),
+  index("notifications_user_recent_idx").on(table.userId, table.createdAt),
 ]);
 
 export const groups = sqliteTable("groups", {

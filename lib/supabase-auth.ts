@@ -1,6 +1,6 @@
 import { getRuntimeEnv } from "./runtime-env.ts";
 
-export type SupabaseUser = { id: string; email?: string | null; user_metadata?: { full_name?: string; name?: string } };
+export type SupabaseUser = { id: string; email?: string | null; email_confirmed_at?: string | null; user_metadata?: { full_name?: string; name?: string; avatar_url?: string } };
 
 export async function supabaseConfig() {
   const env = await getRuntimeEnv();

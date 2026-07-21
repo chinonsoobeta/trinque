@@ -65,7 +65,7 @@ const emptyMatchTiers: MatchTiers = { confirmedNearbyDishes: [], communityOrInfe
 export default function Home() {
   const { authenticated } = useAuth();
   const [view, setView] = useState<"discover" | "groups" | "saved">("discover");
-  const [filter, setFilter] = useState("For you");
+  const [filter, setFilter] = useState("All dishes");
   const [saved, setSaved] = useState<Set<number>>(new Set());
   const [modal, setModal] = useState(false);
   const [phase, setPhase] = useState<"idle" | "loading" | "review" | "error" | "published">("idle");
@@ -358,30 +358,30 @@ export default function Home() {
                 </div>}
               </div>
               <div className="taste-card">
-                <b>Tasteprint preview</b><div className="taste-orbit"><span>T</span><i /><i /><i /></div>
-                <div className="taste-tags"><span>Save dishes</span><span>Publish favourites</span><span>Follow people</span></div>
-                <small>Your taste identity grows from real activity.</small>
+                <b>Your food likes</b><div className="taste-orbit"><span>T</span><i /><i /><i /></div>
+                <div className="taste-tags"><span>Save dishes</span><span>Post dishes</span><span>Follow people</span></div>
+                <small>Trinque learns from what you save and post.</small>
               </div>
             </section>
 
             <section className="discover-section">
               <div className="section-heading">
-                <div><span className="kicker">{location ? t("home.curated", { location: location.locality }) : "Curated for you"}</span><h2>{view === "saved" ? t("home.savedHeading") : t("home.gather")}</h2>{!location && view === "discover" && <button className="location-inline" onClick={() => setSettingsOpen(true)}>Set your location to discover nearby dishes</button>}</div>
+                <div><span className="kicker">{location ? t("home.curated", { location: location.locality }) : "For you"}</span><h2>{view === "saved" ? t("home.savedHeading") : t("home.gather")}</h2>{!location && view === "discover" && <button className="location-inline" onClick={() => setSettingsOpen(true)}>Set your location to find food near you</button>}</div>
                 {view === "discover" && <div className="filters" role="group" aria-label="Feed filters">
-                  {["For you", "Near you", "Hidden gems"].map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item}</button>)}
+                  {["All dishes", "Near you", "Less known"].map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item}</button>)}
                 </div>}
               </div>
               {view === "discover" && <p className="seeded-notice">{t("home.communityFeedNotice")}</p>}
               {(view === "discover" ? communityFeed.length : visible.length) ? <div className="dish-grid">
                 {view === "discover" && communityFeed.map((dish) => <PublishedDishCard key={dish.id} dish={dish} t={t} onDelete={dish.isOwner ? deletePublishedDish : undefined} />)}
                 {view === "saved" && visible.map((dish, index) => <DishCard key={dish.id} dish={dish} featured={index === 0} isSaved={saved.has(dish.id)} onSave={toggleSaved} t={t} />)}
-              </div> : view === "saved" ? <div className="empty-state"><span>♡</span><h3>Nothing saved yet.</h3><p>Save dishes you want to remember. Suggestions stay in Discover until you choose to save them.</p><button className="primary" onClick={() => setView("discover")}>Explore dishes</button></div> : <div className="empty-state editorial-fallback"><span>✦</span><h3>Your next obsession belongs here.</h3><p>There are no community dishes to show yet. Explore the public trending feed or try the clearly labeled deterministic demo—no social activity has been invented to fill this space.</p><div className="hero-actions"><a className="primary button-link" href="/explore">Explore trending</a><button className="secondary" onClick={() => { setPreview(dishes[0].image); void analyze(undefined, true); }}>Try the labeled demo</button></div></div>}
+              </div> : view === "saved" ? <div className="empty-state"><span>♡</span><h3>No saved dishes yet.</h3><p>Save dishes you want to find again.</p><button className="primary" onClick={() => setView("discover")}>Find dishes</button></div> : <div className="empty-state editorial-fallback"><span>✦</span><h3>No user dishes yet.</h3><p>See top dishes or try the demo. The demo does not show real user activity.</p><div className="hero-actions"><a className="primary button-link" href="/explore">See top dishes</a><button className="secondary" onClick={() => { setPreview(dishes[0].image); void analyze(undefined, true); }}>Try the demo</button></div></div>}
             </section>
 
             {view === "discover" && <section className="insider-strip">
               <div className="insider-number">03</div>
-              <div><span className="kicker">{t("home.localNote")}</span><h2>Ask for the off-menu chile crisp.</h2><p>{t("home.localTip")}</p></div>
-              <div className="people"><small>Editorial note · example content</small></div>
+              <div><span className="kicker">{t("home.localNote")}</span><h2>Try the chile crisp.</h2><p>{t("home.localTip")}</p></div>
+              <div className="people"><small>Example tip</small></div>
             </section>}
           </>
         )}

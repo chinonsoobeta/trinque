@@ -1,6 +1,6 @@
-import { and, desc, eq, lt, or } from "drizzle-orm";
+import { and, desc, eq, lt, or, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { follows, profiles, publishedDishes, restaurants } from "@/db/schema";
+import { blocks, follows, hiddenDishes, mutes, profiles, publishedDishes, restaurants } from "@/db/schema";
 import { AuthenticationError, requireAuthenticatedIdentity } from "@/lib/auth";
 
 export const runtime = "edge";
@@ -35,7 +35,13 @@ export async function GET(request: Request) {
       .innerJoin(follows, and(eq(follows.followingId, publishedDishes.ownerId), eq(follows.followerId, identity.id)))
       .leftJoin(profiles, eq(profiles.userId, publishedDishes.ownerId))
       .leftJoin(restaurants, eq(restaurants.id, publishedDishes.restaurantId))
-      .where(and(eq(publishedDishes.moderationStatus, "active"), cursor ? or(lt(publishedDishes.createdAt, cursor.createdAt), and(eq(publishedDishes.createdAt, cursor.createdAt), lt(publishedDishes.id, cursor.id))) : undefined))
+      .where(and(
+        eq(publishedDishes.moderationStatus, "active"),
+        sql`NOT EXISTS (SELECT 1 FROM ${blocks} WHERE (${blocks.blockerId} = ${identity.id} AND ${blocks.blockedId} = ${publishedDishes.ownerId}) OR (${blocks.blockerId} = ${publishedDishes.ownerId} AND ${blocks.blockedId} = ${identity.id}))`,
+        sql`NOT EXISTS (SELECT 1 FROM ${mutes} WHERE ${mutes.muterId} = ${identity.id} AND ${mutes.mutedId} = ${publishedDishes.ownerId})`,
+        sql`NOT EXISTS (SELECT 1 FROM ${hiddenDishes} WHERE ${hiddenDishes.userId} = ${identity.id} AND ${hiddenDishes.dishId} = ${publishedDishes.id})`,
+        cursor ? or(lt(publishedDishes.createdAt, cursor.createdAt), and(eq(publishedDishes.createdAt, cursor.createdAt), lt(publishedDishes.id, cursor.id))) : undefined,
+      ))
       .orderBy(desc(publishedDishes.createdAt), desc(publishedDishes.id))
       .limit(limit + 1);
     const hasMore = rows.length > limit;

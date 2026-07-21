@@ -32,3 +32,30 @@ test("sensitive routes use budgets and expose deletion/export controls without l
   assert.match(files[6], /Content-Disposition/);
   assert.doesNotMatch(files[7], /authorization|imageDataUrl|request\.body|email/i);
 });
+
+test("social writes require completed onboarding and safety reads filter user choices", async () => {
+  const files = await Promise.all([
+    "../app/api/dishes/route.ts", "../app/api/dishes/[id]/route.ts", "../app/api/dishes/[id]/comments/route.ts",
+    "../app/api/groups/route.ts", "../app/api/groups/join/route.ts", "../app/api/groups/[id]/vote/route.ts",
+    "../app/api/groups/[id]/finalize/route.ts", "../app/api/groups/[id]/rsvp/route.ts", "../app/api/profiles/[handle]/follow/route.ts",
+    "../app/api/feed/personal/route.ts", "../app/api/notifications/route.ts", "../app/api/dishes/[id]/comments/[commentId]/route.ts",
+  ].map((path) => readFile(new URL(path, import.meta.url), "utf8")));
+  for (const index of [...Array(9).keys()]) assert.match(files[index], /requireOnboardedIdentity/);
+  assert.match(files[9], /hiddenDishes/);
+  assert.match(files[9], /blocks/);
+  assert.match(files[9], /mutes/);
+  assert.match(files[10], /blocks/);
+  assert.match(files[10], /mutes/);
+  assert.match(files[11], /publishedDishes\.ownerId/);
+  assert.match(files[11], /moderationStatus: "deleted"/);
+});
+
+test("PWA cache policy excludes private API responses and uploads", async () => {
+  const [worker, manifest] = await Promise.all([
+    readFile(new URL("../public/sw.js", import.meta.url), "utf8"),
+    readFile(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"),
+  ]);
+  assert.match(worker, /url\.pathname\.startsWith\("\/api\/"\)/);
+  assert.match(worker, /url\.pathname\.startsWith\("\/_next\/"\)/);
+  assert.match(manifest, /"display"\s*:\s*"standalone"/);
+});

@@ -17,6 +17,7 @@ test("D1 migrations preserve durable identities and independent three-member gro
   const groupPlanRequirementsSql = await readFile(new URL("../drizzle/0010_group_plan_requirements.sql", import.meta.url), "utf8");
   const onboardingSql = await readFile(new URL("../drizzle/0011_profile_onboarding.sql", import.meta.url), "utf8");
   const safetySql = await readFile(new URL("../drizzle/0012_safety_and_editable_posts.sql", import.meta.url), "utf8");
+  const groupLocalScheduleSql = await readFile(new URL("../drizzle/0013_group_local_schedule.sql", import.meta.url), "utf8");
   const db = new DatabaseSync(":memory:");
   db.exec("PRAGMA foreign_keys = ON");
   for (const statement of sql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
@@ -35,6 +36,7 @@ test("D1 migrations preserve durable identities and independent three-member gro
   for (const statement of groupPlanRequirementsSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
   for (const statement of onboardingSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
   for (const statement of safetySql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
+  for (const statement of groupLocalScheduleSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
 
   db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("guest-1", "guest", "Guest explorer", "hash-1");
   db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("guest-b", "guest", "Guest B", "hash-b");
@@ -89,6 +91,8 @@ test("D1 migrations preserve durable identities and independent three-member gro
   assert.deepEqual({ ...db.prepare("SELECT event, language, country_code FROM analytics_events WHERE id = ?").get("event-1") }, { event: "dish_published", language: "fr", country_code: "CA" });
   assert.deepEqual({ ...db.prepare("SELECT reason, target_type, status FROM feedback_reports WHERE id = ?").get("feedback-1") }, { reason: "stale_dish", target_type: "published_dish", status: "open" });
   assert.deepEqual({ ...db.prepare("SELECT distance_unit, dietary_requirements, cuisine_types FROM groups WHERE id = ?").get("group-1") }, { distance_unit: "metric", dietary_requirements: "[]", cuisine_types: "[]" });
+  db.prepare("UPDATE groups SET event_local_date = ?, event_local_time = ? WHERE id = ?").run("2026-07-18", "19:30", "group-1");
+  assert.deepEqual({ ...db.prepare("SELECT event_local_date, event_local_time FROM groups WHERE id = ?").get("group-1") }, { event_local_date: "2026-07-18", event_local_time: "19:30" });
   db.prepare("INSERT INTO profiles (user_id, display_name, handle, country_code, favorite_cuisines, onboarding_completed_at) VALUES (?, ?, ?, ?, ?, ?)").run("guest-1", "Guest explorer", "guest-explorer", "CA", "[\"West African\"]", "2026-07-18T12:30:00.000Z");
   assert.deepEqual({ ...db.prepare("SELECT country_code, favorite_cuisines FROM profiles WHERE user_id = ?").get("guest-1") }, { country_code: "CA", favorite_cuisines: "[\"West African\"]" });
   db.prepare("INSERT INTO blocks (blocker_id, blocked_id) VALUES (?, ?)").run("guest-1", "guest-b");

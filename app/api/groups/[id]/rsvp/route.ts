@@ -2,13 +2,14 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { groupRsvps, groups } from "@/db/schema";
 import { groupMembership, groupSnapshot } from "@/lib/group-api";
-import { requireIdentity } from "@/lib/identity";
+import { AuthenticationError, requireOnboardedIdentity } from "@/lib/auth";
 
 export const runtime = "edge";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const identity = await requireIdentity(request);
-  if (!identity) return Response.json({ error: "Guest session required." }, { status: 401 });
+  let identity;
+  try { identity = await requireOnboardedIdentity(request); }
+  catch (error) { return Response.json({ error: error instanceof AuthenticationError ? error.message : "authentication_required" }, { status: error instanceof AuthenticationError ? error.status : 503 }); }
   const { id } = await params;
   const db = await getDb();
   const membership = await groupMembership(id, identity.id);

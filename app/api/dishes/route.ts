@@ -5,6 +5,7 @@ import type { DishAnalysis } from "@/lib/dish-analysis";
 import { matchNearby, type PublishedDishCandidate } from "@/lib/dish-matching";
 import { normalizePublicationRestaurant, preparePublishedDish, type PublicationKnowledge, type PublishRestaurantInput } from "@/lib/dish-records";
 import { requireIdentity } from "@/lib/identity";
+import { requireOnboardedIdentity, AuthenticationError } from "@/lib/auth";
 import { placesApiKey } from "@/lib/places/http";
 import { createPlacesProvider } from "@/lib/places/provider";
 import { PlacesProviderError, type RestaurantPlace } from "@/lib/places/types";
@@ -26,8 +27,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const requestId = requestIdFor(request);
-  const identity = await requireIdentity(request);
-  if (!identity) return Response.json({ error: "Guest session required." }, { status: 401, headers: cors });
+  let identity;
+  try { identity = await requireOnboardedIdentity(request); }
+  catch (error) { return Response.json({ error: error instanceof AuthenticationError ? error.message : "authentication_required" }, { status: error instanceof AuthenticationError ? error.status : 503, headers: cors }); }
   try { await enforceUsageBudget("publish", identity.id); }
   catch (error) { if (error instanceof UsageBudgetError) return budgetResponse(error, requestId); throw error; }
   const body = await request.json() as { analysis?: DishAnalysis; sourceMode?: "live" | "demo"; imageDataUrl?: string; retainImage?: boolean; restaurant?: PublishRestaurantInput; knowledge?: PublicationKnowledge; language?: SupportedLanguage; reviewConfirmed?: boolean; restaurantConfirmed?: boolean };

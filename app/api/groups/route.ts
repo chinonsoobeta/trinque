@@ -4,7 +4,7 @@ import { groupCandidates, groupMembers, groups, publishedDishes, restaurants } f
 import { distanceBetween } from "@/lib/dish-matching";
 import { groupSnapshot } from "@/lib/group-api";
 import { DIETARY_REQUIREMENTS, instantForLocalTime, rankGroupCandidates, type DietaryRequirement, type GroupCandidateSource } from "@/lib/group-planning";
-import { requireIdentity } from "@/lib/identity";
+import { AuthenticationError, requireOnboardedIdentity } from "@/lib/auth";
 import { normalizeLocation, type NormalizedLocation } from "@/lib/location";
 import { placesApiKey } from "@/lib/places/http";
 import { createPlacesProvider } from "@/lib/places/provider";
@@ -23,8 +23,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const identity = await requireIdentity(request);
-  if (!identity) return Response.json({ error: "Guest session required." }, { status: 401 });
+  let identity;
+  try { identity = await requireOnboardedIdentity(request); }
+  catch (error) { return Response.json({ error: error instanceof AuthenticationError ? error.message : "authentication_required" }, { status: error instanceof AuthenticationError ? error.status : 503 }); }
   const body = await request.json() as { name?: string; eventTime?: string; eventLocalDate?: string; eventLocalTime?: string; budgetMax?: number; maxDistanceKm?: number; maxDistance?: number; distanceUnit?: "metric" | "imperial"; vegetarianRequired?: number; allergies?: string[]; dietaryRequirements?: string[]; cuisineTypes?: string[]; location?: NormalizedLocation; language?: SupportedLanguage };
   if (!body.location || !body.language || !SUPPORTED_LANGUAGES.includes(body.language)) return Response.json({ error: "normalized_group_location_required" }, { status: 400 });
   let location: NormalizedLocation;
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
   const id = crypto.randomUUID();
   const now = new Date();
   const inviteExpiresAt = new Date(now.getTime() + 7 * 86400000).toISOString();
-  await db.insert(groups).values({ id, ownerId: identity.id, name: body.name?.trim().slice(0, 80) || "Friday supper", eventTime: eventTime.toISOString(), neighborhood: location.locality, ...constraints, distanceUnit, allergies: JSON.stringify(constraints.allergies), dietaryRequirements: JSON.stringify(constraints.dietaryRequirements), cuisineTypes: JSON.stringify(constraints.cuisineTypes), inviteCode: crypto.randomUUID().replace(/-/g, "").slice(0, 12), inviteExpiresAt, latitude: location.latitude, longitude: location.longitude, locality: location.locality, administrativeRegion: location.administrativeRegion, countryCode: location.countryCode, currencyCode: location.currencyCode as SupportedCurrency, timeZone: location.timeZone, locale: location.locale, displayLanguage: body.language, updatedAt: now.toISOString() });
+  await db.insert(groups).values({ id, ownerId: identity.id, name: body.name?.trim().slice(0, 80) || "Friday supper", eventTime: eventTime.toISOString(), eventLocalDate: body.eventLocalDate ?? null, eventLocalTime: body.eventLocalTime ?? null, neighborhood: location.locality, ...constraints, distanceUnit, allergies: JSON.stringify(constraints.allergies), dietaryRequirements: JSON.stringify(constraints.dietaryRequirements), cuisineTypes: JSON.stringify(constraints.cuisineTypes), inviteCode: crypto.randomUUID().replace(/-/g, "").slice(0, 12), inviteExpiresAt, latitude: location.latitude, longitude: location.longitude, locality: location.locality, administrativeRegion: location.administrativeRegion, countryCode: location.countryCode, currencyCode: location.currencyCode as SupportedCurrency, timeZone: location.timeZone, locale: location.locale, displayLanguage: body.language, updatedAt: now.toISOString() });
   await db.insert(groupMembers).values({ groupId: id, userId: identity.id, role: "owner", language: body.language });
   for (const candidate of ranked) await db.insert(groupCandidates).values({ groupId: id, candidateId: candidate.candidateId, name: candidate.name, restaurant: candidate.restaurant, neighborhood: candidate.neighborhood, distanceKm: candidate.distanceKm, price: candidate.price, image: candidate.image, score: candidate.score, eligible: candidate.eligible, explanation: candidate.explanation, conflicts: JSON.stringify(candidate.conflicts), kind: candidate.kind, restaurantId: candidate.restaurantId, providerPlaceId: candidate.providerPlaceId, priceAmount: candidate.priceAmount, currencyCode: candidate.currencyCode as SupportedCurrency, provenance: candidate.provenance, verificationStatus: candidate.verificationStatus, currentAvailabilityConfirmed: candidate.currentAvailabilityConfirmed, dietaryCaveat: candidate.dietaryCaveat });
   return Response.json({ group: await groupSnapshot(id, identity.id), providerStatus }, { status: 201 });

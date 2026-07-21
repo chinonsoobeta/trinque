@@ -1,7 +1,7 @@
 import { and, count, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { follows, notifications, profiles } from "@/db/schema";
-import { AuthenticationError, getOptionalIdentity, normalizeHandle, requireAuthenticatedIdentity } from "@/lib/auth";
+import { AuthenticationError, getOptionalIdentity, normalizeHandle, requireOnboardedIdentity } from "@/lib/auth";
 
 export const runtime = "edge";
 
@@ -28,7 +28,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ hand
 
 export async function POST(request: Request, { params }: { params: Promise<{ handle: string }> }) {
   try {
-    const identity = await requireAuthenticatedIdentity(request);
+    const identity = await requireOnboardedIdentity(request);
     const { handle } = await params;
     const profile = await target(handle);
     if (!profile) return Response.json({ error: "Profile not found." }, { status: 404 });
@@ -50,7 +50,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ han
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ handle: string }> }) {
   try {
-    const identity = await requireAuthenticatedIdentity(request);
+    const identity = await requireOnboardedIdentity(request);
     const { handle } = await params;
     const profile = await target(handle);
     if (!profile) return Response.json({ error: "Profile not found." }, { status: 404 });

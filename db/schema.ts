@@ -296,6 +296,8 @@ export const groups = sqliteTable("groups", {
   ownerId: text("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   eventTime: text("event_time").notNull(),
+  eventLocalDate: text("event_local_date"),
+  eventLocalTime: text("event_local_time"),
   neighborhood: text("neighborhood").notNull(),
   budgetMax: integer("budget_max").notNull(),
   maxDistanceKm: integer("max_distance_km").notNull(),

@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { comments, notifications, profiles, publishedDishes } from "@/db/schema";
-import { AuthenticationError, requireAuthenticatedIdentity } from "@/lib/auth";
+import { AuthenticationError, requireOnboardedIdentity } from "@/lib/auth";
 
 export const runtime = "edge";
 const COMMENT_LIMIT = 1000;
@@ -16,7 +16,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const identity = await requireAuthenticatedIdentity(request);
+    const identity = await requireOnboardedIdentity(request);
     const { id } = await params;
     const body = await request.json() as { body?: string };
     const text = body.body?.trim() ?? "";

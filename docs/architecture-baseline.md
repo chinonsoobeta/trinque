@@ -36,7 +36,7 @@ UI language is independent from location-derived formatting. Supported languages
 
 `GET /api/health` reports OpenAI, Google Places, D1, and R2 independently as `available` or `unavailable`, with only safe reasons (`configured`, `missing_credential`, or `missing_binding`). It never returns secret values. Overall readiness is `ready` only when all four live capabilities are available; deterministic demo analysis remains independently reported.
 
-When `GOOGLE_PLACES_API_KEY` is absent, live location search is unavailable. The product must explain that state and must not substitute Vancouver or seeded results.
+When `GCP_API_KEY` is absent, live location search is unavailable. The product must explain that state and must not substitute Vancouver or seeded results.
 
 ## Regression baseline
 
@@ -49,7 +49,7 @@ The baseline `npm run verify` completed successfully:
 
 ## Credential and external-validation blockers
 
-- `GOOGLE_PLACES_API_KEY` is required for real Google Places requests and five-country live provider smoke tests.
+- `GCP_API_KEY` is required for real Google Places requests and live provider smoke tests across the supported countries.
 - `OPENAI_API_KEY` is required for approved live identifier smoke fixtures and measured evaluation results.
 - Physical-device validation, EAS/TestFlight operations, and any distribution change require the owner's Apple/Expo access and explicit authorization at the relevant release step.
 - Sites access must remain at its current owner-only/shared level unless the owner explicitly approves a change.

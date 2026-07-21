@@ -26,4 +26,4 @@ Plans persist their normalized location, country, currency, time zone, formattin
 
 ## Credential-dependent behavior
 
-Without `GOOGLE_PLACES_API_KEY`, group creation still uses eligible nearby published D1 dishes. Provider health remains unavailable and no seeded Vancouver or other demo results are inserted. A real three-session route smoke test and real provider candidate check require deployed D1/Places configuration.
+Without `GCP_API_KEY`, group creation still uses eligible nearby published D1 dishes. Provider health remains unavailable and no seeded Vancouver or other demo results are inserted. A real multi-account route smoke test and real provider candidate check require deployed D1/Places configuration.

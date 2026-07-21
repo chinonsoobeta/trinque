@@ -48,6 +48,16 @@ export async function requireAuthenticatedIdentity(request: Request): Promise<Au
   return identity as AuthenticatedIdentity;
 }
 
+/** Browsing is public. Creating social content requires a completed profile. */
+export async function requireOnboardedIdentity(request: Request): Promise<AuthenticatedIdentity> {
+  const identity = await requireAuthenticatedIdentity(request);
+  const db = await getDb();
+  const [profile] = await db.select({ onboardingCompletedAt: profiles.onboardingCompletedAt })
+    .from(profiles).where(eq(profiles.userId, identity.id)).limit(1);
+  if (!profile?.onboardingCompletedAt) throw new AuthenticationError("Complete your profile first.", 403);
+  return identity;
+}
+
 export async function issueAppSession(userId: string, request?: Request) {
   const token = randomToken();
   const now = new Date();

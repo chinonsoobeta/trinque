@@ -92,6 +92,13 @@
       "when": 1784576000000,
       "tag": "0012_safety_and_editable_posts",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1784660000000,
+      "tag": "0013_group_local_schedule",
+      "breakpoints": true
     }
   ]
 }

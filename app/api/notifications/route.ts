@@ -1,6 +1,6 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { notifications, profiles } from "@/db/schema";
+import { blocks, mutes, notifications, profiles } from "@/db/schema";
 import { AuthenticationError, requireAuthenticatedIdentity } from "@/lib/auth";
 
 export const runtime = "edge";
@@ -13,7 +13,10 @@ export async function GET(request: Request) {
     const limit = Math.max(1, Math.min(MAX_LIMIT, Number(url.searchParams.get("limit") ?? 30) || 30));
     const db = await getDb();
     const rows = await db.select({ id: notifications.id, type: notifications.type, targetId: notifications.targetId, read: notifications.read, createdAt: notifications.createdAt, actorId: notifications.actorId, actorDisplayName: profiles.displayName, actorHandle: profiles.handle, actorAvatarUrl: profiles.avatarUrl })
-      .from(notifications).leftJoin(profiles, eq(profiles.userId, notifications.actorId)).where(eq(notifications.userId, identity.id)).orderBy(desc(notifications.createdAt)).limit(limit);
+      .from(notifications).leftJoin(profiles, eq(profiles.userId, notifications.actorId)).where(and(
+        eq(notifications.userId, identity.id),
+        sql`(${notifications.actorId} IS NULL OR (NOT EXISTS (SELECT 1 FROM ${blocks} WHERE (${blocks.blockerId} = ${identity.id} AND ${blocks.blockedId} = ${notifications.actorId}) OR (${blocks.blockerId} = ${notifications.actorId} AND ${blocks.blockedId} = ${identity.id})) AND NOT EXISTS (SELECT 1 FROM ${mutes} WHERE ${mutes.muterId} = ${identity.id} AND ${mutes.mutedId} = ${notifications.actorId})))`,
+      )).orderBy(desc(notifications.createdAt)).limit(limit);
     return Response.json({ notifications: rows }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return authError(error, "Unable to load notifications."); }
 }

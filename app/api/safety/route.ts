@@ -1,13 +1,13 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { blocks, hiddenDishes, mutes } from "@/db/schema";
-import { AuthenticationError, requireAuthenticatedIdentity } from "@/lib/auth";
+import { AuthenticationError, requireOnboardedIdentity } from "@/lib/auth";
 
 export const runtime = "edge";
 
 export async function POST(request: Request) {
   try {
-    const identity = await requireAuthenticatedIdentity(request);
+    const identity = await requireOnboardedIdentity(request);
     const body = await request.json() as { action?: "block" | "mute" | "hide"; targetId?: string };
     const targetId = body.targetId?.trim() ?? "";
     if (!targetId || targetId.length > 160 || !body.action) return Response.json({ error: "invalid_safety_action" }, { status: 400 });
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const identity = await requireAuthenticatedIdentity(request);
+    const identity = await requireOnboardedIdentity(request);
     const url = new URL(request.url);
     const action = url.searchParams.get("action"); const targetId = url.searchParams.get("targetId")?.trim() ?? "";
     if (!targetId || !["block", "mute", "hide"].includes(action ?? "")) return Response.json({ error: "invalid_safety_action" }, { status: 400 });

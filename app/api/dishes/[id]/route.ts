@@ -1,14 +1,15 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { publishedDishes } from "@/db/schema";
-import { requireIdentity } from "@/lib/identity";
+import { requireOnboardedIdentity, AuthenticationError } from "@/lib/auth";
 import { deleteDishImage } from "@/lib/uploads";
 
 export const runtime = "edge";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const identity = await requireIdentity(request);
-  if (!identity || identity.authType === "guest") return Response.json({ error: "authentication_required" }, { status: 401 });
+  let identity;
+  try { identity = await requireOnboardedIdentity(request); }
+  catch (error) { return Response.json({ error: error instanceof AuthenticationError ? error.message : "authentication_required" }, { status: error instanceof AuthenticationError ? error.status : 503 }); }
   const id = (await params).id;
   let body: { caption?: string; tasteNotes?: string; dietaryNotes?: string; personalComments?: string; locationTag?: string };
   try { body = await request.json(); } catch { return Response.json({ error: "invalid_dish_update" }, { status: 400 }); }
@@ -24,8 +25,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const identity = await requireIdentity(request);
-  if (!identity) return Response.json({ error: "guest_session_required" }, { status: 401 });
+  let identity;
+  try { identity = await requireOnboardedIdentity(request); }
+  catch (error) { return Response.json({ error: error instanceof AuthenticationError ? error.message : "authentication_required" }, { status: error instanceof AuthenticationError ? error.status : 503 }); }
   const id = (await params).id;
   const db = await getDb();
   const [dish] = await db.select({ id: publishedDishes.id, imageKey: publishedDishes.imageKey }).from(publishedDishes).where(and(eq(publishedDishes.id, id), eq(publishedDishes.ownerId, identity.id))).limit(1);

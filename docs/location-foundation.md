@@ -10,13 +10,13 @@ UI language is an independent explicit preference. The typed resources have exac
 
 ## Live location flow
 
-`POST /api/locations/autocomplete` uses a server-only `GOOGLE_PLACES_API_KEY` and returns provider-neutral predictions. A selected prediction is resolved through Place Details before it becomes a normalized location. Device coordinates are resolved server-side through Places Nearby Search after the user grants browser or iOS foreground permission. Unsupported countries are rejected after provider normalization.
+`POST /api/locations/autocomplete` uses the server-only `GCP_API_KEY` and returns provider-neutral predictions. `GOOGLE_PLACES_API_KEY` is a legacy fallback. A selected prediction is resolved through Place Details before it becomes a normalized location. Device coordinates are resolved server-side through Places Nearby Search after the user grants browser or iOS foreground permission. Unsupported countries are rejected after provider normalization.
 
 Requests use explicit field masks, a short timeout, one bounded retry for transient failures, and `Cache-Control: no-store`. The client receives normalized records, stable provider place IDs, and required `Google Maps` text attribution—not raw Google payloads. Place content is not persisted by this phase.
 
 Implementation follows the current Google Places API (New) documentation for [Autocomplete](https://developers.google.com/maps/documentation/places/web-service/place-autocomplete), [Place Details](https://developers.google.com/maps/documentation/places/web-service/place-details), [Nearby Search](https://developers.google.com/maps/documentation/places/web-service/nearby-search), and [Places policies](https://developers.google.com/maps/documentation/places/web-service/policies). France is technically supported, but the owner must review the Google Maps EEA terms that apply to the project billing account before a French live pilot.
 
-Without `GOOGLE_PLACES_API_KEY`, health and location search report a `credentials`/unavailable state. The UI explains the missing capability and never substitutes Vancouver or seeded search results.
+Without `GCP_API_KEY`, health and location search report a `credentials`/unavailable state. The UI explains the missing capability and never substitutes Vancouver or seeded search results.
 
 ## Preferences and theme
 
@@ -26,4 +26,4 @@ Web applies the saved theme in the document head before meaningful render and fo
 
 ## Credential blocker
 
-Live provider smoke tests cannot be run until the owner configures `GOOGLE_PLACES_API_KEY` in the Sites production/preview environment and confirms the applicable Google Maps Platform terms. Deterministic injected provider tests cover the implementation without committing a credential.
+Live provider smoke tests cannot be run until the owner configures `GCP_API_KEY` in the Worker production/preview environment and confirms the applicable Google Maps Platform terms. Deterministic injected provider tests cover the implementation without committing a credential.

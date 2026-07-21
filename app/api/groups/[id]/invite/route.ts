@@ -1,13 +1,13 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { groups, notifications, profiles } from "@/db/schema";
-import { AuthenticationError, normalizeHandle, requireAuthenticatedIdentity } from "@/lib/auth";
+import { AuthenticationError, normalizeHandle, requireOnboardedIdentity } from "@/lib/auth";
 
 export const runtime = "edge";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const identity = await requireAuthenticatedIdentity(request);
+    const identity = await requireOnboardedIdentity(request);
     const groupId = (await params).id;
     const body = await request.json() as { handle?: string };
     const handle = normalizeHandle(body.handle ?? "");

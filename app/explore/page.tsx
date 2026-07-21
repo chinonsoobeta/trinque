@@ -1,16 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { DiscoverPeople } from "@/components/DiscoverPeople";
 import { Feed } from "@/components/Feed";
 import { PageContainer } from "@/components/AppPrimitives";
 
 export default function ExplorePage() {
-  const [feed, setFeed] = useState<"trending" | "following">("trending");
-  useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get("feed");
-    if (requested === "following") setFeed("following");
-  }, []);
+  const [feed, setFeed] = useState<"trending" | "following">(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("feed") === "following"
+      ? "following"
+      : "trending",
+  );
   function selectFeed(next: "trending" | "following") {
     setFeed(next);
     const url = new URL(window.location.href);

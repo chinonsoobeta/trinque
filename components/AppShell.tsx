@@ -19,11 +19,10 @@ type RootView = "discover" | "groups" | "saved";
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { authenticated, identity, loading, signOut } = useAuth();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPathname, setMenuPathname] = useState<string | null>(null);
   const [rootView, setRootView] = useState<RootView>("discover");
   const authSurface = pathname.startsWith("/auth/");
-
-  useEffect(() => setMenuOpen(false), [pathname]);
+  const menuOpen = menuPathname === pathname;
   useEffect(() => {
     const sync = () => {
       if (pathname !== "/") return;
@@ -34,7 +33,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [pathname]);
   useEffect(() => {
     if (!menuOpen) return;
-    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setMenuOpen(false); };
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setMenuPathname(null); };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
   }, [menuOpen]);
@@ -70,7 +69,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {!authSurface && <Link className="app-create-action" href="/#capture" onClick={createDish}><span aria-hidden="true">＋</span><span>Post a dish</span></Link>}
         {!authSurface && authenticated && <NotificationBell />}
         {!loading && !authenticated ? <Link className="signin-link" href={`/auth/login?next=${encodeURIComponent(pathname || "/")}`}>Sign in</Link> : authenticated && identity ? <div className="profile-menu">
-          <button className="profile-menu-trigger" onClick={() => setMenuOpen((value) => !value)} aria-haspopup="menu" aria-expanded={menuOpen} aria-label={`Open account menu for ${identity.displayName}`}><AppAvatar name={identity.displayName} size="small" /></button>
+          <button className="profile-menu-trigger" onClick={() => setMenuPathname((value) => value === pathname ? null : pathname)} aria-haspopup="menu" aria-expanded={menuOpen} aria-label={`Open account menu for ${identity.displayName}`}><AppAvatar name={identity.displayName} size="small" /></button>
           {menuOpen && <div className="profile-menu-popover" role="menu"><div className="profile-menu-identity"><AppAvatar name={identity.displayName} size="medium" /><div><b>{identity.displayName}</b>{identity.email && <small>{identity.email}</small>}</div></div><Link role="menuitem" href="/account">Account & privacy</Link><Link role="menuitem" href="/explore?feed=following">Following feed</Link><button role="menuitem" onClick={() => void signOut()}>Sign out</button></div>}
         </div> : null}
       </div>

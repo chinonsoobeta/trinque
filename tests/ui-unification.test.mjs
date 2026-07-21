@@ -43,3 +43,4 @@ test("social feeds use the shared image-first dish card and preserve pagination 
 test("settings no longer nests the authentication modal", async () => {
   const authControls = await source("components/AuthControls.tsx");
   assert.doesNotMatch(authControls, /AuthModal/);
+});

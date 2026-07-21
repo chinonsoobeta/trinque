@@ -648,10 +648,13 @@ Object.assign(pt, { "analysis.demoName": "Massa recheada com manteiga tostada", 
 
 // Final plain-language review. These values replace older editorial copy with
 // short, direct instructions and remove model or system terms from the UI.
-Object.assign(enUS, enCA, enGB, {
+const englishPlainLanguageReview: Partial<Messages> = {
   "home.title": "Find good food with friends.", "home.savedTitle": "Your saved dishes", "home.gather": "Good choices", "home.editorial": "Find a dish. Then find a place to eat it.",
   "home.tasteprint": "Your food likes", "analysis.live": "Live dish check", "home.analyze": "Check a dish", "group.lock": "Choose this place", "group.bestTable": "Your choice", "group.finalized": "The place is chosen",
-});
+};
+Object.assign(enUS, englishPlainLanguageReview);
+Object.assign(enCA, englishPlainLanguageReview);
+Object.assign(enGB, englishPlainLanguageReview);
 Object.assign(fr, {
   "home.eyebrow": "Trouver des plats", "home.title": "Trouvez de bons plats avec vos proches.", "home.savedTitle": "Vos plats enregistrés", "home.body": "Prenez un plat en photo. Voyez ce qu’il peut être. Trouvez un plat similaire près de vous.", "home.savedBody": "Gardez ici les plats que vous voulez essayer.", "home.demo": "Essayer la démo marquée", "home.curated": "Près de {location}", "home.gather": "Bons choix", "home.emptyTitle": "Trouvez votre prochain plat ici.", "home.emptyBody": "Enregistrez des plats. Trinque les utilisera pour proposer d’autres plats.", "home.localTip": "Les membres peuvent ajouter des détails absents des listes de restaurants.", "home.tasteprint": "Vos goûts", "home.tasteBody": "Vous enregistrez souvent des plats aux goûts vifs, grillés et riches.", "home.editorial": "Trouvez un plat. Puis trouvez où le manger.",
   "analysis.loadingKicker": "Vérification du plat", "analysis.loadingTitle": "Recherche des détails utiles…", "analysis.unavailableKicker": "Vérification impossible", "analysis.live": "Vérification du plat", "analysis.reviewTitle": "Vérifiez ce plat avant de le publier.", "analysis.canonicalNotice": "Trinque utilise un nom commun pour trouver des résultats. Cela ne dit pas si le plat est sans danger pour vous.",

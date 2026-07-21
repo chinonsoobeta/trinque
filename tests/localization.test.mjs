@@ -19,6 +19,14 @@ test("all UI languages have exact key parity and no fallback key text", () => {
   }
 });
 
+test("all English regions use the final plain-language review", () => {
+  for (const language of ["en-CA", "en-US", "en-GB"]) {
+    assert.equal(translations[language]["home.analyze"], "Check a dish");
+    assert.equal(translations[language]["home.gather"], "Good choices");
+    assert.equal(translations[language]["group.lock"], "Choose this place");
+  }
+});
+
 test("interpolation preserves localized copy", () => {
   assert.equal(translate("en-GB", "home.curated", { location: "Manchester" }), "Near Manchester");
   assert.equal(translate("fr", "analysis.confident", { confidence: 91 }), "Confiance : 91 %");

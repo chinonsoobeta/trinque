@@ -13,8 +13,8 @@ test("shared application shell is mounted globally", async () => {
   ]);
   assert.match(layout, /<AppShell>/);
   assert.match(shell, /className="mobile-navigation"/);
-  assert.match(shell, />Sign in</);
-  assert.match(shell, /Following/);
+  assert.match(shell, /t\("auth\.signIn"\)/);
+  assert.match(shell, /t\("nav\.following"\)/);
 });
 
 test("discover removes fabricated social proof and invalid location fallback", async () => {
@@ -23,8 +23,8 @@ test("discover removes fabricated social proof and invalid location fallback", a
   assert.doesNotMatch(home, /18 locals agree/);
   assert.doesNotMatch(home, /location\?\.locality \?\? "—"/);
   assert.doesNotMatch(home, /new Set\(\[2\]\)/);
-  assert.match(home, /For you/);
-  assert.match(home, /Example tip/);
+  assert.match(home, /t\("home\.gather"\)/);
+  assert.match(home, /t\("provenance\.seed_demo"\)/);
 });
 
 test("social feeds use the shared image-first dish card and preserve pagination contracts", async () => {

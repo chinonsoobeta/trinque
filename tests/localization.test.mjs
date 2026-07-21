@@ -28,3 +28,20 @@ test("new users receive a supported device-language default including UK English
   assert.equal(resolveUiLanguage(["it-IT"]), "it");
   assert.equal(resolveUiLanguage(["pt-PT"]), "pt");
 });
+
+test("non-English catalogues do not fall back to English", () => {
+  const keys = Object.keys(translations["en-US"]);
+  const allowedSame = {
+    fr: new Set(["settings.measurement", "location.imperial", "analysis.field.cuisine", "group.date", "notifications.title", "diet.halal", "dish.source"]),
+    es: new Set(["diet.halal", "diet.kosher"]),
+    de: new Set(["diet.vegan", "diet.halal", "safety.reason.spam", "onboarding.name"]),
+    it: new Set(["auth.account", "auth.password", "diet.halal", "diet.kosher"]),
+    pt: new Set(["diet.vegan", "diet.halal", "diet.kosher"]),
+  };
+  for (const language of ["fr", "es", "de", "it", "pt"]) {
+    for (const key of keys) {
+      if (allowedSame[language].has(key)) continue;
+      assert.notEqual(translations[language][key], translations["en-US"][key], `${language}:${key} must not use English copy`);
+    }
+  }
+});

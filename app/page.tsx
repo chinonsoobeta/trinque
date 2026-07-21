@@ -65,7 +65,7 @@ const emptyMatchTiers: MatchTiers = { confirmedNearbyDishes: [], communityOrInfe
 export default function Home() {
   const { authenticated } = useAuth();
   const [view, setView] = useState<"discover" | "groups" | "saved">("discover");
-  const [filter, setFilter] = useState("All dishes");
+  const [filter, setFilter] = useState("all");
   const [saved, setSaved] = useState<Set<number>>(new Set());
   const [modal, setModal] = useState(false);
   const [phase, setPhase] = useState<"idle" | "loading" | "review" | "error" | "published">("idle");
@@ -230,6 +230,7 @@ export default function Home() {
     const nextLocation = storedLocation ? { ...storedLocation, language: nextLanguage, measurementSystem: nextMeasurement } : null;
     setLanguage(nextLanguage); setTheme(nextTheme); setMeasurementSystem(nextMeasurement); setLocation(nextLocation);
     window.localStorage.setItem("trinque.language", nextLanguage);
+    window.dispatchEvent(new Event("trinque:language"));
     window.localStorage.setItem("trinque.theme", nextTheme);
     window.localStorage.setItem("trinque.measurement", nextMeasurement);
     if (nextLocation) window.localStorage.setItem("trinque.location", JSON.stringify(coarseLocation({ ...nextLocation, language: nextLanguage, measurementSystem: nextMeasurement })));
@@ -281,7 +282,7 @@ export default function Home() {
       const envelope = await response.json() as AnalysisEnvelope;
       if (!response.ok || !envelope.ok) {
         trackAnalytics("analysis_failed", { mode: demo ? "demo" : "live", outcome: envelope.ok ? "provider_error" : envelope.error.code, durationMs: Math.round(performance.now() - startedAt) });
-        setAnalysisError(envelope.ok ? "Live identification failed." : envelope.error.message);
+        setAnalysisError(envelope.ok ? t("analysis.unavailableTitle") : envelope.error.message);
         setPhase("error");
         return;
       }
@@ -340,8 +341,8 @@ export default function Home() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <button className="brand" onClick={() => setView("discover")} aria-label="Trinque home"><span>T</span>Trinque</button>
-        <nav className="desktop-nav" aria-label="Primary navigation">
+        <button className="brand" onClick={() => setView("discover")} aria-label={t("home.title")}><span>T</span>Trinque</button>
+        <nav className="desktop-nav" aria-label={t("nav.discover")}>
           {(["discover", "groups", "saved"] as const).map((item) => (
             <button key={item} className={view === item ? "nav active" : "nav"} onClick={() => setView(item)}>
               {t(`nav.${item}`)}{item === "saved" && <i>{saved.size}</i>}
@@ -368,36 +369,36 @@ export default function Home() {
                 </div>}
               </div>
               <div className="taste-card">
-                <b>Your food likes</b><div className="taste-orbit"><span>T</span><i /><i /><i /></div>
-                <div className="taste-tags"><span>Save dishes</span><span>Post dishes</span><span>Follow people</span></div>
-                <small>Trinque learns from what you save and post.</small>
+                <b>{t("home.tasteprint")}</b><div className="taste-orbit"><span>T</span><i /><i /><i /></div>
+                <div className="taste-tags"><span>{t("nav.saved")}</span><span>{t("nav.postDish")}</span><span>{t("nav.following")}</span></div>
+                <small>{t("home.tasteBody")}</small>
               </div>
             </section>
 
             <section className="discover-section">
               <div className="section-heading">
-                <div><span className="kicker">{location ? t("home.curated", { location: location.locality }) : "For you"}</span><h2>{view === "saved" ? t("home.savedHeading") : t("home.gather")}</h2>{!location && view === "discover" && <button className="location-inline" onClick={() => setSettingsOpen(true)}>Set your location to find food near you</button>}</div>
-                {view === "discover" && <div className="filters" role="group" aria-label="Feed filters">
-                  {["All dishes", "Near you", "Less known"].map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item}</button>)}
+                <div><span className="kicker">{location ? t("home.curated", { location: location.locality }) : t("home.gather")}</span><h2>{view === "saved" ? t("home.savedHeading") : t("home.gather")}</h2>{!location && view === "discover" && <button className="location-inline" onClick={() => setSettingsOpen(true)}>{t("location.change")}</button>}</div>
+                {view === "discover" && <div className="filters" role="group" aria-label={t("home.gather")}>
+                  {(["all", "near", "lessKnown"] as const).map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{t(`feed.${item}`)}</button>)}
                 </div>}
               </div>
               {view === "discover" && <p className="seeded-notice">{t("home.communityFeedNotice")}</p>}
               {(view === "discover" ? communityFeed.length : visible.length) ? <div className="dish-grid">
                 {view === "discover" && communityFeed.map((dish) => <PublishedDishCard key={dish.id} dish={dish} t={t} onDelete={dish.isOwner ? deletePublishedDish : undefined} />)}
                 {view === "saved" && visible.map((dish, index) => <DishCard key={dish.id} dish={dish} featured={index === 0} isSaved={saved.has(dish.id)} onSave={toggleSaved} t={t} />)}
-              </div> : view === "saved" ? <div className="empty-state"><span>♡</span><h3>No saved dishes yet.</h3><p>Save dishes you want to find again.</p><button className="primary" onClick={() => setView("discover")}>Find dishes</button></div> : <div className="empty-state editorial-fallback"><span>✦</span><h3>No user dishes yet.</h3><p>See top dishes or try the demo. The demo does not show real user activity.</p><div className="hero-actions"><a className="primary button-link" href="/explore">See top dishes</a><button className="secondary" onClick={() => { setPreview(dishes[0].image); void analyze(undefined, true); }}>Try the demo</button></div></div>}
+              </div> : view === "saved" ? <div className="empty-state"><span>♡</span><h3>{t("home.emptyTitle")}</h3><p>{t("home.emptyBody")}</p><button className="primary" onClick={() => setView("discover")}>{t("home.eyebrow")}</button></div> : <div className="empty-state editorial-fallback"><span>✦</span><h3>{t("feed.publicEmpty")}</h3><p>{t("feed.publicEmptyHelp")}</p><div className="hero-actions"><a className="primary button-link" href="/explore">{t("feed.top")}</a><button className="secondary" onClick={() => { setPreview(dishes[0].image); void analyze(undefined, true); }}>{t("home.demo")}</button></div></div>}
             </section>
 
             {view === "discover" && <section className="insider-strip">
               <div className="insider-number">03</div>
-              <div><span className="kicker">{t("home.localNote")}</span><h2>Try the chile crisp.</h2><p>{t("home.localTip")}</p></div>
-              <div className="people"><small>Example tip</small></div>
+              <div><span className="kicker">{t("home.localNote")}</span><h2>{t("home.localTip")}</h2></div>
+              <div className="people"><small>{t("provenance.seed_demo")}</small></div>
             </section>}
           </>
         )}
       </main>
 
-      <nav className="mobile-nav" aria-label="Mobile navigation">
+      <nav className="mobile-nav" aria-label={t("nav.discover")}>
         <button className={view === "discover" ? "active" : ""} onClick={() => setView("discover")}><span>⌂</span>{t("nav.discover")}</button>
         <button className={view === "groups" ? "active" : ""} onClick={() => setView("groups")}><span>♢</span>{t("nav.groups")}</button>
         <button className="mobile-add" onClick={() => fileRef.current?.click()} aria-label={t("home.analyze")}>＋</button>
@@ -414,8 +415,8 @@ export default function Home() {
 function DishCard({ dish, featured, isSaved, onSave, t }: { dish: Dish; featured: boolean; isSaved: boolean; onSave: (id: number) => void; t: Translator }) {
   return <article className={featured ? "dish-card featured" : "dish-card"}>
     <div className="dish-image" style={{ backgroundImage: "linear-gradient(180deg,transparent 58%,rgba(22,13,10,.62)),url(" + dish.image + ")" }}>
-      <span className="match"><b>{dish.match}%</b> taste match</span>
-      <button className={isSaved ? "save saved" : "save"} onClick={() => onSave(dish.id)} aria-label={(isSaved ? "Remove " : "Save ") + dish.name}>{isSaved ? "♥" : "♡"}</button>
+      <span className="match"><b>{dish.match}%</b> {t("match.label")}</span>
+      <button className={isSaved ? "save saved" : "save"} onClick={() => onSave(dish.id)} aria-label={t(isSaved ? "save.removed" : "save.added")}>{isSaved ? "♥" : "♡"}</button>
       <div className="photo-caption"><b>{dish.restaurant}</b><small>{dish.area}</small></div>
     </div>
     <div className="dish-body">
@@ -428,8 +429,8 @@ function DishCard({ dish, featured, isSaved, onSave, t }: { dish: Dish; featured
 
 function PublishedDishCard({ dish, t, onDelete }: { dish: PublishedDish; t: Translator; onDelete?: (id: string, imageOnly?: boolean) => void }) {
   return <article className="dish-card published-card">
-    <div className="dish-image" style={{ backgroundImage: `linear-gradient(180deg,transparent 55%,rgba(22,13,10,.68)),url(${dish.localPreview ?? dish.imageUrl ?? dishes[0].image})` }}><span className="match"><b>NEW</b> {t("analysis.publishedTitle")}</span><div className="photo-caption"><b>{dish.sourceMode === "live" ? t("analysis.live") : t("analysis.demo")}</b><small>{t("analysis.review")}</small></div></div>
-    <div className="dish-body"><div className="dish-title"><div><h3>{dish.name}</h3><p>{dish.description}</p></div><strong>{dish.confidence}%</strong></div><div className="dish-meta"><div><span>{dish.cuisine}</span></div><small>{dish.restaurant?.name ?? t("analysis.review")}{dish.contributorLabel ? ` · ${dish.contributorLabel}` : ""}</small></div>{dish.provenance && <p className="record-honesty">{t(`provenance.${dish.provenance}` as MessageKey)} · {t(`verification.${dish.verificationStatus ?? "unverified"}` as MessageKey)} · {t(dish.availabilityKnowledge === "recently_confirmed" ? "availability.confirmed" : "availability.unknown")}</p>}<a className="find-button" href={`/dishes/${dish.id}`}>View dish <span>→</span></a>{onDelete && <div className="modal-actions">{dish.imageUrl && <button className="text-button" onClick={() => onDelete(dish.id, true)}>{t("privacy.deleteImage")}</button>}<button className="text-button" onClick={() => onDelete(dish.id)}>{t("privacy.deleteDish")}</button></div>}</div>
+    <div className="dish-image" style={{ backgroundImage: `linear-gradient(180deg,transparent 55%,rgba(22,13,10,.68)),url(${dish.localPreview ?? dish.imageUrl ?? dishes[0].image})` }}><span className="match"><b>{t("analysis.publishedTitle")}</b></span><div className="photo-caption"><b>{dish.sourceMode === "live" ? t("analysis.live") : t("analysis.demo")}</b><small>{t("analysis.review")}</small></div></div>
+    <div className="dish-body"><div className="dish-title"><div><h3>{dish.name}</h3><p>{dish.description}</p></div><strong>{dish.confidence}%</strong></div><div className="dish-meta"><div><span>{dish.cuisine}</span></div><small>{dish.restaurant?.name ?? t("analysis.review")}{dish.contributorLabel ? ` · ${dish.contributorLabel}` : ""}</small></div>{dish.provenance && <p className="record-honesty">{t(`provenance.${dish.provenance}` as MessageKey)} · {t(`verification.${dish.verificationStatus ?? "unverified"}` as MessageKey)} · {t(dish.availabilityKnowledge === "recently_confirmed" ? "availability.confirmed" : "availability.unknown")}</p>}<a className="find-button" href={`/dishes/${dish.id}`}>{t("dish.view")} <span>→</span></a>{onDelete && <div className="modal-actions">{dish.imageUrl && <button className="text-button" onClick={() => onDelete(dish.id, true)}>{t("privacy.deleteImage")}</button>}<button className="text-button" onClick={() => onDelete(dish.id)}>{t("privacy.deleteDish")}</button></div>}</div>
   </article>;
 }
 
@@ -482,7 +483,7 @@ function Analyzer({ guestToken, preview, phase, analysis, analysisMode, warning,
   }
 
   return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="analyzer-title"><div className="analyzer">
-    <button className="modal-close" onClick={close} aria-label="Close analyzer">×</button>
+    <button className="modal-close" onClick={close} aria-label={t("settings.close")}>×</button>
     <div className="analyzer-image" style={{ backgroundImage: "url(" + preview + ")" }}><span>✦ GPT-5.6 vision</span></div>
     <div className="analyzer-content">
       {phase === "loading" ? <div className="loading-state"><div className="scan"><span /></div><em>{t("analysis.loadingKicker")}</em><h2 id="analyzer-title">{t("analysis.loadingTitle")}</h2><div><span>{t("analysis.field.name")}</span><span>{t("analysis.field.ingredients")}</span><span>{t("analysis.field.dietary")}</span></div></div>
@@ -675,7 +676,7 @@ function GroupPlanner({ guestToken, flash, t, location, language, track }: { gue
     const url = URL.createObjectURL(await response.blob()); const link = document.createElement("a"); link.href = url; link.download = "trinque-plan.ics"; link.click(); URL.revokeObjectURL(url); flash(t("group.calendarDownloaded"));
   }
 
-  if (!group) return <section className="group-page"><div className="group-intro"><div className="eyebrow"><span>♢</span> {t("group.eyebrow")}</div><h1>{t("group.createTitle")}</h1><p>{t("group.createBody")}</p></div><div className="group-starter"><span className="kicker">{t("group.start")}</span><h2>{t("group.name")}</h2><div className="planner-form"><label>{t("group.date")}<input type="date" value={eventLocalDate} onChange={(event) => setEventLocalDate(event.target.value)} /></label><label>{t("group.time")}<input type="time" value={eventLocalTime} onChange={(event) => setEventLocalTime(event.target.value)} /></label><label>{t("group.budget")}<input value={budgetMax} onChange={(event) => setBudgetMax(event.target.value)} inputMode="numeric" /></label><label>{t("group.radius")}<input value={maxDistanceKm} onChange={(event) => setMaxDistanceKm(event.target.value)} inputMode="numeric" /><select aria-label={t("group.distanceUnit")} value={distanceUnit} onChange={(event) => setDistanceUnit(event.target.value as "metric" | "imperial")}><option value="metric">{t("location.metric")}</option><option value="imperial">{t("location.imperial")}</option></select></label><label>{t("group.vegetarian")}<input value={vegetarianRequired} onChange={(event) => setVegetarianRequired(event.target.value)} inputMode="numeric" /></label><fieldset><legend>{t("group.dietary")}</legend>{["vegan", "vegetarian", "celiac", "gluten-free", "dairy-free", "nut-free", "shellfish-free", "halal", "kosher"].map((item) => <label key={item}><input type="checkbox" checked={dietaryRequirements.includes(item)} onChange={(event) => setDietaryRequirements((current) => event.target.checked ? [...current, item] : current.filter((value) => value !== item))} />{item}</label>)}</fieldset><label>{t("group.allergies")}<input value={allergies} onChange={(event) => setAllergies(event.target.value)} placeholder={t("group.allergyExample")} /></label><label>{t("group.cuisines")}<input value={cuisineTypes} onChange={(event) => setCuisineTypes(event.target.value)} placeholder={t("group.cuisineExample")} /></label></div>{!location && <p className="location-status warning">{t("location.change")}</p>}<button className="primary full" disabled={busy || !guestToken || !location || !eventLocalDate || !eventLocalTime} onClick={createGroup}>{guestToken ? busy ? t("group.building") : `${t("group.rank")} →` : t("auth.connecting")}</button></div></section>;
+  if (!group) return <section className="group-page"><div className="group-intro"><div className="eyebrow"><span>♢</span> {t("group.eyebrow")}</div><h1>{t("group.createTitle")}</h1><p>{t("group.createBody")}</p></div><div className="group-starter"><span className="kicker">{t("group.start")}</span><h2>{t("group.name")}</h2><div className="planner-form"><label>{t("group.date")}<input type="date" value={eventLocalDate} onChange={(event) => setEventLocalDate(event.target.value)} /></label><label>{t("group.time")}<input type="time" value={eventLocalTime} onChange={(event) => setEventLocalTime(event.target.value)} /></label><label>{t("group.budget")}<input value={budgetMax} onChange={(event) => setBudgetMax(event.target.value)} inputMode="numeric" /></label><label>{t("group.radius")}<input value={maxDistanceKm} onChange={(event) => setMaxDistanceKm(event.target.value)} inputMode="numeric" /><select aria-label={t("group.distanceUnit")} value={distanceUnit} onChange={(event) => setDistanceUnit(event.target.value as "metric" | "imperial")}><option value="metric">{t("location.metric")}</option><option value="imperial">{t("location.imperial")}</option></select></label><label>{t("group.vegetarian")}<input value={vegetarianRequired} onChange={(event) => setVegetarianRequired(event.target.value)} inputMode="numeric" /></label><fieldset><legend>{t("group.dietary")}</legend>{["vegan", "vegetarian", "celiac", "gluten-free", "dairy-free", "nut-free", "shellfish-free", "halal", "kosher"].map((item) => <label key={item}><input type="checkbox" checked={dietaryRequirements.includes(item)} onChange={(event) => setDietaryRequirements((current) => event.target.checked ? [...current, item] : current.filter((value) => value !== item))} />{t(`diet.${item}` as MessageKey)}</label>)}</fieldset><label>{t("group.allergies")}<input value={allergies} onChange={(event) => setAllergies(event.target.value)} placeholder={t("group.allergyExample")} /></label><label>{t("group.cuisines")}<input value={cuisineTypes} onChange={(event) => setCuisineTypes(event.target.value)} placeholder={t("group.cuisineExample")} /></label></div>{!location && <p className="location-status warning">{t("location.change")}</p>}<button className="primary full" disabled={busy || !guestToken || !location || !eventLocalDate || !eventLocalTime} onClick={createGroup}>{guestToken ? busy ? t("group.building") : `${t("group.rank")} →` : t("auth.connecting")}</button></div></section>;
 
   const winner = group.candidates.find((candidate) => candidate.candidateId === group.selectedCandidateId);
   const winnerCopy = winner ? groupCandidateCopy(t, winner) : null;

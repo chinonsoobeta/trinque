@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import { useUiText } from "@/components/useUiText";
 
 export function LikeButton({ dishId, initialLiked = false, initialCount = 0 }: { dishId: string; initialLiked?: boolean; initialCount?: number }) {
   const { authenticated, authHeaders } = useAuth();
+  const t = useUiText();
   const [liked, setLiked] = useState(initialLiked);
   const [count, setCount] = useState(initialCount);
   const [busy, setBusy] = useState(false);
@@ -32,5 +34,5 @@ export function LikeButton({ dishId, initialLiked = false, initialCount = 0 }: {
     finally { setBusy(false); }
   }
 
-  return <button className={liked ? "save saved" : "save"} disabled={busy} onClick={() => void toggle()} aria-label={liked ? "Unlike dish" : "Like dish"}>{liked ? "♥" : "♡"} {count}</button>;
+  return <button className={liked ? "save saved" : "save"} disabled={busy} onClick={() => void toggle()} aria-label={t(liked ? "dish.unlike" : "dish.like")}>{liked ? "♥" : "♡"} {count}</button>;
 }

@@ -3,7 +3,7 @@ import { getDb } from "@/db";
 import { groupCandidates, groupMembers, groups, publishedDishes, restaurants } from "@/db/schema";
 import { distanceBetween } from "@/lib/dish-matching";
 import { groupSnapshot } from "@/lib/group-api";
-import { instantForLocalTime, rankGroupCandidates, type GroupCandidateSource } from "@/lib/group-planning";
+import { DIETARY_REQUIREMENTS, instantForLocalTime, rankGroupCandidates, type DietaryRequirement, type GroupCandidateSource } from "@/lib/group-planning";
 import { requireIdentity } from "@/lib/identity";
 import { normalizeLocation, type NormalizedLocation } from "@/lib/location";
 import { placesApiKey } from "@/lib/places/http";
@@ -25,12 +25,14 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const identity = await requireIdentity(request);
   if (!identity) return Response.json({ error: "Guest session required." }, { status: 401 });
-  const body = await request.json() as { name?: string; eventTime?: string; eventLocalDate?: string; eventLocalTime?: string; budgetMax?: number; maxDistanceKm?: number; vegetarianRequired?: number; allergies?: string[]; location?: NormalizedLocation; language?: SupportedLanguage };
+  const body = await request.json() as { name?: string; eventTime?: string; eventLocalDate?: string; eventLocalTime?: string; budgetMax?: number; maxDistanceKm?: number; maxDistance?: number; distanceUnit?: "metric" | "imperial"; vegetarianRequired?: number; allergies?: string[]; dietaryRequirements?: string[]; cuisineTypes?: string[]; location?: NormalizedLocation; language?: SupportedLanguage };
   if (!body.location || !body.language || !SUPPORTED_LANGUAGES.includes(body.language)) return Response.json({ error: "normalized_group_location_required" }, { status: 400 });
   let location: NormalizedLocation;
   try { location = normalizeLocation({ ...body.location, source: body.location.source ?? "manual" }, body.language); }
   catch (error) { return Response.json({ error: error instanceof Error ? error.message : "invalid_location" }, { status: 400 }); }
-  const constraints = { budgetMax: clamp(Math.round(Number(body.budgetMax) || 35), 10, 500), maxDistanceKm: clamp(Math.round(Number(body.maxDistanceKm) || 4), 1, 80), vegetarianRequired: clamp(Math.round(Number(body.vegetarianRequired) || 0), 0, 20), allergies: (body.allergies ?? []).map((item) => item.trim()).filter(Boolean).slice(0, 10) };
+  const distanceUnit = body.distanceUnit === "imperial" ? "imperial" : "metric";
+  const requestedDistance = Number(body.maxDistance ?? body.maxDistanceKm) || 4;
+  const constraints = { budgetMax: clamp(Math.round(Number(body.budgetMax) || 35), 10, 500), maxDistanceKm: clamp(Math.round(requestedDistance * (distanceUnit === "imperial" ? 1.609344 : 1)), 1, 80), vegetarianRequired: clamp(Math.round(Number(body.vegetarianRequired) || 0), 0, 20), allergies: (body.allergies ?? []).map((item) => item.trim()).filter(Boolean).slice(0, 10), dietaryRequirements: (body.dietaryRequirements ?? []).filter((item): item is DietaryRequirement => DIETARY_REQUIREMENTS.includes(item as DietaryRequirement)).slice(0, DIETARY_REQUIREMENTS.length), cuisineTypes: (body.cuisineTypes ?? []).map((item) => item.trim().toLocaleLowerCase()).filter(Boolean).slice(0, 10) };
   let eventTime: Date;
   try { eventTime = body.eventLocalDate && body.eventLocalTime ? instantForLocalTime(body.eventLocalDate, body.eventLocalTime, location.timeZone) : new Date(body.eventTime ?? Date.now() + 86400000); }
   catch { return Response.json({ error: "Valid event time required." }, { status: 400 }); }
@@ -41,7 +43,7 @@ export async function POST(request: Request) {
     if (dish.latitude == null || dish.longitude == null || dish.provenance === "seed_demo" || dish.verificationStatus === "disputed") return [];
     const distanceKm = distanceBetween(location, { latitude: dish.latitude, longitude: dish.longitude });
     if (distanceKm > constraints.maxDistanceKm * 2) return [];
-    return [{ candidateId: dish.id, name: dish.originalName ?? dish.name, restaurant: restaurant.name, neighborhood: restaurant.locality, distanceKm, priceAmount: dish.priceAmount, currencyCode: dish.currencyCode ?? location.currencyCode, image: dish.imageKey ? `/api/media/${dish.imageKey}` : null, dietaryCaveat: dish.dietary, kind: "published_dish", restaurantId: restaurant.id, providerPlaceId: restaurant.providerPlaceId, provenance: dish.provenance, verificationStatus: dish.verificationStatus, currentAvailabilityConfirmed: dish.availabilityKnowledge === "recently_confirmed" && Boolean(dish.lastConfirmedAt) }];
+    return [{ candidateId: dish.id, name: dish.originalName ?? dish.name, restaurant: restaurant.name, neighborhood: restaurant.locality, distanceKm, priceAmount: dish.priceAmount, currencyCode: dish.currencyCode ?? location.currencyCode, image: dish.imageKey ? `/api/media/${dish.imageKey}` : null, dietaryCaveat: dish.dietary, cuisine: dish.cuisine, kind: "published_dish", restaurantId: restaurant.id, providerPlaceId: restaurant.providerPlaceId, provenance: dish.provenance, verificationStatus: dish.verificationStatus, currentAvailabilityConfirmed: dish.availabilityKnowledge === "recently_confirmed" && Boolean(dish.lastConfirmedAt) }];
   });
   let providerStatus: { status: "live" | "unavailable"; code?: string } = { status: "live" };
   try {
@@ -55,7 +57,7 @@ export async function POST(request: Request) {
   const id = crypto.randomUUID();
   const now = new Date();
   const inviteExpiresAt = new Date(now.getTime() + 7 * 86400000).toISOString();
-  await db.insert(groups).values({ id, ownerId: identity.id, name: body.name?.trim().slice(0, 80) || "Friday supper", eventTime: eventTime.toISOString(), neighborhood: location.locality, ...constraints, allergies: JSON.stringify(constraints.allergies), inviteCode: crypto.randomUUID().replace(/-/g, "").slice(0, 12), inviteExpiresAt, latitude: location.latitude, longitude: location.longitude, locality: location.locality, administrativeRegion: location.administrativeRegion, countryCode: location.countryCode, currencyCode: location.currencyCode as SupportedCurrency, timeZone: location.timeZone, locale: location.locale, displayLanguage: body.language, updatedAt: now.toISOString() });
+  await db.insert(groups).values({ id, ownerId: identity.id, name: body.name?.trim().slice(0, 80) || "Friday supper", eventTime: eventTime.toISOString(), neighborhood: location.locality, ...constraints, distanceUnit, allergies: JSON.stringify(constraints.allergies), dietaryRequirements: JSON.stringify(constraints.dietaryRequirements), cuisineTypes: JSON.stringify(constraints.cuisineTypes), inviteCode: crypto.randomUUID().replace(/-/g, "").slice(0, 12), inviteExpiresAt, latitude: location.latitude, longitude: location.longitude, locality: location.locality, administrativeRegion: location.administrativeRegion, countryCode: location.countryCode, currencyCode: location.currencyCode as SupportedCurrency, timeZone: location.timeZone, locale: location.locale, displayLanguage: body.language, updatedAt: now.toISOString() });
   await db.insert(groupMembers).values({ groupId: id, userId: identity.id, role: "owner", language: body.language });
   for (const candidate of ranked) await db.insert(groupCandidates).values({ groupId: id, candidateId: candidate.candidateId, name: candidate.name, restaurant: candidate.restaurant, neighborhood: candidate.neighborhood, distanceKm: candidate.distanceKm, price: candidate.price, image: candidate.image, score: candidate.score, eligible: candidate.eligible, explanation: candidate.explanation, conflicts: JSON.stringify(candidate.conflicts), kind: candidate.kind, restaurantId: candidate.restaurantId, providerPlaceId: candidate.providerPlaceId, priceAmount: candidate.priceAmount, currencyCode: candidate.currencyCode as SupportedCurrency, provenance: candidate.provenance, verificationStatus: candidate.verificationStatus, currentAvailabilityConfirmed: candidate.currentAvailabilityConfirmed, dietaryCaveat: candidate.dietaryCaveat });
   return Response.json({ group: await groupSnapshot(id, identity.id), providerStatus }, { status: 201 });

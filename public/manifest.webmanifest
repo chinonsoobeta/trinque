@@ -1,0 +1,9 @@
+{
+  "name": "Trinque",
+  "short_name": "Trinque",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fffaf5",
+  "theme_color": "#7a263a",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

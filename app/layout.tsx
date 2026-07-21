@@ -19,10 +19,14 @@ export async function generateMetadata(): Promise<Metadata> {
     description,
     openGraph: { title, description, type: "website", url: baseUrl, siteName: "Trinque", images: [{ url: baseUrl + "/og.png", width: 1732, height: 907, alt: "Trinque — Find dishes with friends" }] },
     twitter: { card: "summary_large_image", title, description, images: [baseUrl + "/og.png"] },
+    manifest: "/manifest.webmanifest",
+    appleWebApp: { capable: true, statusBarStyle: "default", title: "Trinque" },
+    formatDetection: { telephone: false },
   };
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const themeBootstrap = `(function(){try{var p=localStorage.getItem('trinque.theme')||'system';if(!/^(system|light|dark)$/.test(p))p='system';var d=p==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.theme=d;document.documentElement.dataset.themePreference=p}catch(_){}})()`;
-  return <html lang="en-CA" suppressHydrationWarning><head><script dangerouslySetInnerHTML={{ __html: themeBootstrap }} /></head><body><AuthProvider><AppShell>{children}</AppShell></AuthProvider></body></html>;
+  const serviceWorker = `(function(){if('serviceWorker'in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})})()`;
+  return <html lang="en-CA" suppressHydrationWarning><head><meta name="theme-color" content="#7a263a" /><script dangerouslySetInnerHTML={{ __html: themeBootstrap }} /><script dangerouslySetInnerHTML={{ __html: serviceWorker }} /></head><body><AuthProvider><AppShell>{children}</AppShell></AuthProvider></body></html>;
 }

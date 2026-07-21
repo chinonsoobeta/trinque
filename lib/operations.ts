@@ -3,13 +3,14 @@ import { getDb } from "../db/index.ts";
 import { usageCounters } from "../db/schema.ts";
 import { getRuntimeEnv } from "./runtime-env.ts";
 
-export type BudgetAction = "analysis" | "places" | "publish" | "invite_join" | "vote";
+export type BudgetAction = "analysis" | "places" | "publish" | "invite_join" | "vote" | "report";
 const DEFAULT_LIMITS: Record<BudgetAction, { user: number; global: number }> = {
   analysis: { user: 12, global: 500 },
   places: { user: 120, global: 2_000 },
   publish: { user: 20, global: 300 },
   invite_join: { user: 30, global: 800 },
   vote: { user: 120, global: 4_000 },
+  report: { user: 20, global: 500 },
 };
 
 export class UsageBudgetError extends Error {

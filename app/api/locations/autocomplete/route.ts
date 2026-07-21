@@ -1,7 +1,7 @@
 import { placesApiKey } from "@/lib/places/http";
 import { createPlacesProvider } from "@/lib/places/provider";
 import { PlacesProviderError } from "@/lib/places/types";
-import { SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/lib/regions";
+import { supportedCountry, SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/lib/regions";
 import { budgetResponse, enforceUsageBudget, requestIdFor, UsageBudgetError } from "@/lib/operations";
 import { requireIdentity } from "@/lib/identity";
 
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   if (!identity) return Response.json({ error: { code: "session_required", message: "A guest session is required." } }, { status: 401 });
   try { await enforceUsageBudget("places", identity.id); }
   catch (error) { if (error instanceof UsageBudgetError) return budgetResponse(error, requestId); throw error; }
-  let body: { input?: string; providerPlaceId?: string; latitude?: number; longitude?: number; language?: SupportedLanguage; location?: { latitude?: number; longitude?: number } | null };
+  let body: { input?: string; providerPlaceId?: string; latitude?: number; longitude?: number; language?: SupportedLanguage; location?: { latitude?: number; longitude?: number; countryCode?: string } | null };
   try { body = await request.json(); }
   catch { return providerError(new PlacesProviderError("invalid_request", "A JSON request body is required.", 400)); }
   const language = body.language && SUPPORTED_LANGUAGES.includes(body.language) ? body.language : "en-CA";
@@ -30,7 +30,8 @@ export async function POST(request: Request) {
       const location = body.location && typeof body.location.latitude === "number" && typeof body.location.longitude === "number"
         ? { latitude: body.location.latitude, longitude: body.location.longitude }
         : null;
-      return Response.json({ suggestions: await provider.autocomplete(body.input, { language, location }), attribution: "Google Maps" }, { headers });
+      const countryCode = supportedCountry(body.location?.countryCode);
+      return Response.json({ suggestions: await provider.autocomplete(body.input, { language, location, countryCode }), attribution: "Google Maps" }, { headers });
     }
     throw new PlacesProviderError("invalid_request", "Provide search text, a provider place ID, or coordinates.", 400);
   } catch (error) {

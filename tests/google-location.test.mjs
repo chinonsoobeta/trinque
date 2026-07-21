@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { GoogleLocationProvider, googleLocationFieldMasks } from "../lib/places/google-location.ts";
 import { PlacesProviderError } from "../lib/places/types.ts";
-import { SUPPORTED_COUNTRY_CODES } from "../lib/regions.ts";
 
 test("Google autocomplete is country-bounded, field-masked and permits precise address selections", async () => {
   let captured;
@@ -10,14 +9,15 @@ test("Google autocomplete is country-bounded, field-masked and permits precise a
     captured = { url, init };
     return Response.json({ suggestions: [{ placePrediction: { placeId: "ChIJLondon123", text: { text: "London, UK" }, structuredFormat: { mainText: { text: "London" }, secondaryText: { text: "United Kingdom" } } } }] });
   });
-  const suggestions = await provider.autocomplete("Lon", { language: "en-GB", location: { latitude: 51.5, longitude: -0.12 } });
+  const suggestions = await provider.autocomplete("Lon", { language: "en-GB", location: { latitude: 51.5, longitude: -0.12 }, countryCode: "GB" });
   assert.deepEqual(suggestions, [{ id: "google:ChIJLondon123", provider: "google", providerPlaceId: "ChIJLondon123", label: "London", secondaryLabel: "United Kingdom", attribution: "Google Maps" }]);
   assert.equal(captured.url, "https://places.googleapis.com/v1/places:autocomplete");
   assert.equal(captured.init.headers["X-Goog-Api-Key"], "server-secret");
   assert.equal(captured.init.headers["X-Goog-FieldMask"], googleLocationFieldMasks.autocomplete);
   assert.equal(captured.init.cache, "no-store");
   const body = JSON.parse(captured.init.body);
-  assert.deepEqual(body.includedRegionCodes, SUPPORTED_COUNTRY_CODES.map((country) => country.toLowerCase()));
+  assert.deepEqual(body.includedRegionCodes, ["gb"]);
+  assert.ok(body.includedRegionCodes.length <= 15);
   assert.equal(body.includedPrimaryTypes, undefined);
   assert.equal(body.languageCode, "en-GB");
 });

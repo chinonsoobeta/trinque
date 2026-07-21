@@ -15,6 +15,8 @@ export type LocationSuggestion = {
 export type AutocompleteContext = {
   language: SupportedLanguage;
   location?: Pick<NormalizedLocation, "latitude" | "longitude"> | null;
+  /** Google permits at most 15 region codes per autocomplete request. */
+  countryCode?: SupportedCountry | null;
 };
 
 export type RestaurantFilters = {

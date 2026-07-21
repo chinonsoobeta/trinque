@@ -1,5 +1,5 @@
 import { normalizeLocation, type LocationCandidate, type NormalizedLocation } from "../location.ts";
-import { REGIONAL_DEFAULTS, SUPPORTED_COUNTRY_CODES, supportedCountry, type SupportedCountry, type SupportedLanguage } from "../regions.ts";
+import { REGIONAL_DEFAULTS, supportedCountry, type SupportedCountry, type SupportedLanguage } from "../regions.ts";
 import {
   PlacesProviderError,
   type AutocompleteContext,
@@ -73,9 +73,12 @@ export class GooglePlacesProvider implements LocationResolver, PlacesProvider {
     if (query.length < 2 || query.length > 160) throw new PlacesProviderError("invalid_request", "Enter at least two characters.", 400);
     const body: Record<string, unknown> = {
       input: query,
-      includedRegionCodes: SUPPORTED_COUNTRY_CODES.map((country) => country.toLowerCase()),
       languageCode: context.language,
     };
+    // Places Autocomplete accepts no more than 15 regions. A selected location
+    // is the reliable country scope for this search. Place Details still rejects
+    // every country that Trinque does not support when no scope is available.
+    if (context.countryCode) body.includedRegionCodes = [context.countryCode.toLowerCase()];
     if (context.location) {
       body.locationBias = { circle: { center: context.location, radius: 50_000 } };
     }

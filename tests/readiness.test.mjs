@@ -33,9 +33,11 @@ test("readiness exposes missing capabilities without exposing a key", () => {
 });
 
 test("Sites Worker secrets take precedence while local Node env remains supported", () => {
-  assert.equal(selectOpenAIKey(" worker-secret ", "local-secret"), "worker-secret");
-  assert.equal(selectOpenAIKey(undefined, " local-secret "), "local-secret");
-  assert.equal(selectOpenAIKey("", ""), undefined);
+  assert.equal(selectOpenAIKey(" worker-secret-2 ", "worker-secret", "local-secret-2", "local-secret"), "worker-secret-2");
+  assert.equal(selectOpenAIKey(undefined, " worker-secret ", "local-secret-2", "local-secret"), "worker-secret");
+  assert.equal(selectOpenAIKey(undefined, undefined, " local-secret-2 ", "local-secret"), "local-secret-2");
+  assert.equal(selectOpenAIKey(undefined, undefined, undefined, " local-secret "), "local-secret");
+  assert.equal(selectOpenAIKey("", "", "", ""), undefined);
   assert.equal(selectGooglePlacesKey(" canonical-worker ", "legacy-worker", "canonical-node", "legacy-node"), "canonical-worker");
   assert.equal(selectGooglePlacesKey("", " legacy-worker ", "canonical-node", "legacy-node"), "legacy-worker");
   assert.equal(selectGooglePlacesKey(undefined, undefined, " canonical-node ", "legacy-node"), "canonical-node");

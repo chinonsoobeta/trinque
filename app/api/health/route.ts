@@ -7,7 +7,12 @@ export async function GET() {
   try {
     const env = await getRuntimeEnv();
     const capabilities = capabilityStatus({
-      openAIKey: selectOpenAIKey(env.OPENAI_API_KEY, process.env.OPENAI_API_KEY),
+      openAIKey: selectOpenAIKey(
+        env.OPENAI_API_KEY_2,
+        env.OPENAI_API_KEY,
+        process.env.OPENAI_API_KEY_2,
+        process.env.OPENAI_API_KEY,
+      ),
       googlePlacesKey: selectGooglePlacesKey(
         env.GCP_API_KEY,
         env.GOOGLE_PLACES_API_KEY,
@@ -24,7 +29,12 @@ export async function GET() {
     return Response.json({
       ok: false,
       ...capabilityStatus({
-        openAIKey: process.env.OPENAI_API_KEY,
+        openAIKey: selectOpenAIKey(
+          undefined,
+          undefined,
+          process.env.OPENAI_API_KEY_2,
+          process.env.OPENAI_API_KEY,
+        ),
         googlePlacesKey: selectGooglePlacesKey(undefined, undefined, process.env.GCP_API_KEY, process.env.GOOGLE_PLACES_API_KEY),
         hasDatabase: false,
         hasUploads: false,

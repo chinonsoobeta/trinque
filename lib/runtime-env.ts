@@ -1,4 +1,5 @@
 export type TrinqueRuntimeEnv = {
+  OPENAI_API_KEY_2?: string;
   OPENAI_API_KEY?: string;
   GCP_API_KEY?: string;
   TRINQUE_ADMIN_IDENTITY_HASHES?: string;
@@ -30,8 +31,16 @@ export async function getRuntimeEnv(): Promise<TrinqueRuntimeEnv> {
   }
 }
 
-export function selectOpenAIKey(workerKey?: string, nodeKey?: string): string | undefined {
-  const value = workerKey?.trim() || nodeKey?.trim();
+export function selectOpenAIKey(
+  workerKey?: string,
+  workerLegacyKey?: string,
+  nodeKey?: string,
+  nodeLegacyKey?: string,
+): string | undefined {
+  const value = workerKey?.trim()
+    || workerLegacyKey?.trim()
+    || nodeKey?.trim()
+    || nodeLegacyKey?.trim();
   return value || undefined;
 }
 

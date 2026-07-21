@@ -21,7 +21,12 @@ export async function POST(request: Request) {
     if (body.demo) return json(demoEnvelope(requestId, body.demoFixture), 200, headers);
 
     const runtimeEnv = await getRuntimeEnv();
-    const apiKey = selectOpenAIKey(runtimeEnv.OPENAI_API_KEY, process.env.OPENAI_API_KEY);
+    const apiKey = selectOpenAIKey(
+      runtimeEnv.OPENAI_API_KEY_2,
+      runtimeEnv.OPENAI_API_KEY,
+      process.env.OPENAI_API_KEY_2,
+      process.env.OPENAI_API_KEY,
+    );
     if (!apiKey) {
       return json(failure(requestId, "live_not_configured", "Live identification is not configured yet. You can still choose the clearly labeled demo."), 503, headers);
     }

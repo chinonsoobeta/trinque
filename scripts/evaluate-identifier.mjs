@@ -12,7 +12,8 @@ if (!process.argv.includes("--run")) {
   process.exit(0);
 }
 
-if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is required for a measured run and must remain server-side.");
+const openAIKey = process.env.OPENAI_API_KEY_2?.trim() || process.env.OPENAI_API_KEY?.trim();
+if (!openAIKey) throw new Error("OPENAI_API_KEY_2 is required for a measured run and must remain server-side.");
 if (fixtures.length === 0) throw new Error("No approved fixture image paths are configured; results remain unmeasured.");
 
 const results = [];
@@ -22,7 +23,7 @@ for (const fixture of fixtures) {
   const bytes = await readFile(path);
   const mime = mimeFor(path);
   const started = performance.now();
-  const response = await analyzeDishWithOpenAI({ imageDataUrl: `data:${mime};base64,${bytes.toString("base64")}`, apiKey: process.env.OPENAI_API_KEY, requestId: crypto.randomUUID(), language: fixture.language });
+  const response = await analyzeDishWithOpenAI({ imageDataUrl: `data:${mime};base64,${bytes.toString("base64")}`, apiKey: openAIKey, requestId: crypto.randomUUID(), language: fixture.language });
   const latencyMs = Math.round(performance.now() - started);
   results.push(scoreFixture(fixture, response, latencyMs));
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { coarseLocation, normalizeLocation, type NormalizedLocation } from "@/lib/location";
 import type { LocationSuggestion, RestaurantPlace } from "@/lib/places/types";
@@ -513,7 +515,7 @@ function MatchTier({ title, results, t, language, measurementSystem, onFeedback 
     const verification = match.verificationStatus === "not_applicable" ? t("match.notApplicable") : t(`verification.${match.verificationStatus}` as MessageKey);
     const reason = t(match.reasonCode === "restaurant_only" ? "match.restaurantReason" : match.reasonCode === "semantic_and_distance" ? "match.semanticReason" : "match.nearbyReason");
     const price = match.priceAmount != null && match.currencyCode ? new Intl.NumberFormat(language, { style: "currency", currency: match.currencyCode }).format(match.priceAmount) : null;
-    return <article key={match.id}>{match.imageUrl ? <img src={match.imageUrl} alt="" /> : <div className="match-placeholder">T</div>}<div><b>{match.dishName ?? match.restaurantName}</b><small>{match.dishName ? `${match.restaurantName} · ` : ""}{distance} · {match.score}%{price ? ` · ${price}` : ""}</small><p>{reason}</p><small>{provenance} · {verification}</small><small>{match.lastConfirmedAt ? t("match.lastConfirmed", { date: new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(new Date(match.lastConfirmedAt)) }) : t("match.neverConfirmed")}</small><small>{match.currentAvailabilityConfirmed ? t("availability.confirmed") : t("availability.unknown")}</small><p className="dietary-caveat">{match.dietaryCaveat}</p>{match.attribution && <small translate="no">Google Maps</small>}<button className="text-button" onClick={() => onFeedback(match.kind === "dish" ? "stale_dish" : "closed_restaurant", match.kind === "dish" ? "published_dish" : "restaurant", match.id)}>{t(match.kind === "dish" ? "feedback.staleDish" : "feedback.closedRestaurant")}</button></div></article>;
+    return <article key={match.id}>{match.imageUrl ? <Image src={match.imageUrl} alt="" width={640} height={480} sizes="(max-width: 768px) 100vw, 320px" unoptimized /> : <div className="match-placeholder">T</div>}<div><b>{match.dishName ?? match.restaurantName}</b><small>{match.dishName ? `${match.restaurantName} · ` : ""}{distance} · {match.score}%{price ? ` · ${price}` : ""}</small><p>{reason}</p><small>{provenance} · {verification}</small><small>{match.lastConfirmedAt ? t("match.lastConfirmed", { date: new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(new Date(match.lastConfirmedAt)) }) : t("match.neverConfirmed")}</small><small>{match.currentAvailabilityConfirmed ? t("availability.confirmed") : t("availability.unknown")}</small><p className="dietary-caveat">{match.dietaryCaveat}</p>{match.attribution && <small translate="no">Google Maps</small>}<button className="text-button" onClick={() => onFeedback(match.kind === "dish" ? "stale_dish" : "closed_restaurant", match.kind === "dish" ? "published_dish" : "restaurant", match.id)}>{t(match.kind === "dish" ? "feedback.staleDish" : "feedback.closedRestaurant")}</button></div></article>;
   })}</div>}</section>;
 }
 

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { ReactNode } from "react";
 
 export function PageContainer({ children, className = "" }: { children: ReactNode; className?: string }) {
@@ -6,7 +7,7 @@ export function PageContainer({ children, className = "" }: { children: ReactNod
 
 export function AppAvatar({ name, src, size = "medium" }: { name: string; src?: string | null; size?: "small" | "medium" | "large" }) {
   const initials = name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "T";
-  return <span className={`app-avatar app-avatar-${size}`} aria-hidden="true">{src ? <img src={src} alt="" /> : initials}</span>;
+  return <span className={`app-avatar app-avatar-${size}`} aria-hidden="true">{src ? <Image src={src} alt="" width={96} height={96} sizes="96px" unoptimized /> : initials}</span>;
 }
 
 export function EmptyState({ eyebrow, title, body, action }: { eyebrow?: string; title: string; body: string; action?: ReactNode }) {

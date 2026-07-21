@@ -11,7 +11,7 @@ import {
   Alert,
   Appearance,
   DynamicColorIOS,
-  Image,
+  Image as NativeImage,
   ImageSourcePropType,
   KeyboardAvoidingView,
   Linking,
@@ -505,7 +505,7 @@ function DiscoverScreen({ onAnalyze, t, location, feed }: { onAnalyze: () => voi
 }
 
 function CommunityDishCard({ dish, t }: { dish: CommunityDish; t: Translator }) {
-  return <View style={styles.communityDish}><View style={styles.communityDishCopy}><Text style={styles.communityDishName}>{dish.name}</Text><Text style={styles.communityDishDescription}>{dish.description}</Text><Text style={styles.communityDishMeta}>{dish.restaurant?.name ?? t('analysis.review')} · {dish.contributorLabel}</Text><Text style={styles.communityDishMeta}>{t(`provenance.${dish.provenance ?? 'ai_identified'}` as MessageKey)} · {t(`verification.${dish.verificationStatus ?? 'unverified'}` as MessageKey)} · {t(dish.availabilityKnowledge === 'recently_confirmed' ? 'availability.confirmed' : 'availability.unknown')}</Text></View>{dish.imageUrl ? <Image source={{ uri: dish.imageUrl }} style={styles.communityDishImage} /> : <View style={[styles.communityDishImage, styles.mobileMatchPlaceholder]}><Text style={styles.mobileMatchPlaceholderText}>T</Text></View>}</View>;
+  return <View style={styles.communityDish}><View style={styles.communityDishCopy}><Text style={styles.communityDishName}>{dish.name}</Text><Text style={styles.communityDishDescription}>{dish.description}</Text><Text style={styles.communityDishMeta}>{dish.restaurant?.name ?? t('analysis.review')} · {dish.contributorLabel}</Text><Text style={styles.communityDishMeta}>{t(`provenance.${dish.provenance ?? 'ai_identified'}` as MessageKey)} · {t(`verification.${dish.verificationStatus ?? 'unverified'}` as MessageKey)} · {t(dish.availabilityKnowledge === 'recently_confirmed' ? 'availability.confirmed' : 'availability.unknown')}</Text></View>{dish.imageUrl ? <NativeImage source={{ uri: dish.imageUrl }} style={styles.communityDishImage} /> : <View style={[styles.communityDishImage, styles.mobileMatchPlaceholder]}><Text style={styles.mobileMatchPlaceholderText}>T</Text></View>}</View>;
 }
 
 function GroupsScreen({ guestToken, t, location, language, inviteCode, inviteHandled, track }: { guestToken: string | null; t: Translator; location: MobileLocation | null; language: UiLanguage; inviteCode: string | null; inviteHandled: () => void; track: (event: AnalyticsEvent, details?: { mode?: 'live' | 'demo'; outcome?: string; durationMs?: number }) => void }) {
@@ -604,7 +604,7 @@ function GroupsScreen({ guestToken, t, location, language, inviteCode, inviteHan
       <SectionHeading kicker={t('group.ranking').toUpperCase()} title={group ? t('group.bestFits') : t('group.start')} action="" />
       {!group ? <View style={styles.emptyCard}><Text style={styles.emptyIcon}>♢</Text><Text style={styles.emptyTitle}>{t('group.start')}</Text><Text style={styles.emptyBody}>{t('group.createBody')}</Text><Pressable disabled={busy || !location} style={styles.primaryButton} onPress={createGroup}><Text style={styles.primaryButtonText}>{busy ? t('group.building') : t('group.rank')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable></View> : candidates.length === 0 ? <View style={styles.emptyCard}><Text style={styles.emptyTitle}>{t('group.noLiveCandidates')}</Text></View> : candidates.map((candidate) => (
         <View key={candidate.candidateId} style={[styles.voteCard, !candidate.eligible && styles.ineligibleCard]}>
-          {candidate.image ? <Image source={{ uri: candidate.image }} style={styles.voteImage} /> : <View style={styles.voteImage} />}
+          {candidate.image ? <NativeImage source={{ uri: candidate.image }} style={styles.voteImage} /> : <View style={styles.voteImage} />}
           <View style={styles.voteInfo}>
             <View style={styles.voteMeta}><Text style={styles.fitBadge}>{candidate.eligible ? t('group.groupFit', { score: candidate.score }) : t('group.hardConflict')}</Text><Text style={styles.votePrice}>{candidate.price}</Text></View>
             <Text style={styles.voteName}>{candidate.name}</Text>
@@ -630,7 +630,7 @@ function SavedScreen({ dishes: saved, onSave, onDiscover, t }: { dishes: Dish[];
       </View>
       {saved.length ? saved.map((dish) => (
         <View key={dish.id} style={styles.savedCard}>
-          <Image source={{ uri: dish.image }} style={styles.savedImage} />
+          <NativeImage source={{ uri: dish.image }} style={styles.savedImage} />
           <View style={styles.savedInfo}><Text style={styles.savedName}>{dish.name}</Text><Text style={styles.savedRestaurant}>{dish.restaurant} · {dish.neighborhood}</Text><Text style={styles.savedNote}>{dish.note}</Text></View>
           <Pressable style={styles.savedHeart} onPress={() => onSave(dish.id)}><Text style={styles.savedHeartText}>♥</Text></Pressable>
         </View>
@@ -753,7 +753,7 @@ function SectionHeading({ kicker, title, action }: { kicker: string; title: stri
 function DishCard({ dish, saved, onSave }: { dish: Dish; saved: boolean; onSave: () => void }) {
   return (
     <View style={styles.dishCard}>
-      <View><Image source={{ uri: dish.image } as ImageSourcePropType} style={styles.dishImage} /><Text style={styles.matchBadge}>{dish.match}%</Text><Pressable style={styles.heartButton} onPress={onSave}><Text style={[styles.heartText, saved && styles.heartTextSaved]}>{saved ? '♥' : '♡'}</Text></Pressable></View>
+      <View><NativeImage source={{ uri: dish.image } as ImageSourcePropType} style={styles.dishImage} /><Text style={styles.matchBadge}>{dish.match}%</Text><Pressable style={styles.heartButton} onPress={onSave}><Text style={[styles.heartText, saved && styles.heartTextSaved]}>{saved ? '♥' : '♡'}</Text></Pressable></View>
       <View style={styles.dishBody}>
         <View style={styles.dishTitleLine}><Text style={styles.dishName}>{dish.name}</Text><Text style={styles.dishPrice}>{dish.price}</Text></View>
         <Text style={styles.dishRestaurant}>{dish.restaurant} · {dish.neighborhood}</Text><Text style={styles.dishNote}>{dish.note}</Text>
@@ -868,7 +868,7 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
             </View>
           )}
           {phase === 'analyzing' && (
-            <View style={styles.analyzingPanel}>{preview ? <Image source={{ uri: preview }} style={styles.analysisPreview} /> : <View style={[styles.analysisPreview, styles.demoPreview]}><Text style={styles.demoPreviewText}>T</Text></View>}<View style={styles.analysisScrim}><ActivityIndicator color={palette.cream} size="large" /><Text style={styles.analyzingTitle}>{t('analysis.loadingKicker')}</Text><Text style={styles.analyzingBody}>{t('analysis.loadingTitle')}</Text></View></View>
+            <View style={styles.analyzingPanel}>{preview ? <NativeImage source={{ uri: preview }} style={styles.analysisPreview} /> : <View style={[styles.analysisPreview, styles.demoPreview]}><Text style={styles.demoPreviewText}>T</Text></View>}<View style={styles.analysisScrim}><ActivityIndicator color={palette.cream} size="large" /><Text style={styles.analyzingTitle}>{t('analysis.loadingKicker')}</Text><Text style={styles.analyzingBody}>{t('analysis.loadingTitle')}</Text></View></View>
           )}
           {phase === 'error' && (
             <View style={styles.publishedPanel}>
@@ -882,7 +882,7 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
           )}
           {phase === 'review' && (
             <ScrollView style={styles.reviewScroll} contentContainerStyle={styles.reviewContent} keyboardShouldPersistTaps="handled">
-              {preview ? <Image source={{ uri: preview }} style={styles.reviewImage} /> : null}
+              {preview ? <NativeImage source={{ uri: preview }} style={styles.reviewImage} /> : null}
               <View style={[styles.modeBadge, analysisMode === 'demo' && styles.modeBadgeDemo]}><Text style={[styles.modeBadgeText, analysisMode === 'demo' && styles.modeBadgeTextDemo]}>{analysisMode === 'live' ? `● ${t('analysis.live').toUpperCase()}` : `◇ ${t('analysis.demo').toUpperCase()}`}</Text></View>
               <Text style={styles.modalKicker}>{t('analysis.review').toUpperCase()}</Text>
               <View style={styles.confidenceLine}><Text style={styles.reviewTitle}>{t('analysis.reviewTitle')}</Text><Text style={styles.confidenceBadge}>{t('analysis.confident', { confidence: analysis.confidence })}</Text></View>
@@ -938,7 +938,7 @@ function MobileMatchTier({ title, results, t, language, measurementSystem, onFee
     const verification = match.verificationStatus === 'not_applicable' ? t('match.notApplicable') : t(`verification.${match.verificationStatus}` as MessageKey);
     const reason = t(match.reasonCode === 'restaurant_only' ? 'match.restaurantReason' : match.reasonCode === 'semantic_and_distance' ? 'match.semanticReason' : 'match.nearbyReason');
     const price = match.priceAmount != null && match.currencyCode ? new Intl.NumberFormat(language, { style: 'currency', currency: match.currencyCode }).format(match.priceAmount) : null;
-    return <View key={match.id} style={styles.mobileMatch}>{match.imageUrl ? <Image source={{ uri: match.imageUrl }} style={styles.mobileMatchImage} /> : <View style={[styles.mobileMatchImage, styles.mobileMatchPlaceholder]}><Text style={styles.mobileMatchPlaceholderText}>T</Text></View>}<View style={styles.mobileMatchCopy}><View style={styles.mobileMatchTitle}><Text style={styles.mobileMatchName}>{match.dishName ?? match.restaurantName}</Text><Text style={styles.mobileMatchScore}>{match.score}%</Text></View><Text style={styles.mobileMatchPlace}>{match.dishName ? `${match.restaurantName} · ` : ''}{distance}{price ? ` · ${price}` : ''}</Text><Text style={styles.mobileMatchReason}>{reason}</Text><Text style={styles.mobileMatchMeta}>{provenance} · {verification}</Text><Text style={styles.mobileMatchMeta}>{match.lastConfirmedAt ? t('match.lastConfirmed', { date: new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(match.lastConfirmedAt)) }) : t('match.neverConfirmed')}</Text><Text style={styles.mobileMatchMeta}>{match.currentAvailabilityConfirmed ? t('availability.confirmed') : t('availability.unknown')}</Text><Text style={styles.mobileMatchCaveat}>{match.dietaryCaveat}</Text>{match.attribution ? <Text style={styles.googleAttribution}>Google Maps</Text> : null}<Pressable onPress={() => onFeedback(match.kind === 'dish' ? 'stale_dish' : 'closed_restaurant', match.kind === 'dish' ? 'published_dish' : 'restaurant', match.id)}><Text style={styles.demoLink}>{t(match.kind === 'dish' ? 'feedback.staleDish' : 'feedback.closedRestaurant')}</Text></Pressable></View></View>;
+    return <View key={match.id} style={styles.mobileMatch}>{match.imageUrl ? <NativeImage source={{ uri: match.imageUrl }} style={styles.mobileMatchImage} /> : <View style={[styles.mobileMatchImage, styles.mobileMatchPlaceholder]}><Text style={styles.mobileMatchPlaceholderText}>T</Text></View>}<View style={styles.mobileMatchCopy}><View style={styles.mobileMatchTitle}><Text style={styles.mobileMatchName}>{match.dishName ?? match.restaurantName}</Text><Text style={styles.mobileMatchScore}>{match.score}%</Text></View><Text style={styles.mobileMatchPlace}>{match.dishName ? `${match.restaurantName} · ` : ''}{distance}{price ? ` · ${price}` : ''}</Text><Text style={styles.mobileMatchReason}>{reason}</Text><Text style={styles.mobileMatchMeta}>{provenance} · {verification}</Text><Text style={styles.mobileMatchMeta}>{match.lastConfirmedAt ? t('match.lastConfirmed', { date: new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(match.lastConfirmedAt)) }) : t('match.neverConfirmed')}</Text><Text style={styles.mobileMatchMeta}>{match.currentAvailabilityConfirmed ? t('availability.confirmed') : t('availability.unknown')}</Text><Text style={styles.mobileMatchCaveat}>{match.dietaryCaveat}</Text>{match.attribution ? <Text style={styles.googleAttribution}>Google Maps</Text> : null}<Pressable onPress={() => onFeedback(match.kind === 'dish' ? 'stale_dish' : 'closed_restaurant', match.kind === 'dish' ? 'published_dish' : 'restaurant', match.id)}><Text style={styles.demoLink}>{t(match.kind === 'dish' ? 'feedback.staleDish' : 'feedback.closedRestaurant')}</Text></Pressable></View></View>;
   })}</View>;
 }
 

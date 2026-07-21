@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { AppAvatar } from "@/components/AppPrimitives";
 import { LikeButton } from "@/components/LikeButton";
@@ -23,7 +24,7 @@ export function SocialDishCard({ dish, engagementLabel }: { dish: SocialDish; en
   const contributor = dish.contributorName ?? (dish.contributorHandle ? `@${dish.contributorHandle}` : "Trinque community");
   return <article className="social-dish-card">
     <Link className={`social-dish-media${dish.imageUrl ? "" : " is-empty"}`} href={`/dishes/${dish.id}`} aria-label={`Open ${dish.name}`}>
-      {dish.imageUrl ? <img src={dish.imageUrl} alt={dish.name} /> : <span aria-hidden="true">Dish photo not retained</span>}
+      {dish.imageUrl ? <Image src={dish.imageUrl} alt={dish.name} width={960} height={720} sizes="(max-width: 768px) 100vw, 50vw" unoptimized /> : <span aria-hidden="true">Dish photo not retained</span>}
       <div className="social-dish-overlay"><span>{dish.restaurantName ?? "Community dish"}</span>{dish.locality && <small>{dish.locality}</small>}</div>
     </Link>
     <div className="social-dish-content">

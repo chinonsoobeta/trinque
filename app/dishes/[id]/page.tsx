@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { and, count, desc, eq, ne } from "drizzle-orm";
 import { getDb } from "@/db";
 import { comments, likes, profiles, publishedDishes, restaurants } from "@/db/schema";
@@ -23,7 +24,7 @@ export default async function DishDetailPage({ params }: { params: Promise<{ id:
   const price = dish.priceAmount != null && dish.currencyCode ? new Intl.NumberFormat("en-CA", { style: "currency", currency: dish.currencyCode }).format(dish.priceAmount) : null;
   return <PageContainer className="dish-detail-page">
     <article className="dish-detail-article">
-      <div className={`dish-detail-image${dish.imageKey ? "" : " is-empty"}`}>{dish.imageKey ? <img src={`/api/media/${dish.imageKey}`} alt={dish.name} /> : <div><span aria-hidden="true">✦</span><p>The contributor chose not to retain this photo.</p></div>}</div>
+      <div className={`dish-detail-image${dish.imageKey ? "" : " is-empty"}`}>{dish.imageKey ? <Image src={`/api/media/${dish.imageKey}`} alt={dish.name} width={1200} height={900} sizes="(max-width: 768px) 100vw, 50vw" /> : <div><span aria-hidden="true">✦</span><p>The contributor chose not to retain this photo.</p></div>}</div>
       <div className="dish-detail-main">
         <span className="kicker">{dish.cuisine}</span><h1>{dish.name}</h1>
         <p className="dish-restaurant">{dish.restaurantName ?? "Restaurant not attached"}{dish.restaurantLocality ? <span> · {dish.restaurantLocality}</span> : null}</p>
@@ -35,6 +36,6 @@ export default async function DishDetailPage({ params }: { params: Promise<{ id:
       </div>
     </article>
     <section id="comments" className="dish-comments-block"><div className="section-heading"><div><span className="kicker">Around the table</span><h2>Comments</h2></div></div><CommentSection dishId={id} /></section>
-    {related.length > 0 && <section className="related-dishes"><div className="section-heading"><div><span className="kicker">Keep exploring</span><h2>Related dishes</h2></div></div><div className="related-dish-grid">{related.map((item) => <a className="related-dish-card" href={`/dishes/${item.id}`} key={item.id}>{item.imageKey ? <img src={`/api/media/${item.imageKey}`} alt="" /> : <div className="related-placeholder" aria-hidden="true">✦</div>}<div><h3>{item.name}</h3><p>{item.description}</p></div></a>)}</div></section>}
+    {related.length > 0 && <section className="related-dishes"><div className="section-heading"><div><span className="kicker">Keep exploring</span><h2>Related dishes</h2></div></div><div className="related-dish-grid">{related.map((item) => <a className="related-dish-card" href={`/dishes/${item.id}`} key={item.id}>{item.imageKey ? <Image src={`/api/media/${item.imageKey}`} alt="" width={480} height={360} sizes="(max-width: 768px) 100vw, 33vw" /> : <div className="related-placeholder" aria-hidden="true">✦</div>}<div><h3>{item.name}</h3><p>{item.description}</p></div></a>)}</div></section>}
   </PageContainer>;
 }

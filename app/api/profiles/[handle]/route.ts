@@ -24,7 +24,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ hand
     db.select({ count: count() }).from(follows).where(eq(follows.followingId, profile.userId)),
     db.select({ count: count() }).from(follows).where(eq(follows.followerId, profile.userId)),
     db.select({ count: count() }).from(publishedDishes).where(eq(publishedDishes.ownerId, profile.userId)),
-    db.select({ id: publishedDishes.id, name: publishedDishes.name, cuisine: publishedDishes.cuisine, description: publishedDishes.description, confidence: publishedDishes.confidence, createdAt: publishedDishes.createdAt }).from(publishedDishes).where(eq(publishedDishes.ownerId, profile.userId)).orderBy(desc(publishedDishes.createdAt)).limit(24),
+    db.select({ id: publishedDishes.id, name: publishedDishes.name, cuisine: publishedDishes.cuisine, description: publishedDishes.description, confidence: publishedDishes.confidence, createdAt: publishedDishes.createdAt, imageKey: publishedDishes.imageKey }).from(publishedDishes).where(eq(publishedDishes.ownerId, profile.userId)).orderBy(desc(publishedDishes.createdAt)).limit(24),
     getOptionalIdentity(request),
   ]);
   let viewerFollowing = false;
@@ -32,7 +32,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ hand
     const [row] = await db.select({ followerId: follows.followerId }).from(follows).where(and(eq(follows.followerId, viewer.id), eq(follows.followingId, profile.userId))).limit(1);
     viewerFollowing = Boolean(row);
   }
-  return Response.json({ profile, counts: { followers: followers?.count ?? 0, following: following?.count ?? 0, dishes: dishCount?.count ?? 0 }, dishes, viewerFollowing, viewerIsOwner: Boolean(viewer && viewer.authType !== "guest" && viewer.id === profile.userId) }, { headers: { "Cache-Control": "no-store" } });
+  const visibleDishes = dishes.map(({ imageKey, ...dish }) => ({ ...dish, imageUrl: imageKey ? `/api/media/${imageKey}` : null }));
+  return Response.json({ profile, counts: { followers: followers?.count ?? 0, following: following?.count ?? 0, dishes: dishCount?.count ?? 0 }, dishes: visibleDishes, viewerFollowing, viewerIsOwner: Boolean(viewer && viewer.authType !== "guest" && viewer.id === profile.userId) }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ handle: string }> }) {

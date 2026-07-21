@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import { LikeButton } from "@/components/LikeButton";
+import { SocialDishCard, type SocialDish } from "@/components/SocialDishCard";
 
 type FeedType = "following" | "trending";
-type Dish = { id: string; name: string; cuisine: string; description: string; confidence: number; createdAt: string; contributorName?: string | null; contributorHandle?: string | null; likes24h?: number; comments24h?: number };
+type Dish = SocialDish;
 
 export function Feed({ type }: { type: FeedType }) {
   const { authenticated, authHeaders } = useAuth();
@@ -91,5 +91,5 @@ export function Feed({ type }: { type: FeedType }) {
 
   if (type === "following" && !authenticated) return <div className="empty-state"><h3>Sign in for your following feed</h3><p>Trending discovery stays public.</p><a className="primary" href="/auth/login?next=/explore">Sign in</a></div>;
   if (initialLoading) return <section className="feed"><p>Loading…</p></section>;
-  return <section className="feed">{dishes.length === 0 && !error && <div className="empty-state"><h3>{type === "following" ? "Your following feed is empty" : "No trending dishes yet"}</h3><p>{type === "following" ? "Follow a few contributors to personalize this feed." : "New engagement will surface dishes here."}</p></div>}{dishes.map((dish) => <article className="dish-card" key={dish.id}><div className="dish-body"><div className="dish-title"><div><h3>{dish.name}</h3><p>{dish.description}</p></div><LikeButton dishId={dish.id} /></div><div className="dish-meta"><span>{dish.cuisine}</span>{dish.contributorHandle && <a href={`/profiles/${dish.contributorHandle}`}>@{dish.contributorHandle}</a>}</div>{type === "trending" && <small>{dish.likes24h ?? 0} likes · {dish.comments24h ?? 0} comments in 24h</small>}</div></article>)}{error && <div role="alert"><p>{error}</p><button onClick={() => void loadMore()}>Try again</button></div>}{loadingMore && <p>Loading…</p>}<div ref={sentinel} aria-hidden="true" /></section>;
+  return <section className="feed">{dishes.length === 0 && !error && <div className="empty-state"><span className="empty-kicker">A fresh table</span><h3>{type === "following" ? "Your following feed is ready for company" : "No dishes are trending yet"}</h3><p>{type === "following" ? "Follow contributors whose taste you trust, then their newest finds will gather here." : "Be the first to share a dish the community should know about."}</p><a className="secondary" href={type === "following" ? "/explore" : "/?create=1"}>{type === "following" ? "Discover people" : "Share a dish"}</a></div>}{dishes.map((dish) => <SocialDishCard dish={dish} trending={type === "trending"} key={dish.id} />)}{error && <div className="feed-error" role="alert"><p>{error}</p><button className="secondary" onClick={() => void loadMore()}>Try again</button></div>}{loadingMore && <p className="feed-status">Loading more dishes…</p>}<div ref={sentinel} aria-hidden="true" /></section>;
 }

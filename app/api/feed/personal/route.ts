@@ -1,6 +1,6 @@
 import { and, desc, eq, lt, or } from "drizzle-orm";
 import { getDb } from "@/db";
-import { follows, profiles, publishedDishes } from "@/db/schema";
+import { follows, profiles, publishedDishes, restaurants } from "@/db/schema";
 import { AuthenticationError, requireAuthenticatedIdentity } from "@/lib/auth";
 
 export const runtime = "edge";
@@ -22,18 +22,23 @@ export async function GET(request: Request) {
       confidence: publishedDishes.confidence,
       createdAt: publishedDishes.createdAt,
       ownerId: publishedDishes.ownerId,
+      imageKey: publishedDishes.imageKey,
+      restaurantName: restaurants.name,
+      restaurantLocality: restaurants.locality,
       contributorName: profiles.displayName,
       contributorHandle: profiles.handle,
       contributorAvatarUrl: profiles.avatarUrl,
     }).from(publishedDishes)
       .innerJoin(follows, and(eq(follows.followingId, publishedDishes.ownerId), eq(follows.followerId, identity.id)))
       .leftJoin(profiles, eq(profiles.userId, publishedDishes.ownerId))
+      .leftJoin(restaurants, eq(restaurants.id, publishedDishes.restaurantId))
       .where(cursor ? or(lt(publishedDishes.createdAt, cursor.createdAt), and(eq(publishedDishes.createdAt, cursor.createdAt), lt(publishedDishes.id, cursor.id))) : undefined)
       .orderBy(desc(publishedDishes.createdAt), desc(publishedDishes.id))
       .limit(limit + 1);
     const hasMore = rows.length > limit;
-    const dishes = hasMore ? rows.slice(0, limit) : rows;
-    const last = dishes.at(-1);
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const last = page.at(-1);
+    const dishes = page.map(({ imageKey, ...dish }) => ({ ...dish, imageUrl: imageKey ? `/api/media/${imageKey}` : null }));
     return Response.json({ dishes, nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null });
   } catch (error) {
     const status = error instanceof AuthenticationError ? error.status : 503;

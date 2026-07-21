@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Bell } from "lucide-react";
 import { NotificationList } from "@/components/NotificationList";
 import { useAuth } from "@/components/AuthProvider";
 

@@ -1,6 +1,6 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
-import { profiles, publishedDishes } from "@/db/schema";
+import { profiles, publishedDishes, restaurants } from "@/db/schema";
 
 export const runtime = "edge";
 const DEFAULT_LIMIT = 20;
@@ -31,6 +31,9 @@ export async function GET(request: Request) {
     confidence: publishedDishes.confidence,
     createdAt: publishedDishes.createdAt,
     ownerId: publishedDishes.ownerId,
+    imageKey: publishedDishes.imageKey,
+    restaurantName: restaurants.name,
+    restaurantLocality: restaurants.locality,
     contributorName: profiles.displayName,
     contributorHandle: profiles.handle,
     contributorAvatarUrl: profiles.avatarUrl,
@@ -39,11 +42,13 @@ export async function GET(request: Request) {
     score,
   }).from(publishedDishes)
     .leftJoin(profiles, eq(profiles.userId, publishedDishes.ownerId))
+    .leftJoin(restaurants, eq(restaurants.id, publishedDishes.restaurantId))
     .orderBy(sql`${score} DESC`, desc(publishedDishes.createdAt), desc(publishedDishes.id))
     .limit(limit + 1)
     .offset(offset);
   const hasMore = rows.length > limit;
-  return Response.json({ dishes: hasMore ? rows.slice(0, limit) : rows, nextOffset: hasMore ? offset + limit : null }, { headers: { "Cache-Control": "public, max-age=30" } });
+  const dishes = (hasMore ? rows.slice(0, limit) : rows).map(({ imageKey, ...dish }) => ({ ...dish, imageUrl: imageKey ? `/api/media/${imageKey}` : null }));
+  return Response.json({ dishes, nextOffset: hasMore ? offset + limit : null }, { headers: { "Cache-Control": "public, max-age=30" } });
 }
 
 function clampLimit(raw: string | null) { const value = Number(raw ?? DEFAULT_LIMIT); return Number.isInteger(value) ? Math.max(1, Math.min(MAX_LIMIT, value)) : DEFAULT_LIMIT; }

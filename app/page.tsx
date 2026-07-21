@@ -62,7 +62,7 @@ const emptyMatchTiers: MatchTiers = { confirmedNearbyDishes: [], communityOrInfe
 export default function Home() {
   const [view, setView] = useState<"discover" | "groups" | "saved">("discover");
   const [filter, setFilter] = useState("For you");
-  const [saved, setSaved] = useState<Set<number>>(new Set([2]));
+  const [saved, setSaved] = useState<Set<number>>(new Set());
   const [modal, setModal] = useState(false);
   const [phase, setPhase] = useState<"idle" | "loading" | "review" | "error" | "published">("idle");
   const [preview, setPreview] = useState(dishes[0].image);
@@ -110,7 +110,11 @@ export default function Home() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      if (new URLSearchParams(window.location.search).has("join")) setView("groups");
+      const params = new URLSearchParams(window.location.search);
+      const requestedView = params.get("view");
+      if (params.has("join") || requestedView === "groups") setView("groups");
+      if (requestedView === "saved") setView("saved");
+      if (params.has("create")) fileRef.current?.click();
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);

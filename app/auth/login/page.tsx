@@ -16,8 +16,5 @@ function LoginContent() {
 
 function LoginShell({ mode }: { mode: AuthMode }) {
   const [open, setOpen] = useState(true);
-  return <main style={{ minHeight: "70vh", display: "grid", placeItems: "center", padding: "2rem" }}>
-    <div><h1>Sign in to Trinque</h1><p>Browsing stays public. An account is required for saves, publishing, groups, and social actions.</p>{!open && <button className="primary" onClick={() => setOpen(true)}>Open sign in</button>}</div>
-    <AuthModal key={mode} open={open} initialMode={mode} onClose={() => setOpen(false)} />
-  </main>;
+  return <main className="login-page"><section className="login-story"><span className="kicker">Your table is waiting</span><h1>Good food finds good company.</h1><p>Save memorable dishes, follow people whose taste you trust, and make the next dinner plan together.</p><ul><li>A personal library of real finds</li><li>Community notes, not anonymous ratings</li><li>Group plans that respect everyone at the table</li></ul>{!open && <button className="primary" onClick={() => setOpen(true)}>Continue to sign in</button>}</section><AuthModal key={mode} open={open} initialMode={mode} onClose={() => setOpen(false)} /></main>;
 }

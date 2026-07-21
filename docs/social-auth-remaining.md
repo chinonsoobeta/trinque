@@ -27,15 +27,14 @@ This patch establishes the D1 session model, browser auth provider, public profi
 
 ## iOS compatibility migration
 
-The legacy `/api/session` route temporarily returns `guestToken` as an alias of the new app session token for authenticated Supabase users. The server stores that value only in `sessions.token_hash`, not `users.guest_token_hash`.
+The native app now completes the compatibility migration. It signs in through the public Supabase setup, exchanges the Supabase access token at `/api/auth/session`, stores `sessionToken`, restores it at launch, and sends `Authorization: Session <token>` for signed-in privacy and safety calls. It requires onboarding before social writes and treats the anonymous token only as a browsing session.
 
-Migrate iOS in a follow-up release to:
+Before removing the compatibility alias, verify on a physical device that:
 
-1. Store the authenticated token as `sessionToken`.
-2. Send `Authorization: Session <token>` for authenticated API calls.
-3. Stop creating a guest database user merely to browse public feeds.
-4. Treat `401` from saves/publish/groups/social mutations as an authentication prompt.
-5. Continue allowing anonymous public feed/profile/comment reads.
+1. Account creation, email confirmation, sign-in, onboarding, sign-out, and session restore work.
+2. Saves, publishing, groups, privacy, and safety calls use the signed-in session.
+3. Anonymous users can still read public feeds without creating social data.
+4. A failed or expired session shows a sign-in prompt and does not fall back to a guest write.
 
 After supported iOS versions have migrated, remove the authenticated `guestToken` response alias from `/api/session`.
 
@@ -54,8 +53,8 @@ After supported iOS versions have migrated, remove the authenticated `guestToken
 - Trending uses bounded offset pagination because ranking changes with live engagement; `Feed.tsx` de-duplicates dish ids across pages.
 - Suggested people excludes the current user and already-followed users when authenticated, then ranks by `2 * follower_count + 3 * recent_30d_dish_count`.
 
-## Still required after applying to the complete checkout
+## Still required
 
-- Run `npm install`, `npm run lint`, and `npm run verify` in the complete repository. This stripped offline reconstruction does not contain the full application tree or installed dependencies, so a real web build and iOS Expo/TypeScript export cannot be executed here.
+- Run the production auth and safety flow on a physical iPhone. Local lint, web build, tests, iOS type checking, and Expo export pass in the complete repository.
 - Reconcile/generate `drizzle/meta/0009_snapshot.json` from the complete checkout so future `npm run db:generate` calls do not recreate the same schema changes. Preserve the custom backfill/token-migration/tombstone statements in `0009_social_auth_foundation.sql`.
 - After supported iOS versions have migrated to `Session <token>`, remove the transitional authenticated `guestToken` alias and web local-storage compatibility copy.

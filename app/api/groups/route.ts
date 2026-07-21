@@ -9,7 +9,7 @@ import { normalizeLocation, type NormalizedLocation } from "@/lib/location";
 import { placesApiKey } from "@/lib/places/http";
 import { createPlacesProvider } from "@/lib/places/provider";
 import { PlacesProviderError } from "@/lib/places/types";
-import { SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/lib/regions";
+import { SUPPORTED_LANGUAGES, type SupportedCurrency, type SupportedLanguage } from "@/lib/regions";
 import { enforceUsageBudget, UsageBudgetError } from "@/lib/operations";
 
 export const runtime = "edge";
@@ -55,9 +55,9 @@ export async function POST(request: Request) {
   const id = crypto.randomUUID();
   const now = new Date();
   const inviteExpiresAt = new Date(now.getTime() + 7 * 86400000).toISOString();
-  await db.insert(groups).values({ id, ownerId: identity.id, name: body.name?.trim().slice(0, 80) || "Friday supper", eventTime: eventTime.toISOString(), neighborhood: location.locality, ...constraints, allergies: JSON.stringify(constraints.allergies), inviteCode: crypto.randomUUID().replace(/-/g, "").slice(0, 12), inviteExpiresAt, latitude: location.latitude, longitude: location.longitude, locality: location.locality, administrativeRegion: location.administrativeRegion, countryCode: location.countryCode, currencyCode: location.currencyCode as "USD" | "CAD" | "MXN" | "GBP" | "EUR", timeZone: location.timeZone, locale: location.locale, displayLanguage: body.language, updatedAt: now.toISOString() });
+  await db.insert(groups).values({ id, ownerId: identity.id, name: body.name?.trim().slice(0, 80) || "Friday supper", eventTime: eventTime.toISOString(), neighborhood: location.locality, ...constraints, allergies: JSON.stringify(constraints.allergies), inviteCode: crypto.randomUUID().replace(/-/g, "").slice(0, 12), inviteExpiresAt, latitude: location.latitude, longitude: location.longitude, locality: location.locality, administrativeRegion: location.administrativeRegion, countryCode: location.countryCode, currencyCode: location.currencyCode as SupportedCurrency, timeZone: location.timeZone, locale: location.locale, displayLanguage: body.language, updatedAt: now.toISOString() });
   await db.insert(groupMembers).values({ groupId: id, userId: identity.id, role: "owner", language: body.language });
-  for (const candidate of ranked) await db.insert(groupCandidates).values({ groupId: id, candidateId: candidate.candidateId, name: candidate.name, restaurant: candidate.restaurant, neighborhood: candidate.neighborhood, distanceKm: candidate.distanceKm, price: candidate.price, image: candidate.image, score: candidate.score, eligible: candidate.eligible, explanation: candidate.explanation, conflicts: JSON.stringify(candidate.conflicts), kind: candidate.kind, restaurantId: candidate.restaurantId, providerPlaceId: candidate.providerPlaceId, priceAmount: candidate.priceAmount, currencyCode: candidate.currencyCode as "USD" | "CAD" | "MXN" | "GBP" | "EUR", provenance: candidate.provenance, verificationStatus: candidate.verificationStatus, currentAvailabilityConfirmed: candidate.currentAvailabilityConfirmed, dietaryCaveat: candidate.dietaryCaveat });
+  for (const candidate of ranked) await db.insert(groupCandidates).values({ groupId: id, candidateId: candidate.candidateId, name: candidate.name, restaurant: candidate.restaurant, neighborhood: candidate.neighborhood, distanceKm: candidate.distanceKm, price: candidate.price, image: candidate.image, score: candidate.score, eligible: candidate.eligible, explanation: candidate.explanation, conflicts: JSON.stringify(candidate.conflicts), kind: candidate.kind, restaurantId: candidate.restaurantId, providerPlaceId: candidate.providerPlaceId, priceAmount: candidate.priceAmount, currencyCode: candidate.currencyCode as SupportedCurrency, provenance: candidate.provenance, verificationStatus: candidate.verificationStatus, currentAvailabilityConfirmed: candidate.currentAvailabilityConfirmed, dietaryCaveat: candidate.dietaryCaveat });
   return Response.json({ group: await groupSnapshot(id, identity.id), providerStatus }, { status: 201 });
 }
 

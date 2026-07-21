@@ -8,10 +8,14 @@ import {
   SUPPORTED_LANGUAGES,
 } from "../lib/regions.ts";
 
-test("country allowlist accepts exactly the five regional pilot countries", () => {
-  assert.deepEqual(SUPPORTED_COUNTRY_CODES, ["US", "CA", "MX", "GB", "FR"]);
+test("country allowlist accepts every required country and rejects unsupported countries", () => {
+  assert.deepEqual(SUPPORTED_COUNTRY_CODES, ["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE", "GB", "CA", "US", "MX"]);
   for (const countryCode of SUPPORTED_COUNTRY_CODES) assert.equal(isSupportedCountry(countryCode), true);
-  for (const countryCode of ["AU", "DE", "IE", "JP", "", null, undefined]) assert.equal(isSupportedCountry(countryCode), false);
+  for (const countryCode of SUPPORTED_COUNTRY_CODES) {
+    assert.ok(REGIONAL_DEFAULTS[countryCode].currencyCode);
+    assert.ok(REGIONAL_DEFAULTS[countryCode].formattingLocale);
+  }
+  for (const countryCode of ["AU", "CH", "NO", "JP", "", null, undefined]) assert.equal(isSupportedCountry(countryCode), false);
   assert.equal(supportedCountry(" ca "), "CA");
 });
 

@@ -6,7 +6,6 @@
     "nodejs_compat"
   ],
   "main": "./worker/index.ts",
-  "keep_vars": true,
   "assets": {
     "directory": "dist/client",
     "not_found_handling": "none",
@@ -15,20 +14,6 @@
   "images": {
     "binding": "IMAGES"
   },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "trinque",
-      "database_id": "e8ef636a-0684-4dcb-bdf1-d49fe5716243",
-      "migrations_dir": "drizzle"
-    }
-  ],
-  "r2_buckets": [
-    {
-      "binding": "UPLOADS",
-      "bucket_name": "site-creator-r2"
-    }
-  ],
   "vars": {
     "SUPABASE_URL": "https://ulbbuadmtscyywgxagwc.supabase.co",
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_1vC7v-HuRk_qokrwNwewHg_dqaAtDd1"

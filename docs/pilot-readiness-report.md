@@ -1,6 +1,6 @@
 # Trinque pilot readiness report
 
-Report date: 2026-07-21. Validated source: current working tree after the safety and language implementation. Recommendation: **NO-GO**.
+Report date: 2026-07-21. Validated source: commit `945794c6d1a9a8fe7873976c74319b37754d45bb`. Recommendation: **NO-GO**.
 
 ## What passed locally
 
@@ -18,9 +18,11 @@ On 2026-07-21 its health endpoint returned `degraded`: D1, R2, and Places were c
 
 The production D1 database was exported to a private local backup before change. Additive migrations `0010` through `0013` then applied successfully. A read-only schema check confirmed the group requirement and local schedule fields, profile onboarding fields, editable dish fields, and safety tables. The check did not read user records. The Worker code was not changed during the database step. The Worker version before release is `10f4dec3-0c5e-43bc-8648-cfe58df235a0`.
 
-The live Worker still serves the prior English UI. It does not contain the language and safety changes in this working tree. Browser checks at 320, 390, and 412 CSS pixels found no horizontal overflow, and the mobile navigation appeared at 390 pixels. These are browser viewport checks, not physical iOS Safari or Android Chrome results.
+The public Worker now runs version `dac6a62c-af21-465d-ad4d-ed5d87615606`. The same source is saved as managed Sites version 12 under owner-only access. A post-release check returned HTTP 200 for the root page, health route, public auth setup, and demo analysis. The rendered page showed the final plain-language copy. D1 `DB`, R2 `UPLOADS`, Images, Assets, Supabase public settings, and the existing Places secret remained bound after release.
 
-The production backup and additive migration are complete. Save and deploy the tested source through the managed Sites flow so D1 and R2 bindings stay in place. Record the deployed commit and health response. Roll back the Worker to version `10f4dec3-0c5e-43bc-8648-cfe58df235a0` if health or smoke checks fail. A schema rollback needs its own reviewed migration; do not delete production tables as a rollback action.
+Browser checks at 320, 390, and 412 CSS pixels found no horizontal overflow, and the mobile navigation appeared at 390 pixels. A post-release browser snapshot confirmed the new public page and controls. These are browser viewport checks, not physical iOS Safari or Android Chrome results.
+
+The production backup, additive migration, managed Sites release, and public Worker release are complete. Roll back the Worker to version `10f4dec3-0c5e-43bc-8648-cfe58df235a0` if a later live check finds a release fault. A schema rollback needs its own reviewed migration; do not delete production tables as a rollback action.
 
 ## Safety and data controls
 
@@ -38,9 +40,8 @@ The PWA is built and exported locally. Safari on iOS and Chrome on Android have 
 
 - Set and verify `OPENAI_API_KEY`, `GCP_API_KEY`, D1 `DB`, R2 `UPLOADS`, and Supabase public configuration in the Worker. Configure the hashed moderator allowlist only if the moderation queue is enabled.
 - Obtain recorded human native-language review for French, Spanish, German, Italian, and Portuguese. The automated review now checks exact key parity, empty values, English fallback, raw JSX and attributes across the full React tree, reviewed jargon and model names, and sentences over 24 words. German, Italian, and Portuguese no longer use English fallback entries. Necessary food labels such as Halal remain unchanged. Automated review does not replace a human native reviewer.
-- Complete group UI and iOS request/response parity, then run a live multi-account group plan with an eligible candidate, vote, finalization, RSVP, and calendar export.
+- Run a live multi-account group plan with an eligible candidate, vote, finalization, RSVP, and calendar export. Source and contract parity checks pass, but this live journey is not measured.
 - Test moderation actions, feed filtering, account deletion, privacy export, R2 media deletion, and the new signed-in iOS safety flow against a safe preview environment.
 - Run real-device auth and mobile browser flows on supported iOS and Android devices.
-- Deploy the tested source through the managed Sites flow and record the result.
 
-The product remains **NO-GO**. The live Worker is behind this working tree, live OpenAI analysis is unavailable, human native review is not recorded, and the required preview, multi-account, and physical-device journeys have not run.
+The product remains **NO-GO**. The live Worker matches the tested source, but live OpenAI analysis is unavailable, human native review is not recorded, and the required signed-in multi-account and physical-device journeys have not run.

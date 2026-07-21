@@ -4,7 +4,7 @@ The iOS app has committed EAS `preview` and `production` profiles in [ios/eas.js
 
 ## Universal links and invites
 
-The existing `trinque://join/<code>` deep link remains supported. The app config also declares `applinks:<production-host>`, and `GET /.well-known/apple-app-site-association` emits the association for `com.chinonsoobeta.trinque` once `APPLE_DEVELOPER_TEAM_ID` is configured server-side. Apple must be able to fetch that endpoint over HTTPS, so the current owner-only Sites access policy is a blocker until the owner provides an approved public association/API surface or an authenticated distribution design. No access policy was changed.
+The existing `trinque://join/<code>` deep link remains supported. The app config also declares `applinks:<production-host>`, and `GET /.well-known/apple-app-site-association` emits the association for `com.chinonsoobeta.trinque` once `APPLE_DEVELOPER_TEAM_ID` is configured server-side. The public Worker is reachable without the owner-only managed Sites access policy. `APPLE_DEVELOPER_TEAM_ID` and a physical universal-link check remain required.
 
 ## Diagnostics
 
@@ -18,7 +18,7 @@ These source and build checks do not prove that production Supabase settings, em
 
 - [ ] Owner configures the production EAS environment with the deployed API URL and universal-link host.
 - [ ] Owner configures `APPLE_DEVELOPER_TEAM_ID` and verifies the AASA endpoint from an unauthenticated HTTPS client.
-- [ ] Owner confirms the production API is reachable from an iOS device under the approved Sites access policy; the current owner-only policy will fail this until resolved.
+- [ ] Owner confirms the public Worker API is reachable from a physical iOS device.
 - [ ] Build and install the preview profile on a physical iPhone.
 - [ ] Verify location permission allow/deny, manual fallback, coarse persistence, country formatting, and settings changes.
 - [ ] Verify live/demo/unavailable analysis states, review correction, publish consent, nearby tiers, feedback, deletion, and export.
@@ -29,4 +29,4 @@ These source and build checks do not prove that production Supabase settings, em
 - [ ] Confirm crash/diagnostic records contain only the documented safe fields and that withdrawal stops new records.
 - [ ] Run `eas build --profile production --platform ios` and distribute through TestFlight only after the owner approves the external action.
 
-The current release recommendation is **NO-GO** until the production API and universal-link access design, Apple team identity, and physical-device flows are verified. These are deployment and device-evidence blockers, not local build failures.
+The current release recommendation is **NO-GO** until the Apple team identity, universal link, and physical-device flows are verified. The public API is deployed; these are device-evidence blockers, not local build failures.

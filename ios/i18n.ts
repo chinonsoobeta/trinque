@@ -194,7 +194,7 @@ const enUS = {
   "group.cuisines": "Cuisine types",
   "group.allergyExample": "sesame, peanuts",
   "group.cuisineExample": "Italian, Mexican",
-  "group.rank": "Sort the picks",
+  "group.rank": "Find",
   "group.building": "Finding picks…",
   "group.voteTitle": "Vote after you see the key facts.",
   "group.finalTitle": "Your group picked a place.",

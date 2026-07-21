@@ -33,6 +33,11 @@ export default defineConfig(async ({ mode }) => {
         ]
       : [],
     vars: {
+      ...(localEnv.GCP_API_KEY
+        ? { GCP_API_KEY: localEnv.GCP_API_KEY }
+        : localEnv.GOOGLE_PLACES_API_KEY
+          ? { GOOGLE_PLACES_API_KEY: localEnv.GOOGLE_PLACES_API_KEY }
+          : {}),
       ...(localEnv.SUPABASE_URL
         ? { SUPABASE_URL: localEnv.SUPABASE_URL }
         : {}),

@@ -1,5 +1,6 @@
 export type TrinqueRuntimeEnv = {
   OPENAI_API_KEY?: string;
+  GCP_API_KEY?: string;
   GOOGLE_PLACES_API_KEY?: string;
   SUPABASE_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
@@ -33,7 +34,15 @@ export function selectOpenAIKey(workerKey?: string, nodeKey?: string): string | 
   return value || undefined;
 }
 
-export function selectGooglePlacesKey(workerKey?: string, nodeKey?: string): string | undefined {
-  const value = workerKey?.trim() || nodeKey?.trim();
+export function selectGooglePlacesKey(
+  workerKey?: string,
+  workerLegacyKey?: string,
+  nodeKey?: string,
+  nodeLegacyKey?: string,
+): string | undefined {
+  const value = workerKey?.trim()
+    || workerLegacyKey?.trim()
+    || nodeKey?.trim()
+    || nodeLegacyKey?.trim();
   return value || undefined;
 }

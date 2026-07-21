@@ -36,7 +36,11 @@ test("Sites Worker secrets take precedence while local Node env remains supporte
   assert.equal(selectOpenAIKey(" worker-secret ", "local-secret"), "worker-secret");
   assert.equal(selectOpenAIKey(undefined, " local-secret "), "local-secret");
   assert.equal(selectOpenAIKey("", ""), undefined);
-  assert.equal(selectGooglePlacesKey(" places-worker ", "places-local"), "places-worker");
+  assert.equal(selectGooglePlacesKey(" canonical-worker ", "legacy-worker", "canonical-node", "legacy-node"), "canonical-worker");
+  assert.equal(selectGooglePlacesKey("", " legacy-worker ", "canonical-node", "legacy-node"), "legacy-worker");
+  assert.equal(selectGooglePlacesKey(undefined, undefined, " canonical-node ", "legacy-node"), "canonical-node");
+  assert.equal(selectGooglePlacesKey("", "", "", " legacy-node "), "legacy-node");
+  assert.equal(selectGooglePlacesKey("", "", "", ""), undefined);
 });
 
 test("Cloudflare production configuration includes public Supabase auth credentials", () => {
@@ -45,4 +49,6 @@ test("Cloudflare production configuration includes public Supabase auth credenti
   assert.match(wranglerConfig.vars?.SUPABASE_URL ?? "", /^https:\/\/[a-z0-9]+\.supabase\.co$/);
   assert.match(wranglerConfig.vars?.SUPABASE_PUBLISHABLE_KEY ?? "", /^sb_publishable_.+/);
   assert.equal("SUPABASE_SERVICE_ROLE_KEY" in (wranglerConfig.vars ?? {}), false);
+  assert.equal("GCP_API_KEY" in (wranglerConfig.vars ?? {}), false);
+  assert.equal("GOOGLE_PLACES_API_KEY" in (wranglerConfig.vars ?? {}), false);
 });

@@ -6,6 +6,8 @@ import { logOperation, requestIdFor } from "../lib/operations";
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
+  GCP_API_KEY?: string;
+  GOOGLE_PLACES_API_KEY?: string;
   APPLE_DEVELOPER_TEAM_ID?: string;
   TRINQUE_ALLOWED_ORIGINS?: string;
   IMAGES: {

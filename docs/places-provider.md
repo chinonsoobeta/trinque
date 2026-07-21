@@ -8,7 +8,7 @@ Phase 2 implements the first `PlacesProvider` adapter with Google Places API (Ne
 - `GET /api/restaurants/nearby?latitude=…&longitude=…&radiusMeters=…&language=…` validates the coordinate’s country, then returns normalized restaurants.
 - `GET /api/restaurants/:providerId?language=…` returns normalized details for a stable Google place ID.
 
-All routes require the server-only `GOOGLE_PLACES_API_KEY`. Missing credentials, quota, invalid requests, timeouts/unavailability, unreadable responses, and unsupported countries remain explicit error codes. No route substitutes demo or seeded content.
+All routes require the server-only `GCP_API_KEY`; `GOOGLE_PLACES_API_KEY` remains a backward-compatible fallback. Missing credentials, quota, invalid requests, timeouts/unavailability, unreadable responses, and unsupported countries remain explicit error codes. No route substitutes demo or seeded content.
 
 ## Data and attribution
 

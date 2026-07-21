@@ -5,7 +5,12 @@ export const placesResponseHeaders = { "Cache-Control": "private, no-store" } as
 
 export async function placesApiKey(): Promise<string> {
   const env = await getRuntimeEnv();
-  const key = selectGooglePlacesKey(env.GOOGLE_PLACES_API_KEY, process.env.GOOGLE_PLACES_API_KEY);
+  const key = selectGooglePlacesKey(
+    env.GCP_API_KEY,
+    env.GOOGLE_PLACES_API_KEY,
+    process.env.GCP_API_KEY,
+    process.env.GOOGLE_PLACES_API_KEY,
+  );
   if (!key) throw new PlacesProviderError("credentials", "Live restaurant discovery is not configured.", 503);
   return key;
 }

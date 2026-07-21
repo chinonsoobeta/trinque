@@ -38,7 +38,7 @@ Guest sessions are created server-side and stored as an opaque token on the devi
 
 To enable live photo analysis, copy .env.example to .env.local and add an OpenAI API key. Never commit the key.
 
-For production, add `OPENAI_API_KEY` and `GOOGLE_PLACES_API_KEY` as secrets in the Sites environment. The public client never receives them. `GET /api/health` reports OpenAI, Places, D1, and R2 independently without exposing secret values.
+For production, add `OPENAI_API_KEY` and `GCP_API_KEY` as secrets in the Sites environment. `GOOGLE_PLACES_API_KEY` remains supported as a legacy fallback. The public client never receives them. `GET /api/health` reports OpenAI, Places, D1, and R2 independently without exposing secret values.
 
 Pilot operations also support `TRINQUE_ALLOWED_ORIGINS` plus per-action `TRINQUE_BUDGET_<ACTION>_USER_HOURLY` and `TRINQUE_BUDGET_<ACTION>_GLOBAL_HOURLY` settings for `ANALYSIS`, `PLACES`, `PUBLISH`, `INVITE_JOIN`, and `VOTE`. Defaults are safe and bounded; configure names only in source control and values only in server-side environment settings. See `docs/security-privacy-operations.md`.
 

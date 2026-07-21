@@ -72,12 +72,12 @@ export function Feed({ type }: { type: FeedType }) {
     observer.observe(node); return () => observer.disconnect();
   }, [done, initialLoading, loadMore]);
 
-  if (type === "following" && !authenticated) return <EmptyState eyebrow="Following" title="Build a feed around people you trust." body="Trending discovery stays public. Sign in to follow contributors and see their newest dishes here." action={<a className="primary button-link" href="/auth/login?next=/explore%3Ffeed%3Dfollowing">Sign in</a>} />;
-  if (initialLoading) return <section className="feed"><LoadingState label="Setting the table…" /></section>;
+  if (type === "following" && !authenticated) return <EmptyState eyebrow="Following" title="Follow people to see their dishes." body="Anyone can see Top dishes. Sign in to follow people and see their new dishes here." action={<a className="primary button-link" href="/auth/login?next=/explore%3Ffeed%3Dfollowing">Sign in</a>} />;
+  if (initialLoading) return <section className="feed"><LoadingState label="Loading dishes…" /></section>;
   return <section className="feed social-feed">
-    {dishes.length === 0 && !error && <EmptyState eyebrow={type === "following" ? "Following" : "Trending"} title={type === "following" ? "Your following feed is ready for its first dish." : "The community feed is quiet right now."} body={type === "following" ? "Follow contributors from Explore and their published dishes will appear here." : "There is no community activity to rank yet. No engagement has been invented to fill the space."} action={type === "following" ? <a className="secondary button-link" href="/explore">Discover contributors</a> : undefined} />}
+    {dishes.length === 0 && !error && <EmptyState eyebrow={type === "following" ? "Following" : "Top dishes"} title={type === "following" ? "No dishes from people you follow yet." : "No user dishes yet."} body={type === "following" ? "Find people in Explore, then follow them to see their posts here." : "When people post dishes, they will show here."} action={type === "following" ? <a className="secondary button-link" href="/explore">Find people</a> : undefined} />}
     {dishes.map((dish) => <SocialDishCard key={dish.id} dish={dish} engagementLabel={type === "trending" ? `${dish.likes24h ?? 0} likes · ${dish.comments24h ?? 0} comments in the previous 24 hours` : undefined} />)}
     {error && <div className="feed-error" role="alert"><p>{error}</p><button className="secondary" onClick={() => void loadMore()}>Try again</button></div>}
-    {loadingMore && <LoadingState label="Bringing more dishes…" />}<div ref={sentinel} aria-hidden="true" />
+    {loadingMore && <LoadingState label="Loading more dishes…" />}<div ref={sentinel} aria-hidden="true" />
   </section>;
 }

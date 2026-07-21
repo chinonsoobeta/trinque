@@ -12,7 +12,7 @@ export function CommentSection({ dishId }: { dishId: string }) {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { let active = true; void fetch(`/api/dishes/${encodeURIComponent(dishId)}/comments`).then((response) => response.json()).then((payload: { comments?: Comment[] }) => { if (active) setComments(payload.comments ?? []); }).catch(() => setStatus("Comments are temporarily unavailable.")).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [dishId]);
+  useEffect(() => { let active = true; void fetch(`/api/dishes/${encodeURIComponent(dishId)}/comments`).then((response) => response.json()).then((payload: { comments?: Comment[] }) => { if (active) setComments(payload.comments ?? []); }).catch(() => setStatus("Comments are not available now.")).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [dishId]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -28,7 +28,7 @@ export function CommentSection({ dishId }: { dishId: string }) {
       const payload = await response.json() as { comment: Comment };
       setComments((current) => current.map((comment) => comment.id === tempId ? payload.comment : comment));
     } catch {
-      setComments((current) => current.filter((comment) => comment.id !== tempId)); setBody(text); setStatus("We could not post that comment.");
+      setComments((current) => current.filter((comment) => comment.id !== tempId)); setBody(text); setStatus("We could not post your comment.");
     }
   }
 

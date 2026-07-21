@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { getDb } from "@/db";
-import { blocks, hiddenDishes, mutes } from "@/db/schema";
+import { blocks, follows, hiddenDishes, mutes, notifications } from "@/db/schema";
 import { AuthenticationError, requireOnboardedIdentity } from "@/lib/auth";
 
 export const runtime = "edge";
@@ -15,6 +15,8 @@ export async function POST(request: Request) {
     if (body.action === "block") {
       if (targetId === identity.id) return Response.json({ error: "cannot_block_self" }, { status: 400 });
       await db.insert(blocks).values({ blockerId: identity.id, blockedId: targetId }).onConflictDoNothing();
+      await db.delete(follows).where(or(and(eq(follows.followerId, identity.id), eq(follows.followingId, targetId)), and(eq(follows.followerId, targetId), eq(follows.followingId, identity.id))));
+      await db.delete(notifications).where(or(and(eq(notifications.userId, identity.id), eq(notifications.actorId, targetId)), and(eq(notifications.userId, targetId), eq(notifications.actorId, identity.id))));
     } else if (body.action === "mute") {
       if (targetId === identity.id) return Response.json({ error: "cannot_mute_self" }, { status: 400 });
       await db.insert(mutes).values({ muterId: identity.id, mutedId: targetId }).onConflictDoNothing();

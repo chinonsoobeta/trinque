@@ -7,6 +7,7 @@ import { CommentSection } from "@/components/CommentSection";
 import { DishOwnerControls } from "@/components/DishOwnerControls";
 import { DishShareButton } from "@/components/DishShareButton";
 import { LikeButton } from "@/components/LikeButton";
+import { SafetyActions } from "@/components/SafetyActions";
 
 export default async function DishDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -33,9 +34,10 @@ export default async function DishDetailPage({ params }: { params: Promise<{ id:
         <div className="dish-detail-actions"><LikeButton dishId={id} initialCount={likeCount?.count ?? 0} /><a className="secondary compact-action button-link" href="#comments">◌ {commentCount?.count ?? 0} comments</a><DishShareButton title={dish.name} /></div>
         <section className="dish-facts"><div className="section-heading"><div><span className="kicker">Dish facts</span><h2>About this dish</h2></div></div><dl><dt>Ingredients</dt><dd>{dish.ingredients || "Not listed"}</dd><dt>Food notes</dt><dd>{dish.dietary || "Not listed"}</dd>{price && <><dt>Price seen</dt><dd>{price}</dd></>}<dt>Menu status</dt><dd>{dish.availabilityKnowledge.replaceAll("_", " ")}{dish.lastConfirmedAt ? ` · checked ${new Intl.DateTimeFormat("en-CA", { dateStyle: "medium" }).format(new Date(dish.lastConfirmedAt))}` : ""}</dd><dt>Checked by</dt><dd>{dish.verificationStatus.replaceAll("_", " ")}</dd><dt>Source</dt><dd>{dish.provenance.replaceAll("_", " ")}</dd><dt>Photo check</dt><dd>{dish.confidence}%</dd>{dish.restaurantName && <><dt>Restaurant</dt><dd>{dish.restaurantName}{dish.restaurantAddress ? ` · ${dish.restaurantAddress}` : ""}</dd></>}</dl></section>
         <DishOwnerControls dishId={id} ownerId={dish.ownerId} />
+        <SafetyActions targetType="dish" targetId={id} userId={dish.ownerId} allowHide />
       </div>
     </article>
-    <section id="comments" className="dish-comments-block"><div className="section-heading"><div><span className="kicker">Around the table</span><h2>Comments</h2></div></div><CommentSection dishId={id} /></section>
+    <section id="comments" className="dish-comments-block"><div className="section-heading"><div><span className="kicker">Around the table</span><h2>Comments</h2></div></div><CommentSection dishId={id} dishOwnerId={dish.ownerId} /></section>
     {related.length > 0 && <section className="related-dishes"><div className="section-heading"><div><span className="kicker">Keep exploring</span><h2>Related dishes</h2></div></div><div className="related-dish-grid">{related.map((item) => <a className="related-dish-card" href={`/dishes/${item.id}`} key={item.id}>{item.imageKey ? <Image src={`/api/media/${item.imageKey}`} alt="" width={480} height={360} sizes="(max-width: 768px) 100vw, 33vw" /> : <div className="related-placeholder" aria-hidden="true">✦</div>}<div><h3>{item.name}</h3><p>{item.description}</p></div></a>)}</div></section>}
   </PageContainer>;
 }

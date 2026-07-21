@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { getDb } from "@/db";
-import { groups, notifications, profiles } from "@/db/schema";
+import { blocks, groups, notifications, profiles } from "@/db/schema";
 import { AuthenticationError, normalizeHandle, requireOnboardedIdentity } from "@/lib/auth";
 
 export const runtime = "edge";
@@ -23,6 +23,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const [target] = await db.select({ userId: profiles.userId, handle: profiles.handle }).from(profiles).where(eq(profiles.handle, handle)).limit(1);
     if (!target) return Response.json({ error: "No Trinque profile was found for that handle." }, { status: 404 });
     if (target.userId === identity.id) return Response.json({ error: "You cannot invite yourself." }, { status: 400 });
+    const [blocked] = await db.select({ blockerId: blocks.blockerId }).from(blocks).where(or(and(eq(blocks.blockerId, identity.id), eq(blocks.blockedId, target.userId)), and(eq(blocks.blockerId, target.userId), eq(blocks.blockedId, identity.id)))).limit(1);
+    if (blocked) return Response.json({ error: "No Trinque profile was found for that handle." }, { status: 404 });
 
     const dedupeKey = `group-invite:${group.id}:${target.userId}`;
     const now = new Date().toISOString();

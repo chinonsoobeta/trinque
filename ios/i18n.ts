@@ -231,6 +231,40 @@ const enUS = {
   "feedback.staleDish": "Report this dish as stale",
   "feedback.closedRestaurant": "Report this restaurant as closed",
   "feedback.thanks": "Thanks—your feedback was recorded.",
+  "safety.title": "Safety choices",
+  "safety.reportDish": "Report this dish",
+  "safety.reportComment": "Report this comment",
+  "safety.reportUser": "Report this person",
+  "safety.hideDish": "Hide this dish",
+  "safety.muteUser": "Mute this person",
+  "safety.blockUser": "Block this person",
+  "safety.removeComment": "Remove comment",
+  "safety.done": "Your choice was saved.",
+  "safety.failed": "We could not save your choice. Try again.",
+  "comments.title": "Comments",
+  "comments.loading": "Loading comments…",
+  "comments.unavailable": "Comments are not available now.",
+  "comments.add": "Add a comment",
+  "comments.signIn": "Sign in to comment",
+  "comments.post": "Post",
+  "comments.postFailed": "We could not post your comment.",
+  "comments.member": "Trinque member",
+  "comments.you": "You",
+  "onboarding.loading": "Loading…",
+  "onboarding.title": "Set up your profile",
+  "onboarding.help": "Fill in the required details. You can skip cuisines and a photo.",
+  "onboarding.name": "Name",
+  "onboarding.username": "Username",
+  "onboarding.country": "Country",
+  "onboarding.language": "Preferred language",
+  "onboarding.cuisines": "Favourite cuisines (optional)",
+  "onboarding.cuisineExample": "Italian, Mexican",
+  "onboarding.photo": "Profile photo (optional)",
+  "onboarding.saving": "Saving…",
+  "onboarding.save": "Save profile",
+  "onboarding.saveFailed": "We could not save your details.",
+  "onboarding.photoFailed": "Your details were saved. We could not add your photo.",
+  "owner.deleteDishConfirm": "Delete this dish?",
   "error.generic": "Something went wrong. Try again.",
 } as const;
 
@@ -302,6 +336,37 @@ const es: Messages = {
 const de: Messages = { ...enUS, "settings.language": "Sprache", "settings.language.de": "Deutsch", "settings.language.it": "Italienisch", "settings.language.pt": "Portugiesisch", "settings.language.fr": "Französisch", "settings.language.es": "Spanisch", "settings.title": "Einstellungen", "settings.close": "Schließen", "location.change": "Ort ändern", "location.search": "Adresse oder Ort suchen", "privacy.title": "Datenschutz" };
 const it: Messages = { ...enUS, "settings.language": "Lingua", "settings.language.de": "Tedesco", "settings.language.it": "Italiano", "settings.language.pt": "Portoghese", "settings.language.fr": "Francese", "settings.language.es": "Spagnolo", "settings.title": "Impostazioni", "settings.close": "Chiudi", "location.change": "Cambia luogo", "location.search": "Cerca indirizzo o luogo", "privacy.title": "Privacy" };
 const pt: Messages = { ...enUS, "settings.language": "Idioma", "settings.language.de": "Alemão", "settings.language.it": "Italiano", "settings.language.pt": "Português", "settings.language.fr": "Francês", "settings.language.es": "Espanhol", "settings.title": "Definições", "settings.close": "Fechar", "location.change": "Mudar local", "location.search": "Procurar morada ou local", "privacy.title": "Privacidade" };
+
+Object.assign(fr, {
+  "group.date": "Date", "group.time": "Heure", "group.distanceUnit": "Unité de distance", "group.dietary": "Besoins alimentaires", "group.cuisines": "Types de cuisine", "group.allergyExample": "sésame, arachides", "group.cuisineExample": "italienne, mexicaine",
+  "safety.title": "Options de sécurité", "safety.reportDish": "Signaler ce plat", "safety.reportComment": "Signaler ce commentaire", "safety.reportUser": "Signaler cette personne", "safety.hideDish": "Masquer ce plat", "safety.muteUser": "Masquer cette personne", "safety.blockUser": "Bloquer cette personne", "safety.removeComment": "Supprimer le commentaire", "safety.done": "Votre choix est enregistré.", "safety.failed": "Impossible d’enregistrer votre choix. Réessayez.",
+  "comments.title": "Commentaires", "comments.loading": "Chargement des commentaires…", "comments.unavailable": "Les commentaires ne sont pas disponibles.", "comments.add": "Ajouter un commentaire", "comments.signIn": "Connectez-vous pour commenter", "comments.post": "Publier", "comments.postFailed": "Impossible de publier votre commentaire.", "comments.member": "Membre de Trinque", "comments.you": "Vous",
+  "onboarding.loading": "Chargement…", "onboarding.title": "Créer votre profil", "onboarding.help": "Remplissez les champs requis. La cuisine et la photo sont facultatives.", "onboarding.name": "Nom", "onboarding.username": "Nom d’utilisateur", "onboarding.country": "Pays", "onboarding.language": "Langue préférée", "onboarding.cuisines": "Cuisines préférées (facultatif)", "onboarding.cuisineExample": "italienne, mexicaine", "onboarding.photo": "Photo de profil (facultatif)", "onboarding.saving": "Enregistrement…", "onboarding.save": "Enregistrer le profil", "onboarding.saveFailed": "Impossible d’enregistrer vos données.", "onboarding.photoFailed": "Vos données sont enregistrées. Impossible d’ajouter la photo.", "owner.deleteDishConfirm": "Supprimer ce plat?",
+});
+Object.assign(es, {
+  "group.date": "Fecha", "group.time": "Hora", "group.distanceUnit": "Unidad de distancia", "group.dietary": "Necesidades alimentarias", "group.cuisines": "Tipos de cocina", "group.allergyExample": "sésamo, cacahuates", "group.cuisineExample": "italiana, mexicana",
+  "safety.title": "Opciones de seguridad", "safety.reportDish": "Reportar este platillo", "safety.reportComment": "Reportar este comentario", "safety.reportUser": "Reportar a esta persona", "safety.hideDish": "Ocultar este platillo", "safety.muteUser": "Silenciar a esta persona", "safety.blockUser": "Bloquear a esta persona", "safety.removeComment": "Eliminar comentario", "safety.done": "Guardamos tu elección.", "safety.failed": "No pudimos guardar tu elección. Intenta de nuevo.",
+  "comments.title": "Comentarios", "comments.loading": "Cargando comentarios…", "comments.unavailable": "Los comentarios no están disponibles.", "comments.add": "Añadir un comentario", "comments.signIn": "Inicia sesión para comentar", "comments.post": "Publicar", "comments.postFailed": "No pudimos publicar tu comentario.", "comments.member": "Miembro de Trinque", "comments.you": "Tú",
+  "onboarding.loading": "Cargando…", "onboarding.title": "Crea tu perfil", "onboarding.help": "Completa los datos obligatorios. La cocina y la foto son opcionales.", "onboarding.name": "Nombre", "onboarding.username": "Nombre de usuario", "onboarding.country": "País", "onboarding.language": "Idioma preferido", "onboarding.cuisines": "Cocinas favoritas (opcional)", "onboarding.cuisineExample": "italiana, mexicana", "onboarding.photo": "Foto de perfil (opcional)", "onboarding.saving": "Guardando…", "onboarding.save": "Guardar perfil", "onboarding.saveFailed": "No pudimos guardar tus datos.", "onboarding.photoFailed": "Guardamos tus datos. No pudimos añadir la foto.", "owner.deleteDishConfirm": "¿Eliminar este platillo?",
+});
+Object.assign(de, {
+  "group.date": "Datum", "group.time": "Uhrzeit", "group.distanceUnit": "Entfernungseinheit", "group.dietary": "Ernährungswünsche", "group.cuisines": "Küchenarten", "group.allergyExample": "Sesam, Erdnüsse", "group.cuisineExample": "italienisch, mexikanisch",
+  "safety.title": "Sicherheitsoptionen", "safety.reportDish": "Dieses Gericht melden", "safety.reportComment": "Diesen Kommentar melden", "safety.reportUser": "Diese Person melden", "safety.hideDish": "Dieses Gericht ausblenden", "safety.muteUser": "Diese Person stummschalten", "safety.blockUser": "Diese Person blockieren", "safety.removeComment": "Kommentar entfernen", "safety.done": "Deine Auswahl wurde gespeichert.", "safety.failed": "Deine Auswahl konnte nicht gespeichert werden. Versuche es erneut.",
+  "comments.title": "Kommentare", "comments.loading": "Kommentare werden geladen…", "comments.unavailable": "Kommentare sind derzeit nicht verfügbar.", "comments.add": "Kommentar hinzufügen", "comments.signIn": "Zum Kommentieren anmelden", "comments.post": "Veröffentlichen", "comments.postFailed": "Dein Kommentar konnte nicht veröffentlicht werden.", "comments.member": "Trinque-Mitglied", "comments.you": "Du",
+  "onboarding.loading": "Wird geladen…", "onboarding.title": "Profil einrichten", "onboarding.help": "Fülle die Pflichtfelder aus. Küche und Foto sind optional.", "onboarding.name": "Name", "onboarding.username": "Benutzername", "onboarding.country": "Land", "onboarding.language": "Bevorzugte Sprache", "onboarding.cuisines": "Lieblingsküchen (optional)", "onboarding.cuisineExample": "italienisch, mexikanisch", "onboarding.photo": "Profilfoto (optional)", "onboarding.saving": "Wird gespeichert…", "onboarding.save": "Profil speichern", "onboarding.saveFailed": "Deine Angaben konnten nicht gespeichert werden.", "onboarding.photoFailed": "Deine Angaben wurden gespeichert. Das Foto konnte nicht hinzugefügt werden.", "owner.deleteDishConfirm": "Dieses Gericht löschen?",
+});
+Object.assign(it, {
+  "group.date": "Data", "group.time": "Ora", "group.distanceUnit": "Unità di distanza", "group.dietary": "Esigenze alimentari", "group.cuisines": "Tipi di cucina", "group.allergyExample": "sesamo, arachidi", "group.cuisineExample": "italiana, messicana",
+  "safety.title": "Opzioni di sicurezza", "safety.reportDish": "Segnala questo piatto", "safety.reportComment": "Segnala questo commento", "safety.reportUser": "Segnala questa persona", "safety.hideDish": "Nascondi questo piatto", "safety.muteUser": "Silenzia questa persona", "safety.blockUser": "Blocca questa persona", "safety.removeComment": "Rimuovi commento", "safety.done": "La scelta è stata salvata.", "safety.failed": "Non è stato possibile salvare la scelta. Riprova.",
+  "comments.title": "Commenti", "comments.loading": "Caricamento dei commenti…", "comments.unavailable": "I commenti non sono disponibili.", "comments.add": "Aggiungi un commento", "comments.signIn": "Accedi per commentare", "comments.post": "Pubblica", "comments.postFailed": "Non è stato possibile pubblicare il commento.", "comments.member": "Membro di Trinque", "comments.you": "Tu",
+  "onboarding.loading": "Caricamento…", "onboarding.title": "Crea il tuo profilo", "onboarding.help": "Compila i campi richiesti. Cucine e foto sono facoltative.", "onboarding.name": "Nome", "onboarding.username": "Nome utente", "onboarding.country": "Paese", "onboarding.language": "Lingua preferita", "onboarding.cuisines": "Cucine preferite (facoltativo)", "onboarding.cuisineExample": "italiana, messicana", "onboarding.photo": "Foto del profilo (facoltativa)", "onboarding.saving": "Salvataggio…", "onboarding.save": "Salva profilo", "onboarding.saveFailed": "Non è stato possibile salvare i dati.", "onboarding.photoFailed": "I dati sono stati salvati. Non è stato possibile aggiungere la foto.", "owner.deleteDishConfirm": "Eliminare questo piatto?",
+});
+Object.assign(pt, {
+  "group.date": "Data", "group.time": "Hora", "group.distanceUnit": "Unidade de distância", "group.dietary": "Necessidades alimentares", "group.cuisines": "Tipos de cozinha", "group.allergyExample": "sésamo, amendoins", "group.cuisineExample": "italiana, mexicana",
+  "safety.title": "Opções de segurança", "safety.reportDish": "Denunciar este prato", "safety.reportComment": "Denunciar este comentário", "safety.reportUser": "Denunciar esta pessoa", "safety.hideDish": "Ocultar este prato", "safety.muteUser": "Silenciar esta pessoa", "safety.blockUser": "Bloquear esta pessoa", "safety.removeComment": "Remover comentário", "safety.done": "A sua escolha foi guardada.", "safety.failed": "Não foi possível guardar a sua escolha. Tente de novo.",
+  "comments.title": "Comentários", "comments.loading": "A carregar comentários…", "comments.unavailable": "Os comentários não estão disponíveis.", "comments.add": "Adicionar um comentário", "comments.signIn": "Inicie sessão para comentar", "comments.post": "Publicar", "comments.postFailed": "Não foi possível publicar o comentário.", "comments.member": "Membro do Trinque", "comments.you": "Você",
+  "onboarding.loading": "A carregar…", "onboarding.title": "Crie o seu perfil", "onboarding.help": "Preencha os campos obrigatórios. Cozinhas e foto são opcionais.", "onboarding.name": "Nome", "onboarding.username": "Nome de utilizador", "onboarding.country": "País", "onboarding.language": "Idioma preferido", "onboarding.cuisines": "Cozinhas favoritas (opcional)", "onboarding.cuisineExample": "italiana, mexicana", "onboarding.photo": "Foto de perfil (opcional)", "onboarding.saving": "A guardar…", "onboarding.save": "Guardar perfil", "onboarding.saveFailed": "Não foi possível guardar os seus dados.", "onboarding.photoFailed": "Os dados foram guardados. Não foi possível adicionar a foto.", "owner.deleteDishConfirm": "Eliminar este prato?",
+});
 
 export const translations: Record<UiLanguage, Messages> = { "en-CA": enCA, "en-US": enUS, "en-GB": enGB, fr, es, de, it, pt };
 

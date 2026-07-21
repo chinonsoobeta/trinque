@@ -1,6 +1,6 @@
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, or } from "drizzle-orm";
 import { getDb } from "@/db";
-import { follows, profiles, publishedDishes, restaurants, users } from "@/db/schema";
+import { blocks, follows, profiles, publishedDishes, restaurants, users } from "@/db/schema";
 import { AuthenticationError, getOptionalIdentity, normalizeHandle, requireAuthenticatedIdentity } from "@/lib/auth";
 
 export const runtime = "edge";
@@ -30,6 +30,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ hand
   ]);
   let viewerFollowing = false;
   if (viewer && viewer.id !== profile.userId && viewer.authType !== "guest") {
+    const [blocked] = await db.select({ blockerId: blocks.blockerId }).from(blocks).where(or(and(eq(blocks.blockerId, viewer.id), eq(blocks.blockedId, profile.userId)), and(eq(blocks.blockerId, profile.userId), eq(blocks.blockedId, viewer.id)))).limit(1);
+    if (blocked) return Response.json({ error: "Profile not found." }, { status: 404 });
     const [row] = await db.select({ followerId: follows.followerId }).from(follows).where(and(eq(follows.followerId, viewer.id), eq(follows.followingId, profile.userId))).limit(1);
     viewerFollowing = Boolean(row);
   }

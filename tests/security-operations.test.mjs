@@ -59,3 +59,23 @@ test("PWA cache policy excludes private API responses and uploads", async () => 
   assert.match(worker, /url\.pathname\.startsWith\("\/_next\/"\)/);
   assert.match(manifest, /"display"\s*:\s*"standalone"/);
 });
+
+test("safety controls are present on dish, profile, and comment surfaces", async () => {
+  const [actions, dish, profile, comments, route, invite] = await Promise.all([
+    readFile(new URL("../components/SafetyActions.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/dishes/[id]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/ProfileView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/CommentSection.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/safety/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/groups/[id]/invite/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(actions, /\/api\/reports/);
+  for (const action of ["hide", "mute", "block"]) assert.match(actions, new RegExp(`\"${action}\"`));
+  assert.match(dish, /SafetyActions/);
+  assert.match(profile, /SafetyActions/);
+  assert.match(comments, /targetType="comment"/);
+  assert.match(comments, /dishOwnerId/);
+  assert.match(route, /db\.delete\(follows\)/);
+  assert.match(route, /db\.delete\(notifications\)/);
+  assert.match(invite, /blocks\.blockerId/);
+});

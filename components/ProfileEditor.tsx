@@ -20,13 +20,13 @@ export function ProfileEditor({ profile }: { profile: PublicProfile }) {
   async function uploadAvatar(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    setBusy(true); setStatus("Uploading avatar…");
+    setBusy(true); setStatus("Adding your photo…");
     try {
       const form = new FormData(); form.set("file", file);
       const response = await fetch("/api/profile/avatar", { method: "POST", headers: authHeaders(), body: form });
       const payload = await response.json() as { avatarUrl?: string; error?: string };
-      if (!response.ok || !payload.avatarUrl) { setStatus(payload.error ?? "Unable to upload avatar."); return; }
-      setAvatarUrl(payload.avatarUrl); setStatus("Avatar updated.");
+      if (!response.ok || !payload.avatarUrl) { setStatus(payload.error ?? "We could not add your photo."); return; }
+      setAvatarUrl(payload.avatarUrl); setStatus("Your photo was updated.");
     } finally { setBusy(false); event.target.value = ""; }
   }
 
@@ -34,8 +34,8 @@ export function ProfileEditor({ profile }: { profile: PublicProfile }) {
     setBusy(true); setStatus("");
     try {
       const response = await fetch("/api/profile/avatar", { method: "DELETE", headers: authHeaders() });
-      if (!response.ok) { setStatus("Unable to remove avatar."); return; }
-      setAvatarUrl(null); setStatus("Avatar removed.");
+      if (!response.ok) { setStatus("We could not remove your photo."); return; }
+      setAvatarUrl(null); setStatus("Your photo was removed.");
     } finally { setBusy(false); }
   }
 
@@ -44,7 +44,7 @@ export function ProfileEditor({ profile }: { profile: PublicProfile }) {
     try {
       const response = await fetch(`/api/profiles/${encodeURIComponent(profile.handle)}`, { method: "PATCH", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ displayName, handle, bio, location }) });
       const payload = await response.json() as { error?: string; profile?: { handle: string } };
-      if (!response.ok || !payload.profile) { setStatus(payload.error ?? "Unable to update profile."); return; }
+      if (!response.ok || !payload.profile) { setStatus(payload.error ?? "We could not update your profile."); return; }
       if (payload.profile.handle !== profile.handle) window.location.replace(`/profiles/${payload.profile.handle}`);
       else window.location.reload();
     } finally { setBusy(false); }
@@ -53,8 +53,8 @@ export function ProfileEditor({ profile }: { profile: PublicProfile }) {
   return <form className="profile-editor" onSubmit={submit}>
     <div className="profile-avatar-editor">
       <div className="profile-avatar">{avatarUrl ? <Image src={avatarUrl} alt="Current avatar" width={128} height={128} sizes="128px" unoptimized /> : <span>{displayName.slice(0, 2).toUpperCase()}</span>}</div>
-      <label className="secondary avatar-upload">Upload avatar<input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/avif" disabled={busy} onChange={(event) => void uploadAvatar(event)} /></label>
-      {avatarUrl && <button type="button" className="text-button" disabled={busy} onClick={() => void removeAvatar()}>Remove avatar</button>}
+      <label className="secondary avatar-upload">Add photo<input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/avif" disabled={busy} onChange={(event) => void uploadAvatar(event)} /></label>
+      {avatarUrl && <button type="button" className="text-button" disabled={busy} onClick={() => void removeAvatar()}>Remove photo</button>}
     </div>
     <label>Display name<input maxLength={80} value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></label>
     <label>Handle<input maxLength={30} value={handle} onChange={(event) => setHandle(event.target.value.toLowerCase())} /></label>

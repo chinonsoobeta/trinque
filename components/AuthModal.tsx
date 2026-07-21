@@ -36,11 +36,11 @@ export function AuthModal({ open, onClose, initialMode = "signin", embedded = fa
       }
       const result = mode === "signup" ? await signUpWithPassword(email, password) : await signInWithPassword(email, password);
       if (result.error) { setStatus(result.error.message); return; }
-      if (mode === "signup" && !result.data.session) setStatus("Check your email to verify your account, then sign in.");
+      if (mode === "signup" && !result.data.session) setStatus("Check your email, then sign in.");
       else if (window.location.pathname === "/auth/login") window.location.replace(loginReturnPath());
       else onClose();
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Authentication failed.");
+      setStatus(error instanceof Error ? error.message : "Sign-in failed.");
     } finally { setBusy(false); }
   }
 
@@ -48,7 +48,7 @@ export function AuthModal({ open, onClose, initialMode = "signin", embedded = fa
     setBusy(true); setStatus("");
     try {
       const { data, error } = await signInWithGoogle(window.location.pathname === "/auth/login" ? loginReturnPath() : window.location.pathname + window.location.search);
-      if (error || !data.url) setStatus(error?.message ?? "Google sign-in is unavailable.");
+      if (error || !data.url) setStatus(error?.message ?? "Google sign-in is not available.");
       else window.location.assign(data.url);
     } catch (error) { setStatus(error instanceof Error ? error.message : "Google sign-in failed."); }
     finally { setBusy(false); }
@@ -59,7 +59,7 @@ export function AuthModal({ open, onClose, initialMode = "signin", embedded = fa
     setBusy(true);
     try {
       const { error } = await requestPasswordReset(email);
-      setStatus(error ? error.message : "Password reset instructions sent.");
+      setStatus(error ? error.message : "We sent password reset steps.");
     } finally { setBusy(false); }
   }
 
@@ -67,14 +67,14 @@ export function AuthModal({ open, onClose, initialMode = "signin", embedded = fa
     return safeReturnPath(new URLSearchParams(window.location.search).get("next"));
   }
 
-  const title = mode === "signin" ? "Welcome back" : mode === "signup" ? "Create your Trinque account" : "Choose a new password";
+  const title = mode === "signin" ? "Sign in" : mode === "signup" ? "Make a Trinque account" : "Choose a new password";
   return <div role="dialog" aria-modal={embedded ? undefined : true} aria-labelledby="auth-title" className={`auth-modal-backdrop${embedded ? " embedded" : ""}`} onMouseDown={(event) => { if (!embedded && event.target === event.currentTarget) onClose(); }}>
     <div className="auth-modal">
       {!embedded && <button type="button" className="auth-close" onClick={onClose} aria-label="Close authentication dialog">×</button>}
       <div className="auth-brand-mark" aria-hidden="true">T</div><span className="kicker">Trinque account</span><h2 id="auth-title">{title}</h2>
-      <p>{contextMessage ?? (mode === "signin" ? "Sign in to save, publish, follow, like, comment, and plan meals with people you trust." : mode === "signup" ? "Create an account to turn dish discovery into a personal food library and social circle." : "Enter a new password for your Trinque account.")}</p>
+      <p>{contextMessage ?? (mode === "signin" ? "Sign in to save, post, follow, like, comment, and plan meals." : mode === "signup" ? "Make an account to save dishes and connect with people." : "Enter a new password for your Trinque account.")}</p>
       {mode !== "recovery" && <button type="button" className="oauth-button" disabled={busy} onClick={() => void google()}><span aria-hidden="true">G</span>Continue with Google</button>}
-      {mode !== "recovery" && <div className="auth-divider"><span>or continue with email</span></div>}
+      {mode !== "recovery" && <div className="auth-divider"><span>or use email</span></div>}
       <form onSubmit={submit}>
         {mode !== "recovery" && <label><span>Email</span><input type="email" autoComplete="email" inputMode="email" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>}
         <label><span>{mode === "recovery" ? "New password" : "Password"}</span><input type="password" autoComplete={mode === "signin" ? "current-password" : "new-password"} minLength={8} placeholder="At least 8 characters" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
@@ -83,7 +83,7 @@ export function AuthModal({ open, onClose, initialMode = "signin", embedded = fa
       {mode === "signin" && <button className="text-button auth-inline-action" disabled={busy} onClick={() => void reset()}>Forgot password?</button>}
       {mode !== "recovery" && <button className="text-button auth-switch" onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setStatus(""); }}>{mode === "signin" ? "New to Trinque? Create an account" : "Already have an account? Sign in"}</button>}
       {status && <p role="status" aria-live="polite" className="auth-status">{status}</p>}
-      <small className="auth-footnote">Browsing stays public. Trinque only asks you to sign in for actions that need an identity.</small>
+      <small className="auth-footnote">Anyone can browse. Trinque asks you to sign in only when an action needs your account.</small>
     </div>
   </div>;
 }

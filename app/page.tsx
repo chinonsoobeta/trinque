@@ -181,6 +181,16 @@ export default function Home() {
           }
         }
 
+        if (!token) {
+          const guestResponse = await fetch("/api/session", { method: "POST" });
+          if (guestResponse.ok) {
+            const session = await guestResponse.json() as { identity: { displayName: string }; guestToken?: string };
+            token = session.guestToken ?? null;
+            displayName = session.identity.displayName;
+            if (session.guestToken) window.localStorage.setItem("trinque.guestToken", session.guestToken);
+          }
+        }
+
         if (!active) return;
         setGuestToken(token);
         setIdentityLabel(displayName);

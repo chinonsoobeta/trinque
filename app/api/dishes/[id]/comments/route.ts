@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { comments, notifications, profiles, publishedDishes } from "@/db/schema";
 import { AuthenticationError, requireAuthenticatedIdentity } from "@/lib/auth";
@@ -10,7 +10,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   const db = await getDb();
   const rows = await db.select({ id: comments.id, body: comments.body, createdAt: comments.createdAt, updatedAt: comments.updatedAt, userId: comments.userId, displayName: profiles.displayName, handle: profiles.handle, avatarUrl: profiles.avatarUrl })
-    .from(comments).leftJoin(profiles, eq(profiles.userId, comments.userId)).where(eq(comments.dishId, id)).orderBy(desc(comments.createdAt)).limit(100);
+    .from(comments).leftJoin(profiles, eq(profiles.userId, comments.userId)).where(and(eq(comments.dishId, id), eq(comments.moderationStatus, "active"))).orderBy(desc(comments.createdAt)).limit(100);
   return Response.json({ comments: rows });
 }
 

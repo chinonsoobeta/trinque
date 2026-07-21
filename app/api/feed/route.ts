@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   const origin = new URL(request.url).origin;
   const rows = await db.select({ dish: publishedDishes, restaurant: restaurants })
     .from(publishedDishes)
-    .leftJoin(restaurants, eq(publishedDishes.restaurantId, restaurants.id))
+    .leftJoin(restaurants, eq(publishedDishes.restaurantId, restaurants.id)).where(eq(publishedDishes.moderationStatus, "active"))
     .orderBy(desc(publishedDishes.createdAt))
     .limit(40);
   return Response.json({ dishes: rows.map(({ dish, restaurant }) => ({

@@ -45,7 +45,7 @@ export async function GET(request: Request) {
     score,
   }).from(publishedDishes)
     .leftJoin(restaurants, eq(restaurants.id, publishedDishes.restaurantId))
-    .leftJoin(profiles, eq(profiles.userId, publishedDishes.ownerId))
+    .leftJoin(profiles, eq(profiles.userId, publishedDishes.ownerId)).where(eq(publishedDishes.moderationStatus, "active"))
     .orderBy(sql`${score} DESC`, desc(publishedDishes.createdAt), desc(publishedDishes.id))
     .limit(limit + 1)
     .offset(offset);

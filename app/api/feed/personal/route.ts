@@ -35,7 +35,7 @@ export async function GET(request: Request) {
       .innerJoin(follows, and(eq(follows.followingId, publishedDishes.ownerId), eq(follows.followerId, identity.id)))
       .leftJoin(profiles, eq(profiles.userId, publishedDishes.ownerId))
       .leftJoin(restaurants, eq(restaurants.id, publishedDishes.restaurantId))
-      .where(cursor ? or(lt(publishedDishes.createdAt, cursor.createdAt), and(eq(publishedDishes.createdAt, cursor.createdAt), lt(publishedDishes.id, cursor.id))) : undefined)
+      .where(and(eq(publishedDishes.moderationStatus, "active"), cursor ? or(lt(publishedDishes.createdAt, cursor.createdAt), and(eq(publishedDishes.createdAt, cursor.createdAt), lt(publishedDishes.id, cursor.id))) : undefined))
       .orderBy(desc(publishedDishes.createdAt), desc(publishedDishes.id))
       .limit(limit + 1);
     const hasMore = rows.length > limit;

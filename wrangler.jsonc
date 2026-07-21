@@ -13,5 +13,9 @@
   },
   "images": {
     "binding": "IMAGES"
+  },
+  "vars": {
+    "SUPABASE_URL": "https://ulbbuadmtscyywgxagwc.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_1vC7v-HuRk_qokrwNwewHg_dqaAtDd1"
   }
 }

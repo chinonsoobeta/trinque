@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { capabilityStatus } from "../lib/readiness.ts";
 import { selectGooglePlacesKey, selectOpenAIKey } from "../lib/runtime-env.ts";
@@ -36,4 +37,12 @@ test("Sites Worker secrets take precedence while local Node env remains supporte
   assert.equal(selectOpenAIKey(undefined, " local-secret "), "local-secret");
   assert.equal(selectOpenAIKey("", ""), undefined);
   assert.equal(selectGooglePlacesKey(" places-worker ", "places-local"), "places-worker");
+});
+
+test("Cloudflare production configuration includes public Supabase auth credentials", () => {
+  const wranglerConfig = JSON.parse(readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8"));
+
+  assert.match(wranglerConfig.vars?.SUPABASE_URL ?? "", /^https:\/\/[a-z0-9]+\.supabase\.co$/);
+  assert.match(wranglerConfig.vars?.SUPABASE_PUBLISHABLE_KEY ?? "", /^sb_publishable_.+/);
+  assert.equal("SUPABASE_SERVICE_ROLE_KEY" in (wranglerConfig.vars ?? {}), false);
 });

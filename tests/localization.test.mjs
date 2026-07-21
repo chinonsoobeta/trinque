@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
 import { resolveUiLanguage, translate, translations, UI_LANGUAGES } from "../ios/i18n.ts";
+
+const require = createRequire(import.meta.url);
+const ts = require("typescript");
 
 test("all UI languages have exact key parity and no fallback key text", () => {
   const reference = Object.keys(translations["en-US"]).sort();
@@ -35,9 +39,9 @@ test("non-English catalogues do not fall back to English", () => {
   const allowedSame = {
     fr: new Set(["settings.measurement", "location.imperial", "analysis.field.cuisine", "group.date", "notifications.title", "diet.halal", "dish.source"]),
     es: new Set(["diet.halal", "diet.kosher"]),
-    de: new Set(["diet.vegan", "diet.halal", "safety.reason.spam", "onboarding.name"]),
-    it: new Set(["auth.account", "auth.password", "diet.halal", "diet.kosher"]),
-    pt: new Set(["diet.vegan", "diet.halal", "diet.kosher"]),
+    de: new Set(["diet.halal"]),
+    it: new Set(["diet.halal"]),
+    pt: new Set(["diet.halal"]),
   };
   for (const language of ["fr", "es", "de", "it", "pt"]) {
     for (const key of keys) {
@@ -56,24 +60,53 @@ test("user-facing catalogues do not use technical terms", () => {
   }
 });
 
+test("catalogue prose stays short and avoids reviewed jargon and model names", () => {
+  const localJargon = {
+    "en-US": /\b(?:provider|payload|canonical|semantic|GPT-\d)\b/i,
+    fr: /\b(?:fournisseur|normalis\w*|dossier|admissible|GPT-\d)\b/i,
+    es: /\b(?:proveedor|normaliz\w*|registro|elegible|GPT-\d)\b/i,
+    de: /\b(?:Provider|Metadaten|Endpunkt|GPT-\d)\b/i,
+    it: /\b(?:provider|metadati|endpoint|GPT-\d)\b/i,
+    pt: /\b(?:fornecedor|metadados|endpoint|GPT-\d)\b/i,
+  };
+  for (const language of ["en-US", "fr", "es", "de", "it", "pt"]) {
+    for (const [key, message] of Object.entries(translations[language])) {
+      assert.doesNotMatch(message, localJargon[language], `${language}:${key} contains reviewed jargon`);
+      for (const sentence of message.split(/[.!?…]+/)) {
+        const words = sentence.match(/[\p{L}\p{N}{}%-]+/gu) ?? [];
+        assert.ok(words.length <= 24, `${language}:${key} has a sentence longer than 24 words`);
+      }
+    }
+  }
+});
+
 test("main interactive views do not contain raw user-facing prose", () => {
-  const files = [
-    "components/AuthModal.tsx",
-    "components/SafetyActions.tsx",
-    "components/SafetyCenter.tsx",
-    "app/moderation/page.tsx",
-    "components/Feed.tsx",
-    "components/ProfileView.tsx",
-    "components/CommentSection.tsx",
-    "components/NotificationList.tsx",
-    "components/DishDetailView.tsx",
-  ];
-  const rawJsxText = />\s*([A-Za-z][A-Za-z0-9 ,.!?’'&:+-]*)\s*</g;
-  const allowedMarks = new Set(["T", "G"]);
+  function sourceFiles(directory) {
+    return readdirSync(new URL(`../${directory}/`, import.meta.url), { withFileTypes: true }).flatMap((entry) => entry.isDirectory() ? sourceFiles(`${directory}/${entry.name}`) : entry.name.endsWith(".tsx") ? [`${directory}/${entry.name}`] : []);
+  }
+  const files = [...sourceFiles("app"), ...sourceFiles("components"), "ios/App.tsx"];
+  const allowedMarks = new Set(["Trinque", "T", "G", "Google Maps", "i", "YYYY-MM-DD"]);
   for (const file of files) {
     const source = readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
-    for (const match of source.matchAll(rawJsxText)) {
-      assert.ok(allowedMarks.has(match[1]), `${file} contains raw UI text: ${match[1]}`);
+    const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    function visit(node) {
+      if (ts.isJsxText(node)) {
+        const text = node.text.trim();
+        if (/\p{L}/u.test(text)) assert.ok(allowedMarks.has(text), `${file} contains raw UI text: ${text}`);
+      }
+      if (ts.isJsxAttribute(node) && ["placeholder", "aria-label", "title", "alt", "accessibilityLabel", "accessibilityHint"].includes(node.name.text) && node.initializer) {
+        if (ts.isStringLiteral(node.initializer) && /\p{L}/u.test(node.initializer.text)) assert.ok(allowedMarks.has(node.initializer.text), `${file} contains a raw UI attribute: ${node.initializer.text}`);
+        if (ts.isJsxExpression(node.initializer) && node.initializer.expression && ts.isTemplateExpression(node.initializer.expression)) {
+          const prose = [node.initializer.expression.head.text, ...node.initializer.expression.templateSpans.map((span) => span.literal.text)].join(" ").trim();
+          assert.doesNotMatch(prose, /\p{L}/u, `${file} contains raw UI template text: ${prose}`);
+        }
+      }
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && ["setStatus", "setError", "setAnalysisError", "setAnalysisWarning"].includes(node.expression.text)) {
+        const value = node.arguments[0];
+        if (value && ts.isStringLiteral(value) && value.text) assert.fail(`${file} exposes a raw status: ${value.text}`);
+      }
+      ts.forEachChild(node, visit);
     }
+    visit(sourceFile);
   }
 });

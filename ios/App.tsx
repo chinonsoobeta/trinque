@@ -39,6 +39,7 @@ type MobileLocationSuggestion = { id: string; provider: 'google'; providerPlaceI
 type MobileRestaurantPlace = { provider: 'google'; providerPlaceId: string; displayName: string; address: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: MobileLocation['countryCode']; currencyCode: string; rating?: number; attribution: 'Google Maps' };
 type PublishRestaurant = { provider: 'google' | 'community'; providerPlaceId?: string | null; name: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: MobileLocation['countryCode']; address: string; currencyCode: string };
 type PublicationMetadata = { restaurant: PublishRestaurant; knowledge: { priceKnowledge: 'unknown' | 'exact' | 'approximate'; priceAmount?: number; availabilityKnowledge: 'unknown' | 'recently_confirmed' | 'historical'; lastConfirmedAt?: string }; retainImage: boolean; reviewConfirmed: true; restaurantConfirmed: true };
+type MobileIdentity = { id: string; authType: 'guest' | 'chatgpt' | 'supabase'; displayName: string; email: string | null };
 
 type Analysis = {
   name: string;
@@ -57,6 +58,7 @@ type AnalysisEnvelope =
 type MatchResult = { kind: 'dish' | 'restaurant_alternative'; id: string; dishName: string | null; restaurantName: string; locality: string; distanceKm: number; score: number; reasonCode: 'semantic_and_distance' | 'nearby_alternative' | 'restaurant_only'; provenance: string; verificationStatus: string; lastConfirmedAt: string | null; dietaryCaveat: string; currentAvailabilityConfirmed: boolean; priceAmount: number | null; currencyCode: string | null; imageUrl: string | null; attribution?: 'Google Maps' };
 type MatchTiers = { confirmedNearbyDishes: MatchResult[]; communityOrInferredDishes: MatchResult[]; restaurantLevelAlternatives: MatchResult[] };
 type CommunityDish = { id: string; ownerId: string; name: string; cuisine: string; description: string; confidence: number; imageUrl?: string | null; contributorLabel: string; restaurant?: { name: string } | null; provenance?: string; verificationStatus?: string; availabilityKnowledge?: string };
+type Dish = { id: number; name: string; restaurant: string; neighborhood: string; price: string; note: string; match: number; image: string; tags: string[] };
 type MobileGroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; explanation: string; conflicts: string[]; kind: 'published_dish' | 'provider_restaurant' | 'seed_demo'; provenance?: string | null; verificationStatus?: string | null; currentAvailabilityConfirmed: boolean; dietaryCaveat: string };
 type MobileGroup = { id: string; name: string; eventTime: string; eventLocalDate: string | null; eventLocalTime: string | null; neighborhood: string; budgetMax: number; maxDistanceKm: number; distanceUnit: MeasurementSystem; vegetarianRequired: number; allergies: string[]; dietaryRequirements: string[]; cuisineTypes: string[]; inviteCode: string; inviteExpiresAt: string | null; inviteRevokedAt: string | null; status: 'voting' | 'finalized'; selectedCandidateId: string | null; candidates: MobileGroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number>; memberCount: number; viewerRole: 'owner' | 'participant'; viewerVote: string | null; viewerRsvp: string | null; timeZone: string | null; currencyCode: string | null; locale: string | null; locality: string | null; countryCode: string | null };
 
@@ -67,22 +69,10 @@ function mobileGroupConflictLabel(t: Translator, conflict: string): string {
 }
 
 function mobileGroupCandidateCopy(t: Translator, candidate: MobileGroupCandidate) {
-  const explanation = candidate.explanation === 'eligible' ? t('group.fitEligible') : candidate.explanation === 'ineligible' ? `${t('group.fitIneligible')} ${candidate.conflicts.map((conflict) => mobileGroupConflictLabel(t, conflict)).join('; ')}` : candidate.explanation;
-  const dietaryCaveat = candidate.dietaryCaveat === 'provider_information_unconfirmed' ? t('group.providerCaveat') : candidate.dietaryCaveat;
+  const explanation = candidate.explanation === 'eligible' ? t('group.fitEligible') : `${t('group.fitIneligible')} ${candidate.conflicts.map((conflict) => mobileGroupConflictLabel(t, conflict)).join('; ')}`.trim();
+  const dietaryCaveat = candidate.dietaryCaveat === 'provider_information_unconfirmed' ? t('group.providerCaveat') : t('analysis.warning');
   return { explanation, dietaryCaveat };
 }
-
-type Dish = {
-  id: number;
-  name: string;
-  restaurant: string;
-  neighborhood: string;
-  price: string;
-  note: string;
-  match: number;
-  image: string;
-  tags: string[];
-};
 
 const adaptive = (light: string, dark: string) => Platform.OS === 'ios' ? DynamicColorIOS({ light, dark }) : light;
 const palette = {
@@ -102,52 +92,16 @@ const palette = {
   danger: adaptive('#A7343F', '#F07F8D'),
 };
 
-const sampleAnalysis: Analysis = {
-  name: 'Brown butter agnolotti',
-  cuisine: 'Northern Italian',
-  ingredients: 'Filled pasta, brown butter, sage, lemon, parmesan',
-  dietary: 'Vegetarian · Contains dairy and gluten',
-  confidence: 94,
-  description: 'Tender filled pasta with toasted butter, herbs and a bright citrus finish.',
-  canonical: { dishName: 'agnolotti', cuisine: 'northern italian', ingredients: ['filled pasta', 'butter', 'sage', 'lemon', 'parmesan'], flavours: ['nutty', 'herbal', 'bright'], metadataSource: 'user_reviewed' },
-};
+function sampleAnalysisFor(t: Translator): Analysis {
+  return {
+    name: t('analysis.demoName'), cuisine: t('analysis.demoCuisine'), ingredients: t('analysis.demoIngredients'), dietary: t('analysis.demoDietary'), confidence: 94, description: t('analysis.demoDescription'),
+    canonical: { dishName: 'agnolotti', cuisine: 'northern italian', ingredients: ['filled pasta', 'butter', 'sage', 'lemon', 'parmesan'], flavours: ['nutty', 'herbal', 'bright'], metadataSource: 'user_reviewed' },
+  };
+}
 const emptyMatchTiers: MatchTiers = { confirmedNearbyDishes: [], communityOrInferredDishes: [], restaurantLevelAlternatives: [] };
-
-const dishes: Dish[] = [
-  {
-    id: 1,
-    name: 'Brown butter agnolotti',
-    restaurant: 'Oca Pastificio',
-    neighborhood: 'Mount Pleasant',
-    price: '$24',
-    note: 'Silky filled pasta, toasted hazelnut and a bright lemon finish.',
-    match: 96,
-    image: 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=1200&q=85',
-    tags: ['Buttery', 'Bright', 'Vegetarian'],
-  },
-  {
-    id: 2,
-    name: 'Miso black cod',
-    restaurant: 'Kissa Tanto',
-    neighborhood: 'Chinatown',
-    price: '$31',
-    note: 'Caramelized edges, deep umami and a clean pickled-radish lift.',
-    match: 91,
-    image: 'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=1200&q=85',
-    tags: ['Umami', 'Smoky', 'Gluten-aware'],
-  },
-  {
-    id: 3,
-    name: 'Roasted cauliflower',
-    restaurant: 'Bar Susu',
-    neighborhood: 'Main Street',
-    price: '$18',
-    note: 'Charred brassica, tahini, preserved lemon and a scattering of herbs.',
-    match: 88,
-    image: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=1200&q=85',
-    tags: ['Charred', 'Nutty', 'Plant-based'],
-  },
-];
+// The native app does not invent saved dishes. Live saved records will replace
+// this empty list when the saves endpoint returns the full shared dish contract.
+const dishes: Dish[] = [];
 
 const navItems: Array<{ tab: Tab; icon: string }> = [
   { tab: 'Discover', icon: '⌂' },
@@ -157,21 +111,25 @@ const navItems: Array<{ tab: Tab; icon: string }> = [
 ];
 
 const remoteApi = process.env.EXPO_PUBLIC_TRINQUE_API_URL?.replace(/\/$/, '');
+const SESSION_KEY = 'trinque.sessionToken';
+const GUEST_KEY = 'trinque.guestToken';
 
 export default function App() {
   const systemScheme = useColorScheme();
   const [tab, setTab] = useState<Tab>('Discover');
-  const [savedIds, setSavedIds] = useState<number[]>([2]);
+  const [savedIds, setSavedIds] = useState<number[]>([]);
   const [analyzerOpen, setAnalyzerOpen] = useState(false);
   const [phase, setPhase] = useState<AnalyzerPhase>('choose');
   const [preview, setPreview] = useState<string | null>(null);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
-  const [analysis, setAnalysis] = useState<Analysis>(sampleAnalysis);
+  const [analysis, setAnalysis] = useState<Analysis>(() => sampleAnalysisFor((key, values) => translate('en-CA', key, values)));
   const [analysisMode, setAnalysisMode] = useState<'live' | 'demo' | null>(null);
   const [analysisWarning, setAnalysisWarning] = useState('');
   const [analysisError, setAnalysisError] = useState('');
   const [analysisRequestId, setAnalysisRequestId] = useState<string | null>(null);
   const [guestToken, setGuestToken] = useState<string | null>(null);
+  const [identity, setIdentity] = useState<MobileIdentity | null>(null);
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [nearbyMatches, setNearbyMatches] = useState<MatchTiers>(emptyMatchTiers);
   const [matchProviderUnavailable, setMatchProviderUnavailable] = useState(false);
   const [matchRecordsUnavailable, setMatchRecordsUnavailable] = useState(false);
@@ -184,6 +142,7 @@ export default function App() {
   const [pendingInvite, setPendingInvite] = useState<string | null>(null);
   const [communityFeed, setCommunityFeed] = useState<CommunityDish[]>([]);
   const t = useCallback<Translator>((key, values) => translate(language, key, values), [language]);
+  const canWrite = Boolean(identity && identity.authType !== 'guest' && onboardingComplete && guestToken);
   const correctionTracked = useRef(false);
   const inviteHandled = useCallback(() => setPendingInvite(null), []);
   const effectiveTheme = theme === 'system' ? (systemScheme ?? 'light') : theme;
@@ -238,41 +197,61 @@ export default function App() {
   useEffect(() => {
     if (!remoteApi) return;
     let active = true;
-    async function restoreGuest() {
+    async function hydrate(token: string, scheme: 'Session' | 'Guest') {
+      const headers = { Authorization: `${scheme} ${token}` };
+      const [preferencesResponse, savesResponse, feedResponse] = await Promise.all([
+        fetch(`${remoteApi}/api/preferences`, { headers }), fetch(`${remoteApi}/api/saves`, { headers }), fetch(`${remoteApi}/api/feed`, { headers }),
+      ]);
+      if (preferencesResponse.ok) {
+        const payload = await preferencesResponse.json() as { preferences: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: MobileLocation | null } | null };
+        if (active && payload.preferences) {
+          if (payload.preferences.language) setLanguage(payload.preferences.language);
+          if (payload.preferences.theme) setTheme(payload.preferences.theme);
+          if (payload.preferences.measurementSystem) setMeasurementSystem(payload.preferences.measurementSystem);
+          if (payload.preferences.location) setLocation(payload.preferences.location);
+        }
+      }
+      if (savesResponse.ok) {
+        const payload = await savesResponse.json() as { savedDishIds: number[] };
+        if (active) setSavedIds(payload.savedDishIds);
+      }
+      if (feedResponse.ok) {
+        const payload = await feedResponse.json() as { dishes: CommunityDish[] };
+        if (active) setCommunityFeed(payload.dishes);
+      }
+    }
+    async function restoreSession() {
       try {
-        const stored = await AsyncStorage.getItem('trinque.guestToken');
+        const signedInToken = await AsyncStorage.getItem(SESSION_KEY);
+        if (signedInToken) {
+          const authResponse = await fetch(`${remoteApi}/api/auth/session`, { headers: { Authorization: `Session ${signedInToken}` } });
+          if (authResponse.ok) {
+            const auth = await authResponse.json() as { authenticated?: boolean; identity?: MobileIdentity | null };
+            if (auth.authenticated && auth.identity) {
+              if (!active) return;
+              setGuestToken(signedInToken); setIdentity(auth.identity);
+              const onboardingResponse = await fetch(`${remoteApi}/api/onboarding`, { headers: { Authorization: `Session ${signedInToken}` } });
+              if (active && onboardingResponse.ok) setOnboardingComplete(Boolean(((await onboardingResponse.json()) as { complete?: boolean }).complete));
+              await hydrate(signedInToken, 'Session');
+              return;
+            }
+          }
+          await AsyncStorage.removeItem(SESSION_KEY);
+        }
+        const stored = await AsyncStorage.getItem(GUEST_KEY);
         const sessionResponse = await fetch(`${remoteApi}/api/session`, { method: 'POST', headers: stored ? { Authorization: `Guest ${stored}` } : undefined });
         if (!sessionResponse.ok) return;
-        const session = await sessionResponse.json() as { guestToken?: string };
+        const session = await sessionResponse.json() as { guestToken?: string; identity?: MobileIdentity };
         const token = session.guestToken ?? stored;
         if (!active || !token) return;
-        if (session.guestToken) await AsyncStorage.setItem('trinque.guestToken', session.guestToken);
-        setGuestToken(token);
-        const preferencesResponse = await fetch(`${remoteApi}/api/preferences`, { headers: { Authorization: `Guest ${token}` } });
-        if (preferencesResponse.ok) {
-          const payload = await preferencesResponse.json() as { preferences: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: MobileLocation | null } | null };
-          if (active && payload.preferences) {
-            if (payload.preferences.language) setLanguage(payload.preferences.language);
-            if (payload.preferences.theme) setTheme(payload.preferences.theme);
-            if (payload.preferences.measurementSystem) setMeasurementSystem(payload.preferences.measurementSystem);
-            if (payload.preferences.location) setLocation(payload.preferences.location);
-          }
-        }
-        const savesResponse = await fetch(`${remoteApi}/api/saves`, { headers: { Authorization: `Guest ${token}` } });
-        if (savesResponse.ok) {
-          const payload = await savesResponse.json() as { savedDishIds: number[] };
-          if (active) setSavedIds(payload.savedDishIds);
-        }
-        const feedResponse = await fetch(`${remoteApi}/api/feed`, { headers: { Authorization: `Guest ${token}` } });
-        if (feedResponse.ok) {
-          const payload = await feedResponse.json() as { dishes: CommunityDish[] };
-          if (active) setCommunityFeed(payload.dishes);
-        }
+        if (session.guestToken) await AsyncStorage.setItem(GUEST_KEY, session.guestToken);
+        setGuestToken(token); setIdentity(session.identity ?? null); setOnboardingComplete(false);
+        await hydrate(token, 'Guest');
       } catch {
         // Keep the offline demo available; the next launch retries persistence.
       }
     }
-    void restoreGuest();
+    void restoreSession();
     return () => { active = false; };
   }, []);
 
@@ -290,8 +269,9 @@ export default function App() {
       ['trinque.location', nextLocation ? JSON.stringify({ ...nextLocation, latitude: Math.round(nextLocation.latitude * 100) / 100, longitude: Math.round(nextLocation.longitude * 100) / 100 }) : ''],
     ]);
     if (remoteApi && guestToken) {
-      await fetch(`${remoteApi}/api/preferences`, { method: 'PUT', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ language: nextLanguage, theme: nextTheme, measurementSystem: nextMeasurement, location: nextLocation }) }).catch(() => undefined);
-      if (next.location !== undefined) await fetch(`${remoteApi}/api/privacy`, { method: 'PUT', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ locationConsent: Boolean(nextLocation) }) }).catch(() => undefined);
+      const authorization = `${identity && identity.authType !== 'guest' ? 'Session' : 'Guest'} ${guestToken}`;
+      await fetch(`${remoteApi}/api/preferences`, { method: 'PUT', headers: { Authorization: authorization, 'Content-Type': 'application/json' }, body: JSON.stringify({ language: nextLanguage, theme: nextTheme, measurementSystem: nextMeasurement, location: nextLocation }) }).catch(() => undefined);
+      if (next.location !== undefined) await fetch(`${remoteApi}/api/privacy`, { method: 'PUT', headers: { Authorization: authorization, 'Content-Type': 'application/json' }, body: JSON.stringify({ locationConsent: Boolean(nextLocation) }) }).catch(() => undefined);
     }
   };
 
@@ -304,7 +284,7 @@ export default function App() {
     setPhase('choose');
     setPreview(null);
     setImageDataUrl(null);
-    setAnalysis(sampleAnalysis);
+    setAnalysis(sampleAnalysisFor(t));
     setAnalysisMode(null);
     setAnalysisWarning('');
     setAnalysisError('');
@@ -349,7 +329,7 @@ export default function App() {
           setPhase('error');
           return;
         }
-        setAnalysis(sampleAnalysis);
+        setAnalysis(sampleAnalysisFor(t));
         setAnalysisMode('demo');
         setAnalysisWarning(t('analysis.warning'));
       } else {
@@ -381,22 +361,23 @@ export default function App() {
   };
 
   const toggleSaved = (dishId: number) => {
+    if (!canWrite) { Alert.alert(t('auth.signInNeeded')); return; }
     const shouldSave = !savedIds.includes(dishId);
     setSavedIds((current) => shouldSave ? [...current, dishId] : current.filter((id) => id !== dishId));
     if (remoteApi && guestToken) {
-      void fetch(`${remoteApi}/api/saves`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ dishId, saved: shouldSave }) });
+      void fetch(`${remoteApi}/api/saves`, { method: 'POST', headers: { Authorization: `Session ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ dishId, saved: shouldSave }) });
     }
   };
 
   const publishDish = async (metadata: PublicationMetadata) => {
-    if (!remoteApi || !guestToken || !analysisMode) {
+    if (!remoteApi || !guestToken || !analysisMode || !canWrite) {
       setAnalysisError(t('analysis.sessionError'));
       setPhase('error');
       return;
     }
     setPublishing(true);
     try {
-      const response = await fetch(`${remoteApi}/api/dishes`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ analysis, sourceMode: analysisMode, imageDataUrl, language, ...metadata }) });
+      const response = await fetch(`${remoteApi}/api/dishes`, { method: 'POST', headers: { Authorization: `Session ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ analysis, sourceMode: analysisMode, imageDataUrl, language, ...metadata }) });
       if (!response.ok) throw new Error('publish failed');
       const payload = await response.json() as { matches: MatchTiers; providerStatus: { status: 'live' | 'unavailable' }; matchingStatus: { status: 'live' | 'unavailable' } };
       setNearbyMatches(payload.matches);
@@ -419,10 +400,10 @@ export default function App() {
       <SafeAreaView style={styles.safeArea}>
         <StatusBar style={effectiveTheme === 'dark' ? 'light' : 'dark'} />
         <View style={styles.appShell}>
-          {tab === 'Discover' && <DiscoverScreen onAnalyze={openAnalyzer} t={t} location={location} feed={communityFeed} guestToken={guestToken} onHide={(id) => setCommunityFeed((current) => current.filter((dish) => dish.id !== id))} />}
-          {tab === 'Groups' && <GroupsScreen guestToken={guestToken} t={t} location={location} language={language} inviteCode={pendingInvite} inviteHandled={inviteHandled} track={trackAnalytics} />}
+          {tab === 'Discover' && <DiscoverScreen onAnalyze={openAnalyzer} t={t} location={location} feed={communityFeed} guestToken={canWrite ? guestToken : null} onHide={(id) => setCommunityFeed((current) => current.filter((dish) => dish.id !== id))} />}
+          {tab === 'Groups' && <GroupsScreen guestToken={canWrite ? guestToken : null} t={t} location={location} language={language} inviteCode={pendingInvite} inviteHandled={inviteHandled} track={trackAnalytics} />}
           {tab === 'Saved' && <SavedScreen dishes={savedDishes} onSave={toggleSaved} onDiscover={() => setTab('Discover')} t={t} />}
-          {tab === 'Profile' && <ProfileScreen guestToken={guestToken} t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} persist={persistPreferences} />}
+          {tab === 'Profile' && <ProfileScreen guestToken={guestToken} identity={identity} onboardingComplete={onboardingComplete} onAuthenticated={(token, nextIdentity, complete) => { setGuestToken(token); setIdentity(nextIdentity); setOnboardingComplete(complete); }} onSignedOut={() => { setIdentity(null); setOnboardingComplete(false); setGuestToken(null); }} onOnboardingComplete={() => setOnboardingComplete(true)} t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} persist={persistPreferences} />}
           <TabBar active={tab} onSelect={setTab} onAnalyze={openAnalyzer} t={t} />
         </View>
         <AnalyzerModal
@@ -486,36 +467,24 @@ function DiscoverScreen({ onAnalyze, t, location, feed, guestToken, onHide }: { 
       <View style={styles.seededNotice}><Text style={styles.seededNoticeText}>{t('home.communityFeedNotice')}</Text></View>
       {feed.length ? <View style={styles.communityFeed}>{feed.map((dish) => <CommunityDishCard key={dish.id} dish={dish} t={t} guestToken={guestToken} onHide={onHide} />)}</View> : <View style={styles.emptyFeed}><Text style={styles.emptyFeedText}>{t('match.noResults')}</Text></View>}
 
-      <View style={styles.tasteCard}>
-        <View style={styles.tasteTopLine}>
-          <Text style={styles.tasteKicker}>{t('home.tasteprint').toUpperCase()}</Text>
-          <Text style={styles.tastePercent}>82%</Text>
-        </View>
-        <Text style={styles.tasteTitle}>{t('home.tasteTitle')}</Text>
-        <Text style={styles.tasteBody}>{t('home.tasteBody')}</Text>
-        <View style={styles.tasteTags}>
-          {(['analysis.field.cuisine', 'analysis.field.dietary', 'analysis.field.ingredients', 'analysis.field.description'] as const).map((key, index) => (
-            <View key={key} style={[styles.tasteTag, index === 0 && styles.tasteTagStrong]}><Text style={[styles.tasteTagText, index === 0 && styles.tasteTagTextStrong]}>{t(key)}</Text></View>
-          ))}
-        </View>
-      </View>
-      <Text style={styles.editorialNote}>“{t('home.editorial')}”</Text>
     </ScrollView>
   );
 }
 
 function CommunityDishCard({ dish, t, guestToken, onHide }: { dish: CommunityDish; t: Translator; guestToken: string | null; onHide: (id: string) => void }) {
+  const [safetyOpen, setSafetyOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reason, setReason] = useState<'harmful' | 'spam' | 'false' | 'stale' | 'other'>('stale');
+  const [details, setDetails] = useState('');
   async function act(path: string, body: Record<string, string>) {
     if (!remoteApi || !guestToken) { Alert.alert(t('safety.title'), t('comments.signIn')); return; }
-    const response = await fetch(`${remoteApi}${path}`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null);
+    const response = await fetch(`${remoteApi}${path}`, { method: 'POST', headers: { Authorization: `Session ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null);
     Alert.alert(t('safety.title'), response?.ok ? t('safety.done') : t('safety.failed'));
     if (response?.ok && body.action === 'hide') onHide(dish.id);
   }
-  function reportDish() {
-    Alert.alert(t('safety.reportReason'), dish.name, [
-      ...(['harmful', 'spam', 'false', 'stale', 'other'] as const).map((reason) => ({ text: t(`safety.reason.${reason}`), onPress: () => void act('/api/reports', { targetType: 'dish', targetId: dish.id, reason }) })),
-      { text: t('safety.cancel'), style: 'cancel' as const },
-    ]);
+  async function reportDish() {
+    await act('/api/reports', { targetType: 'dish', targetId: dish.id, reason, details: details.trim() });
+    setDetails(''); setReportOpen(false); setSafetyOpen(false);
   }
   function blockUser() {
     Alert.alert(t('safety.blockUser'), t('safety.blockConfirm'), [
@@ -523,16 +492,7 @@ function CommunityDishCard({ dish, t, guestToken, onHide }: { dish: CommunityDis
       { text: t('safety.blockUser'), style: 'destructive', onPress: () => void act('/api/safety', { action: 'block', targetId: dish.ownerId }) },
     ]);
   }
-  function openSafety() {
-    Alert.alert(t('safety.title'), dish.name, [
-      { text: t('safety.reportDish'), onPress: reportDish },
-      { text: t('safety.hideDish'), onPress: () => void act('/api/safety', { action: 'hide', targetId: dish.id }) },
-      { text: t('safety.muteUser'), onPress: () => void act('/api/safety', { action: 'mute', targetId: dish.ownerId }) },
-      { text: t('safety.blockUser'), style: 'destructive', onPress: blockUser },
-      { text: t('settings.close'), style: 'cancel' },
-    ]);
-  }
-  return <View style={styles.communityDish}><View style={styles.communityDishCopy}><Text style={styles.communityDishName}>{dish.name}</Text><Text style={styles.communityDishDescription}>{dish.description}</Text><Text style={styles.communityDishMeta}>{dish.restaurant?.name ?? t('analysis.review')} · {dish.contributorLabel}</Text><Text style={styles.communityDishMeta}>{t(`provenance.${dish.provenance ?? 'ai_identified'}` as MessageKey)} · {t(`verification.${dish.verificationStatus ?? 'unverified'}` as MessageKey)} · {t(dish.availabilityKnowledge === 'recently_confirmed' ? 'availability.confirmed' : 'availability.unknown')}</Text><Pressable accessibilityRole="button" onPress={openSafety}><Text style={styles.demoLink}>{t('safety.title')}</Text></Pressable></View>{dish.imageUrl ? <NativeImage source={{ uri: dish.imageUrl }} style={styles.communityDishImage} /> : <View style={[styles.communityDishImage, styles.mobileMatchPlaceholder]}><Text style={styles.mobileMatchPlaceholderText}>T</Text></View>}</View>;
+  return <View style={styles.communityDish}><View style={styles.communityDishCopy}><Text style={styles.communityDishName}>{dish.name}</Text><Text style={styles.communityDishDescription}>{dish.description}</Text><Text style={styles.communityDishMeta}>{dish.restaurant?.name ?? t('analysis.review')} · {dish.contributorLabel}</Text><Text style={styles.communityDishMeta}>{t(`provenance.${dish.provenance ?? 'ai_identified'}` as MessageKey)} · {t(`verification.${dish.verificationStatus ?? 'unverified'}` as MessageKey)} · {t(dish.availabilityKnowledge === 'recently_confirmed' ? 'availability.confirmed' : 'availability.unknown')}</Text><Pressable accessibilityRole="button" onPress={() => setSafetyOpen((value) => !value)}><Text style={styles.demoLink}>{t('safety.title')}</Text></Pressable>{safetyOpen ? <View style={styles.inlineSafety}><Pressable onPress={() => setReportOpen((value) => !value)}><Text style={styles.demoLink}>{t('safety.reportDish')}</Text></Pressable>{reportOpen ? <View><Text style={styles.fieldLabel}>{t('safety.reportReason')}</Text><View style={styles.choiceRow}>{(['harmful', 'spam', 'false', 'stale', 'other'] as const).map((item) => <Choice key={item} selected={reason === item} label={t(`safety.reason.${item}`)} onPress={() => setReason(item)} />)}</View><TextInput maxLength={1000} multiline style={[styles.fieldInput, styles.fieldTextarea]} value={details} onChangeText={setDetails} placeholder={t('safety.details')} placeholderTextColor={palette.muted} /><Pressable style={styles.secondaryButton} onPress={() => void reportDish()}><Text style={styles.secondaryButtonText}>{t('safety.submitReport')}</Text></Pressable></View> : null}<Pressable onPress={() => void act('/api/safety', { action: 'hide', targetId: dish.id })}><Text style={styles.demoLink}>{t('safety.hideDish')}</Text></Pressable><Pressable onPress={() => void act('/api/safety', { action: 'mute', targetId: dish.ownerId })}><Text style={styles.demoLink}>{t('safety.muteUser')}</Text></Pressable><Pressable onPress={blockUser}><Text style={styles.dangerLink}>{t('safety.blockUser')}</Text></Pressable><Pressable onPress={() => { setSafetyOpen(false); setReportOpen(false); }}><Text style={styles.demoLink}>{t('safety.cancel')}</Text></Pressable></View> : null}</View>{dish.imageUrl ? <NativeImage source={{ uri: dish.imageUrl }} style={styles.communityDishImage} /> : <View style={[styles.communityDishImage, styles.mobileMatchPlaceholder]}><Text style={styles.mobileMatchPlaceholderText}>T</Text></View>}</View>;
 }
 
 function GroupsScreen({ guestToken, t, location, language, inviteCode, inviteHandled, track }: { guestToken: string | null; t: Translator; location: MobileLocation | null; language: UiLanguage; inviteCode: string | null; inviteHandled: () => void; track: (event: AnalyticsEvent, details?: { mode?: 'live' | 'demo'; outcome?: string; durationMs?: number }) => void }) {
@@ -559,7 +519,7 @@ function GroupsScreen({ guestToken, t, location, language, inviteCode, inviteHan
   useEffect(() => {
     if (!remoteApi || !guestToken) return;
     if (inviteCode) {
-      void fetch(`${remoteApi}/api/groups/join`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ inviteCode, language }) }).then(async (response) => {
+      void fetch(`${remoteApi}/api/groups/join`, { method: 'POST', headers: { Authorization: `Session ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ inviteCode, language }) }).then(async (response) => {
         if (!response.ok) { Alert.alert(t('group.inviteInvalid')); return; }
         setGroup(((await response.json()) as { group: MobileGroup }).group);
         track('invite_joined', { outcome: 'success' });
@@ -567,17 +527,17 @@ function GroupsScreen({ guestToken, t, location, language, inviteCode, inviteHan
       }).catch(() => Alert.alert(t('error.generic'))).finally(inviteHandled);
       return;
     }
-    void fetch(`${remoteApi}/api/groups`, { headers: { Authorization: `Guest ${guestToken}` } }).then(async (response) => {
+    void fetch(`${remoteApi}/api/groups`, { headers: { Authorization: `Session ${guestToken}` } }).then(async (response) => {
       if (response.ok) setGroup(((await response.json()) as { group: MobileGroup | null }).group);
     });
   }, [guestToken, inviteCode, inviteHandled, language, t, track]);
 
   const createGroup = async () => {
-    if (!remoteApi || !guestToken) { Alert.alert(t('auth.connecting'), t('analysis.sessionError')); return; }
+    if (!remoteApi || !guestToken) { Alert.alert(t('auth.signInNeeded')); return; }
     if (!location) { Alert.alert(t('location.change'), t('location.privacy')); return; }
     setBusy(true);
     try {
-      const response = await fetch(`${remoteApi}/api/groups`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: t('group.name'), eventLocalDate, eventLocalTime, location, language, budgetMax: Number(budgetMax), maxDistance: Number(maxDistance), distanceUnit, vegetarianRequired: dietaryRequirements.includes('vegetarian') ? 1 : 0, allergies: allergies.split(','), dietaryRequirements, cuisineTypes: cuisineTypes.split(',') }) });
+      const response = await fetch(`${remoteApi}/api/groups`, { method: 'POST', headers: { Authorization: `Session ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: t('group.name'), eventLocalDate, eventLocalTime, location, language, budgetMax: Number(budgetMax), maxDistance: Number(maxDistance), distanceUnit, vegetarianRequired: dietaryRequirements.includes('vegetarian') ? 1 : 0, allergies: allergies.split(','), dietaryRequirements, cuisineTypes: cuisineTypes.split(',') }) });
       if (!response.ok) throw new Error();
       const payload = await response.json() as { group: MobileGroup; providerStatus?: { status: 'live' | 'unavailable' } };
       setGroup(payload.group); setPlacesUnavailable(payload.providerStatus?.status === 'unavailable');
@@ -589,7 +549,7 @@ function GroupsScreen({ guestToken, t, location, language, inviteCode, inviteHan
     if (!remoteApi || !guestToken || !group) return;
     setBusy(true);
     try {
-      const response = await fetch(`${remoteApi}/api/groups/${group.id}/${path}`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const response = await fetch(`${remoteApi}/api/groups/${group.id}/${path}`, { method: 'POST', headers: { Authorization: `Session ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!response.ok) throw new Error(((await response.json()) as { error?: string }).error);
       setGroup(((await response.json()) as { group: MobileGroup }).group);
       if (path === 'vote') track('vote_cast', { outcome: 'success' }); else if (path === 'finalize') track('plan_finalized', { outcome: 'success' }); else if (path === 'rsvp') track('rsvp_submitted', { outcome: 'success' });
@@ -598,7 +558,7 @@ function GroupsScreen({ guestToken, t, location, language, inviteCode, inviteHan
 
   const shareCalendar = async () => {
     if (!remoteApi || !guestToken || !group) return;
-    const response = await fetch(`${remoteApi}/api/groups/${group.id}/calendar`, { headers: { Authorization: `Guest ${guestToken}` } });
+    const response = await fetch(`${remoteApi}/api/groups/${group.id}/calendar`, { headers: { Authorization: `Session ${guestToken}` } });
     if (!response.ok) { Alert.alert(t('error.generic')); return; }
     await Share.share({ title: 'Trinque dining plan', message: await response.text() });
   };
@@ -629,7 +589,7 @@ function GroupsScreen({ guestToken, t, location, language, inviteCode, inviteHan
           {group ? <Text style={styles.constraintText}>{t('group.memberCount', { count: group.memberCount })}</Text> : null}
         </View>
         <View style={styles.constraintRow}>
-          {(group ? [t('group.underBudget', { amount: new Intl.NumberFormat(group.locale ?? language, { style: 'currency', currency: group.currencyCode ?? location?.currencyCode ?? 'CAD', maximumFractionDigits: 0 }).format(group.budgetMax) }), t('group.vegetarianCount', { count: group.vegetarianRequired }), t('group.avoid', { allergens: group.allergies.join(', ') }), t('group.withinRadius', { distance: `${group.maxDistanceKm} km` })] : [t('group.budget'), t('group.vegetarian'), t('group.allergies'), t('group.radius')]).map((item) => <View key={item} style={styles.constraint}><Text style={styles.constraintText}>✓ {item}</Text></View>)}
+          {(group ? [t('group.underBudget', { amount: new Intl.NumberFormat(group.locale ?? language, { style: 'currency', currency: group.currencyCode ?? location?.currencyCode ?? 'CAD', maximumFractionDigits: 0 }).format(group.budgetMax) }), t('group.vegetarianCount', { count: group.vegetarianRequired }), t('group.avoid', { allergens: group.allergies.join(', ') }), t('group.withinRadius', { distance: new Intl.NumberFormat(language, { style: 'unit', unit: group.distanceUnit === 'imperial' ? 'mile' : 'kilometer', unitDisplay: 'short', maximumFractionDigits: 1 }).format(group.distanceUnit === 'imperial' ? group.maxDistanceKm * .621371 : group.maxDistanceKm) })] : [t('group.budget'), t('group.vegetarian'), t('group.allergies'), t('group.radius')]).map((item) => <View key={item} style={styles.constraint}><Text style={styles.constraintText}>✓ {item}</Text></View>)}
         </View>
         {group?.viewerRole === 'owner' && !group.inviteRevokedAt ? <View style={styles.mobileFinalActions}><Pressable style={styles.finalAction} onPress={shareInvite}><Text style={styles.finalActionText}>{t('group.copyInvite')}</Text></Pressable><Pressable style={styles.finalAction} onPress={() => groupAction('invite/revoke')}><Text style={styles.finalActionText}>{t('group.revokeInvite')}</Text></Pressable></View> : null}
       </View>
@@ -641,7 +601,7 @@ function GroupsScreen({ guestToken, t, location, language, inviteCode, inviteHan
           <View style={styles.voteInfo}>
             <View style={styles.voteMeta}><Text style={styles.fitBadge}>{candidate.eligible ? t('group.groupFit', { score: candidate.score }) : t('group.hardConflict')}</Text><Text style={styles.votePrice}>{candidate.price}</Text></View>
             <Text style={styles.voteName}>{candidate.name}</Text>
-            <Text style={styles.voteReason}>{candidate.restaurant} · {candidate.distanceKm} km{`\n`}{mobileGroupCandidateCopy(t, candidate).explanation}{`\n`}{mobileGroupCandidateCopy(t, candidate).dietaryCaveat}{candidate.kind === 'provider_restaurant' ? `\n${t('match.restaurantReason')}` : ''}</Text>
+            <Text style={styles.voteReason}>{candidate.restaurant} · {new Intl.NumberFormat(language, { style: 'unit', unit: group.distanceUnit === 'imperial' ? 'mile' : 'kilometer', unitDisplay: 'short', maximumFractionDigits: 1 }).format(group.distanceUnit === 'imperial' ? candidate.distanceKm * .621371 : candidate.distanceKm)}{`\n`}{mobileGroupCandidateCopy(t, candidate).explanation}{`\n`}{mobileGroupCandidateCopy(t, candidate).dietaryCaveat}{candidate.kind === 'provider_restaurant' ? `\n${t('match.restaurantReason')}` : ''}</Text>
             <Pressable disabled={busy || !candidate.eligible || group.status === 'finalized'} style={({ pressed }) => [styles.voteButton, pressed && styles.pressed, (busy || !candidate.eligible || group.status === 'finalized') && styles.disabledButton]} onPress={() => groupAction('vote', { candidateId: candidate.candidateId })}>
               <Text style={styles.voteButtonText}>{group.status === 'finalized' ? t('group.votingClosed') : `${group.viewerVote === candidate.candidateId ? '♥' : '♡'}  ${t('group.vote')} · ${group.votes[candidate.candidateId] ?? 0}`}</Text>
             </Pressable>
@@ -677,20 +637,99 @@ function SavedScreen({ dishes: saved, onSave, onDiscover, t }: { dishes: Dish[];
   );
 }
 
-function ProfileScreen({ guestToken, t, language, theme, measurementSystem, location, persist }: { guestToken: string | null; t: Translator; language: UiLanguage; theme: ThemePreference; measurementSystem: MeasurementSystem; location: MobileLocation | null; persist: (next: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: MobileLocation | null }) => Promise<void> }) {
+function MobileAuthPanel({ t, onAuthenticated }: { t: Translator; onAuthenticated: (token: string, identity: MobileIdentity, onboardingComplete: boolean) => void }) {
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [busy, setBusy] = useState(false);
+  async function submit() {
+    if (!remoteApi || !email.trim() || password.length < 8) return;
+    setBusy(true);
+    try {
+      const configResponse = await fetch(`${remoteApi}/api/auth/config`);
+      const config = await configResponse.json() as { configured?: boolean; url?: string; publishableKey?: string };
+      if (!configResponse.ok || !config.configured || !config.url || !config.publishableKey) { Alert.alert(t('auth.notSetUp')); return; }
+      const authResponse = await fetch(`${config.url}/auth/v1/${mode === 'signin' ? 'token?grant_type=password' : 'signup'}`, { method: 'POST', headers: { apikey: config.publishableKey, Authorization: `Bearer ${config.publishableKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email.trim(), password }) });
+      const auth = await authResponse.json() as { access_token?: string };
+      if (!authResponse.ok) { Alert.alert(t(mode === 'signin' ? 'auth.failed' : 'auth.createFailed')); return; }
+      if (!auth.access_token) { Alert.alert(t('auth.checkEmail')); return; }
+      const sessionResponse = await fetch(`${remoteApi}/api/auth/session`, { method: 'POST', headers: { Authorization: `Bearer ${auth.access_token}` } });
+      if (!sessionResponse.ok) { Alert.alert(t('auth.failed')); return; }
+      const session = await sessionResponse.json() as { sessionToken?: string; identity?: MobileIdentity };
+      if (!session.sessionToken || !session.identity) { Alert.alert(t('auth.failed')); return; }
+      await AsyncStorage.setItem(SESSION_KEY, session.sessionToken);
+      const onboardingResponse = await fetch(`${remoteApi}/api/onboarding`, { headers: { Authorization: `Session ${session.sessionToken}` } });
+      const complete = onboardingResponse.ok && Boolean(((await onboardingResponse.json()) as { complete?: boolean }).complete);
+      onAuthenticated(session.sessionToken, session.identity, complete);
+    } catch { Alert.alert(t(mode === 'signin' ? 'auth.failed' : 'auth.createFailed')); }
+    finally { setBusy(false); }
+  }
+  return <View style={styles.preferenceCard}><Text style={styles.preferenceKicker}>{t('auth.account').toUpperCase()}</Text><Text style={styles.preferenceTitle}>{t(mode === 'signin' ? 'auth.signIn' : 'auth.create')}</Text><Text style={styles.privacyText}>{t(mode === 'signin' ? 'auth.signInBody' : 'auth.createBody')}</Text><TextInput autoCapitalize="none" autoCorrect={false} keyboardType="email-address" textContentType="emailAddress" style={styles.fieldInput} value={email} onChangeText={setEmail} placeholder={t('auth.email')} placeholderTextColor={palette.muted} /><TextInput secureTextEntry textContentType={mode === 'signin' ? 'password' : 'newPassword'} style={styles.fieldInput} value={password} onChangeText={setPassword} placeholder={t('auth.passwordHint')} placeholderTextColor={palette.muted} /><Pressable disabled={busy || !email.trim() || password.length < 8} style={[styles.primaryButton, (busy || !email.trim() || password.length < 8) && styles.disabledButton]} onPress={() => void submit()}><Text style={styles.primaryButtonText}>{busy ? t('auth.working') : t(mode === 'signin' ? 'auth.signIn' : 'auth.create')}</Text></Pressable><Pressable onPress={() => setMode((value) => value === 'signin' ? 'signup' : 'signin')}><Text style={styles.demoLink}>{t(mode === 'signin' ? 'auth.newHere' : 'auth.haveAccount')}</Text></Pressable></View>;
+}
+
+function MobileOnboarding({ token, t, language, location, onComplete }: { token: string; t: Translator; language: UiLanguage; location: MobileLocation | null; onComplete: () => void }) {
+  const [name, setName] = useState(''); const [handle, setHandle] = useState(''); const [countryCode, setCountryCode] = useState(location?.countryCode ?? 'CA'); const [cuisines, setCuisines] = useState(''); const [busy, setBusy] = useState(false);
+  async function save() {
+    if (!name.trim() || !handle.trim() || countryCode.trim().length !== 2) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`${remoteApi}/api/onboarding`, { method: 'PUT', headers: { Authorization: `Session ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), handle: handle.trim().toLowerCase(), countryCode: countryCode.trim().toUpperCase(), language, favoriteCuisines: cuisines.split(',').map((item) => item.trim()).filter(Boolean) }) });
+      if (!response.ok) { Alert.alert(t('onboarding.saveFailed')); return; }
+      onComplete();
+    } catch { Alert.alert(t('onboarding.saveFailed')); }
+    finally { setBusy(false); }
+  }
+  return <View style={styles.preferenceCard}><Text style={styles.preferenceKicker}>{t('onboarding.title').toUpperCase()}</Text><Text style={styles.privacyText}>{t('onboarding.help')}</Text><Field label={t('onboarding.name')} value={name} onChangeText={setName} /><Field label={t('onboarding.username')} value={handle} onChangeText={(value) => setHandle(value.toLowerCase())} /><Text style={styles.fieldLabel}>{t('onboarding.country')}</Text><TextInput autoCapitalize="characters" maxLength={2} style={styles.fieldInput} value={countryCode} onChangeText={setCountryCode} placeholder={t('onboarding.countryExample')} placeholderTextColor={palette.muted} /><Field label={t('onboarding.cuisines')} value={cuisines} onChangeText={setCuisines} /><Pressable disabled={busy || !name.trim() || !handle.trim() || countryCode.trim().length !== 2} style={[styles.primaryButton, (busy || !name.trim() || !handle.trim() || countryCode.trim().length !== 2) && styles.disabledButton]} onPress={() => void save()}><Text style={styles.primaryButtonText}>{busy ? t('onboarding.saving') : t('onboarding.save')}</Text></Pressable></View>;
+}
+
+type MobileSafetyItem = { id: string; label: string; handle?: string | null };
+type MobileReport = { id: string; reason: 'harmful' | 'spam' | 'false' | 'stale' | 'other'; status: 'open' | 'resolved' | 'rejected'; createdAt: string };
+function MobileSafetyCenter({ token, t, language }: { token: string; t: Translator; language: UiLanguage }) {
+  const [choices, setChoices] = useState<{ blocks: MobileSafetyItem[]; mutes: MobileSafetyItem[]; hiddenDishes: MobileSafetyItem[] }>({ blocks: [], mutes: [], hiddenDishes: [] });
+  const [reports, setReports] = useState<MobileReport[]>([]);
+  const load = useCallback(async () => {
+    const headers = { Authorization: `Session ${token}` };
+    const [safetyResponse, reportResponse] = await Promise.all([fetch(`${remoteApi}/api/safety`, { headers }), fetch(`${remoteApi}/api/reports`, { headers })]);
+    if (!safetyResponse.ok || !reportResponse.ok) { Alert.alert(t('safety.failed')); return; }
+    setChoices(await safetyResponse.json() as typeof choices); setReports(((await reportResponse.json()) as { reports?: MobileReport[] }).reports ?? []);
+  }, [t, token]);
+  useEffect(() => {
+    let active = true;
+    const headers = { Authorization: `Session ${token}` };
+    void Promise.all([fetch(`${remoteApi}/api/safety`, { headers }), fetch(`${remoteApi}/api/reports`, { headers })]).then(async ([safetyResponse, reportResponse]) => {
+      if (!safetyResponse.ok || !reportResponse.ok) throw new Error('safety unavailable');
+      const nextChoices = await safetyResponse.json() as typeof choices;
+      const nextReports = ((await reportResponse.json()) as { reports?: MobileReport[] }).reports ?? [];
+      if (active) { setChoices(nextChoices); setReports(nextReports); }
+    }).catch(() => { if (active) Alert.alert(t('safety.failed')); });
+    return () => { active = false; };
+  }, [t, token]);
+  async function undo(action: 'block' | 'mute' | 'hide', id: string) {
+    const response = await fetch(`${remoteApi}/api/safety?action=${action}&targetId=${encodeURIComponent(id)}`, { method: 'DELETE', headers: { Authorization: `Session ${token}` } });
+    Alert.alert(t('safety.title'), response.ok ? t('safety.done') : t('safety.failed')); if (response.ok) await load();
+  }
+  const lists = [
+    { key: 'blocks' as const, title: 'safety.blocked' as const, action: 'block' as const, undo: 'safety.unblock' as const },
+    { key: 'mutes' as const, title: 'safety.muted' as const, action: 'mute' as const, undo: 'safety.unmute' as const },
+    { key: 'hiddenDishes' as const, title: 'safety.hidden' as const, action: 'hide' as const, undo: 'safety.unhide' as const },
+  ];
+  return <View style={styles.preferenceCard}><Text style={styles.preferenceKicker}>{t('safety.manage').toUpperCase()}</Text>{lists.map((list) => <View key={list.key}><Text style={styles.preferenceTitle}>{t(list.title)}</Text>{choices[list.key].length ? choices[list.key].map((item) => <View key={item.id} style={styles.safetyChoiceRow}><View><Text style={styles.safetyTitle}>{item.label}</Text>{item.handle ? <Text style={styles.safetyBody}>@{item.handle}</Text> : null}</View><Pressable onPress={() => void undo(list.action, item.id)}><Text style={styles.demoLink}>{t(list.undo)}</Text></Pressable></View>) : <Text style={styles.privacyText}>{t('safety.none')}</Text>}</View>)}<Text style={styles.preferenceTitle}>{t('safety.reports')}</Text>{reports.length ? reports.map((report) => <View key={report.id} style={styles.safetyChoiceRow}><View><Text style={styles.safetyTitle}>{t(`safety.reason.${report.reason}`)}</Text><Text style={styles.safetyBody}>{new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(report.createdAt))}</Text></View><Text style={styles.safetyBody}>{t(report.status === 'open' ? 'safety.open' : 'safety.resolved')}</Text></View>) : <Text style={styles.privacyText}>{t('safety.none')}</Text>}</View>;
+}
+
+function ProfileScreen({ guestToken, identity, onboardingComplete, onAuthenticated, onSignedOut, onOnboardingComplete, t, language, theme, measurementSystem, location, persist }: { guestToken: string | null; identity: MobileIdentity | null; onboardingComplete: boolean; onAuthenticated: (token: string, identity: MobileIdentity, onboardingComplete: boolean) => void; onSignedOut: () => void; onOnboardingComplete: () => void; t: Translator; language: UiLanguage; theme: ThemePreference; measurementSystem: MeasurementSystem; location: MobileLocation | null; persist: (next: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: MobileLocation | null }) => Promise<void> }) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<MobileLocationSuggestion[]>([]);
   const [busy, setBusy] = useState(false);
   const [consent, setConsent] = useState({ locationConsent: false, analyticsConsent: false, imageRetentionConsent: false });
+  const authenticated = Boolean(identity && identity.authType !== 'guest');
+  const authorization = useMemo((): Record<string, string> => guestToken ? { Authorization: `${authenticated ? 'Session' : 'Guest'} ${guestToken}` } : {}, [authenticated, guestToken]);
 
   useEffect(() => {
     if (!remoteApi || !guestToken) return;
-    void fetch(`${remoteApi}/api/privacy`, { headers: { Authorization: `Guest ${guestToken}` } }).then(async (response) => { if (response.ok) setConsent((await response.json() as { consent: typeof consent }).consent); });
-  }, [guestToken]);
+    void fetch(`${remoteApi}/api/privacy`, { headers: authorization }).then(async (response) => { if (response.ok) setConsent((await response.json() as { consent: typeof consent }).consent); });
+  }, [authorization, guestToken]);
 
   const saveConsent = async (next = consent) => {
     if (!remoteApi || !guestToken) return;
-    const response = await fetch(`${remoteApi}/api/privacy`, { method: 'PUT', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(next) });
+    const response = await fetch(`${remoteApi}/api/privacy`, { method: 'PUT', headers: { ...authorization, 'Content-Type': 'application/json' }, body: JSON.stringify(next) });
     if (!response.ok) { Alert.alert(t('error.generic')); return; }
     setConsent((await response.json() as { consent: typeof consent }).consent);
     if (!next.locationConsent) await persist({ location: null });
@@ -698,21 +737,21 @@ function ProfileScreen({ guestToken, t, language, theme, measurementSystem, loca
 
   const exportData = async () => {
     if (!remoteApi || !guestToken) return;
-    const response = await fetch(`${remoteApi}/api/privacy/export`, { headers: { Authorization: `Guest ${guestToken}` } });
+    const response = await fetch(`${remoteApi}/api/privacy/export`, { headers: authorization });
     if (!response.ok) { Alert.alert(t('error.generic')); return; }
     await Share.share({ title: t('privacy.export'), message: await response.text() });
   };
 
   const deleteData = () => {
     if (!remoteApi || !guestToken) return;
-    Alert.alert(t('privacy.delete'), t('privacy.deleteConfirm'), [{ text: t('analysis.keepPrivate'), style: 'cancel' }, { text: t('privacy.delete'), style: 'destructive', onPress: () => { void fetch(`${remoteApi}/api/privacy`, { method: 'DELETE', headers: { Authorization: `Guest ${guestToken}` } }).then(async (response) => { if (!response.ok) { Alert.alert(t('error.generic')); return; } await AsyncStorage.multiRemove(['trinque.guestToken', 'trinque.location', 'trinque.language', 'trinque.theme', 'trinque.measurement']); Alert.alert(t('privacy.deleted')); }); } }]);
+    Alert.alert(t('privacy.delete'), t('privacy.deleteConfirm'), [{ text: t('analysis.keepPrivate'), style: 'cancel' }, { text: t('privacy.delete'), style: 'destructive', onPress: () => { void fetch(`${remoteApi}/api/privacy`, { method: 'DELETE', headers: authorization }).then(async (response) => { if (!response.ok) { Alert.alert(t('error.generic')); return; } await AsyncStorage.multiRemove([SESSION_KEY, GUEST_KEY, 'trinque.location', 'trinque.language', 'trinque.theme', 'trinque.measurement']); onSignedOut(); Alert.alert(t('privacy.deleted')); }); } }]);
   };
 
   const lookup = async (payload: { input?: string; latitude?: number; longitude?: number; providerPlaceId?: string }) => {
     if (!remoteApi) { Alert.alert(t('health.placesUnavailable'), t('location.unavailable')); return; }
     setBusy(true); setSuggestions([]);
     try {
-      const response = await fetch(`${remoteApi}/api/locations/autocomplete`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(guestToken ? { Authorization: `Guest ${guestToken}` } : {}) }, body: JSON.stringify({ ...payload, language, location }) });
+      const response = await fetch(`${remoteApi}/api/locations/autocomplete`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authorization }, body: JSON.stringify({ ...payload, language, location }) });
       const body = await response.json() as { suggestions?: MobileLocationSuggestion[]; location?: MobileLocation; error?: { code?: string } };
       if (!response.ok) {
         const message = body.error?.code === 'unsupported_country' ? t('location.unsupported') : body.error?.code === 'credentials' ? t('location.unavailable') : t('location.providerError');
@@ -736,16 +775,22 @@ function ProfileScreen({ guestToken, t, language, theme, measurementSystem, loca
     await lookup({ latitude: position.coords.latitude, longitude: position.coords.longitude });
   };
 
+  const signOut = async () => {
+    if (remoteApi && guestToken) await fetch(`${remoteApi}/api/auth/session`, { method: 'DELETE', headers: { Authorization: `Session ${guestToken}` } }).catch(() => undefined);
+    await AsyncStorage.removeItem(SESSION_KEY); onSignedOut();
+  };
+
+  const initials = authenticated ? identity?.displayName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'T' : 'T';
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
       <Header eyebrow={t('settings.title')} />
       <View style={styles.profileHero}>
-        <View style={styles.profileAvatar}><Text style={styles.profileInitials}>CO</Text></View>
-        <Text style={styles.profileName}>{t('auth.guest')}</Text><Text style={styles.profileHandle}>{location ? `${location.locality} · ${location.countryCode}` : t('location.change')}</Text>
+        <View style={styles.profileAvatar}><Text style={styles.profileInitials}>{initials}</Text></View>
+        <Text style={styles.profileName}>{authenticated ? identity?.displayName : t('auth.guest')}</Text><Text style={styles.profileHandle}>{location ? `${location.locality} · ${location.countryCode}` : t('location.change')}</Text>
       </View>
-      <View style={styles.profileStats}>
-        {[['18', t('profile.dishes')], ['7', t('profile.lists')], ['12', t('profile.friends')]].map(([value, label]) => <View key={label} style={styles.profileStat}><Text style={styles.profileStatValue}>{value}</Text><Text style={styles.profileStatLabel}>{label}</Text></View>)}
-      </View>
+      {!authenticated ? <MobileAuthPanel t={t} onAuthenticated={onAuthenticated} /> : !onboardingComplete && guestToken ? <MobileOnboarding token={guestToken} t={t} language={language} location={location} onComplete={onOnboardingComplete} /> : null}
+      {authenticated ? <Pressable style={styles.secondaryButtonStandalone} onPress={() => void signOut()}><Text style={styles.secondaryButtonText}>{t('auth.signOut')}</Text></Pressable> : null}
       <View style={styles.preferenceCard}>
         <Text style={styles.preferenceKicker}>{t('settings.title').toUpperCase()}</Text>
         <Text style={styles.preferenceTitle}>{t('settings.language')}</Text>
@@ -763,6 +808,7 @@ function ProfileScreen({ guestToken, t, language, theme, measurementSystem, loca
         <Text style={styles.privacyText}>{t('location.privacy')}</Text>
       </View>
       <View style={styles.preferenceCard}><Text style={styles.preferenceKicker}>{t('privacy.title').toUpperCase()}</Text><Text style={styles.privacyText}>{t('privacy.location')}</Text>{([['locationConsent', 'privacy.locationConsent'], ['analyticsConsent', 'privacy.analyticsConsent'], ['imageRetentionConsent', 'privacy.imageConsent']] as const).map(([field, key]) => <Toggle key={field} selected={consent[field]} label={t(key)} onPress={() => setConsent((current) => ({ ...current, [field]: !current[field] }))} />)}<Pressable style={styles.secondaryButton} onPress={() => void saveConsent()}><Text style={styles.secondaryButtonText}>{t('privacy.saveConsent')}</Text></Pressable><Pressable style={styles.secondaryButton} onPress={() => { const withdrawn = { locationConsent: false, analyticsConsent: false, imageRetentionConsent: false }; setConsent(withdrawn); void saveConsent(withdrawn); }}><Text style={styles.secondaryButtonText}>{t('privacy.withdraw')}</Text></Pressable><Pressable style={styles.secondaryButton} onPress={() => void exportData()}><Text style={styles.secondaryButtonText}>{t('privacy.export')}</Text></Pressable><Pressable style={styles.secondaryButton} onPress={deleteData}><Text style={styles.secondaryButtonText}>{t('privacy.delete')}</Text></Pressable></View>
+      {authenticated && onboardingComplete && guestToken ? <MobileSafetyCenter token={guestToken} t={t} language={language} /> : null}
       <View style={styles.safetyCard}><Text style={styles.safetyIcon}>i</Text><View style={styles.safetyCopy}><Text style={styles.safetyTitle}>{t('privacy.title')}</Text><Text style={styles.safetyBody}>{t('analysis.warning')}</Text></View></View>
     </ScrollView>
   );
@@ -772,7 +818,7 @@ function Header({ eyebrow }: { eyebrow: string }) {
   return (
     <View style={styles.header}>
       <View><Text style={styles.wordmark}>Trinque</Text><Text style={styles.headerEyebrow}>{eyebrow}</Text></View>
-      <View style={styles.headerAvatar}><Text style={styles.headerAvatarText}>CO</Text></View>
+      <View style={styles.headerAvatar}><Text style={styles.headerAvatarText}>T</Text></View>
     </View>
   );
 }
@@ -930,7 +976,7 @@ function AnalyzerModal({ visible, phase, preview, imageDataUrl, analysis, analys
               <Text style={styles.canonicalNotice}>{t('analysis.canonicalNotice')}</Text>
               <View style={styles.publicationSection}><Text style={styles.publicationTitle}>{t('publish.restaurantTitle')}</Text><Text style={styles.publicationHelp}>{t('publish.restaurantHelp')}</Text>
                 <Pressable style={styles.secondaryButton} onPress={() => void findRestaurants()}><Text style={styles.secondaryButtonText}>{t('publish.findRestaurants')}</Text></Pressable>
-                {restaurants.map((place) => <Pressable key={place.providerPlaceId} style={[styles.restaurantOption, selectedRestaurant?.providerPlaceId === place.providerPlaceId && styles.restaurantOptionSelected]} onPress={() => selectProviderRestaurant(place)}><View style={styles.restaurantTitleRow}><Text style={styles.restaurantName}>{place.displayName}</Text>{place.rating != null ? <Text accessibilityLabel={`${place.rating.toFixed(1)} out of 5 stars`} style={styles.restaurantRating}>{'★'.repeat(Math.round(place.rating))}{'☆'.repeat(5 - Math.round(place.rating))} {place.rating.toFixed(1)}</Text> : null}</View><Text style={styles.restaurantAddress}>{place.address}</Text></Pressable>)}
+                {restaurants.map((place) => <Pressable key={place.providerPlaceId} style={[styles.restaurantOption, selectedRestaurant?.providerPlaceId === place.providerPlaceId && styles.restaurantOptionSelected]} onPress={() => selectProviderRestaurant(place)}><View style={styles.restaurantTitleRow}><Text style={styles.restaurantName}>{place.displayName}</Text>{place.rating != null ? <Text accessibilityLabel={t('restaurant.rating', { rating: place.rating.toFixed(1) })} style={styles.restaurantRating}>{'★'.repeat(Math.round(place.rating))}{'☆'.repeat(5 - Math.round(place.rating))} {place.rating.toFixed(1)}</Text> : null}</View><Text style={styles.restaurantAddress}>{place.address}</Text></Pressable>)}
                 {restaurants.length > 0 ? <Text style={styles.googleAttribution}>{t('publish.googleAttribution')}</Text> : null}
                 {restaurantStatus ? <Text style={styles.publicationStatus}>{restaurantStatus}</Text> : null}
                 <Text style={styles.fieldLabel}>{t('publish.manualRestaurant')}</Text><TextInput style={styles.fieldInput} placeholder={t('publish.restaurantName')} placeholderTextColor={palette.muted} value={manualName} onChangeText={setManualName} /><TextInput style={styles.fieldInput} placeholder={t('publish.restaurantAddress')} placeholderTextColor={palette.muted} value={manualAddress} onChangeText={setManualAddress} />
@@ -971,7 +1017,7 @@ function MobileMatchTier({ title, results, t, language, measurementSystem, onFee
     const verification = match.verificationStatus === 'not_applicable' ? t('match.notApplicable') : t(`verification.${match.verificationStatus}` as MessageKey);
     const reason = t(match.reasonCode === 'restaurant_only' ? 'match.restaurantReason' : match.reasonCode === 'semantic_and_distance' ? 'match.semanticReason' : 'match.nearbyReason');
     const price = match.priceAmount != null && match.currencyCode ? new Intl.NumberFormat(language, { style: 'currency', currency: match.currencyCode }).format(match.priceAmount) : null;
-    return <View key={match.id} style={styles.mobileMatch}>{match.imageUrl ? <NativeImage source={{ uri: match.imageUrl }} style={styles.mobileMatchImage} /> : <View style={[styles.mobileMatchImage, styles.mobileMatchPlaceholder]}><Text style={styles.mobileMatchPlaceholderText}>T</Text></View>}<View style={styles.mobileMatchCopy}><View style={styles.mobileMatchTitle}><Text style={styles.mobileMatchName}>{match.dishName ?? match.restaurantName}</Text><Text style={styles.mobileMatchScore}>{match.score}%</Text></View><Text style={styles.mobileMatchPlace}>{match.dishName ? `${match.restaurantName} · ` : ''}{distance}{price ? ` · ${price}` : ''}</Text><Text style={styles.mobileMatchReason}>{reason}</Text><Text style={styles.mobileMatchMeta}>{provenance} · {verification}</Text><Text style={styles.mobileMatchMeta}>{match.lastConfirmedAt ? t('match.lastConfirmed', { date: new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(match.lastConfirmedAt)) }) : t('match.neverConfirmed')}</Text><Text style={styles.mobileMatchMeta}>{match.currentAvailabilityConfirmed ? t('availability.confirmed') : t('availability.unknown')}</Text><Text style={styles.mobileMatchCaveat}>{match.dietaryCaveat}</Text>{match.attribution ? <Text style={styles.googleAttribution}>Google Maps</Text> : null}<Pressable onPress={() => onFeedback(match.kind === 'dish' ? 'stale_dish' : 'closed_restaurant', match.kind === 'dish' ? 'published_dish' : 'restaurant', match.id)}><Text style={styles.demoLink}>{t(match.kind === 'dish' ? 'feedback.staleDish' : 'feedback.closedRestaurant')}</Text></Pressable></View></View>;
+    return <View key={match.id} style={styles.mobileMatch}>{match.imageUrl ? <NativeImage source={{ uri: match.imageUrl }} style={styles.mobileMatchImage} /> : <View style={[styles.mobileMatchImage, styles.mobileMatchPlaceholder]}><Text style={styles.mobileMatchPlaceholderText}>T</Text></View>}<View style={styles.mobileMatchCopy}><View style={styles.mobileMatchTitle}><Text style={styles.mobileMatchName}>{match.dishName ?? match.restaurantName}</Text><Text style={styles.mobileMatchScore}>{match.score}%</Text></View><Text style={styles.mobileMatchPlace}>{match.dishName ? `${match.restaurantName} · ` : ''}{distance}{price ? ` · ${price}` : ''}</Text><Text style={styles.mobileMatchReason}>{reason}</Text><Text style={styles.mobileMatchMeta}>{provenance} · {verification}</Text><Text style={styles.mobileMatchMeta}>{match.lastConfirmedAt ? t('match.lastConfirmed', { date: new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(match.lastConfirmedAt)) }) : t('match.neverConfirmed')}</Text><Text style={styles.mobileMatchMeta}>{match.currentAvailabilityConfirmed ? t('availability.confirmed') : t('availability.unknown')}</Text><Text style={styles.mobileMatchCaveat}>{match.dietaryCaveat === 'provider_information_unconfirmed' ? t('group.providerCaveat') : t('analysis.warning')}</Text>{match.attribution ? <Text style={styles.googleAttribution}>Google Maps</Text> : null}<Pressable onPress={() => onFeedback(match.kind === 'dish' ? 'stale_dish' : 'closed_restaurant', match.kind === 'dish' ? 'published_dish' : 'restaurant', match.id)}><Text style={styles.demoLink}>{t(match.kind === 'dish' ? 'feedback.staleDish' : 'feedback.closedRestaurant')}</Text></Pressable></View></View>;
   })}</View>;
 }
 
@@ -1086,6 +1132,7 @@ const styles = StyleSheet.create({
   emptyTitle: { color: palette.ink, fontFamily: Platform.select({ ios: 'Georgia-Bold', default: 'serif' }), fontSize: 23, marginTop: 8 },
   emptyBody: { color: palette.muted, textAlign: 'center', fontSize: 13, lineHeight: 20, marginTop: 9 },
   secondaryButton: { borderWidth: 1.5, borderColor: palette.terracotta, borderRadius: 17, minHeight: 52, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center', marginTop: 20 },
+  secondaryButtonStandalone: { marginHorizontal: 18, borderWidth: 1.5, borderColor: palette.terracotta, borderRadius: 17, minHeight: 52, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center', marginTop: 18 },
   secondaryButtonText: { color: palette.terracotta, fontWeight: '900', fontSize: 14 },
   profileHero: { alignItems: 'center', paddingTop: 12 },
   profileAvatar: { width: 88, height: 88, borderRadius: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.burgundy, borderWidth: 6, borderColor: palette.blush },
@@ -1097,6 +1144,7 @@ const styles = StyleSheet.create({
   profileStatValue: { color: palette.burgundy, fontFamily: Platform.select({ ios: 'Georgia-Bold', default: 'serif' }), fontSize: 22 },
   profileStatLabel: { color: palette.muted, fontSize: 10, marginTop: 3 },
   preferenceCard: { margin: 18, backgroundColor: palette.paper, borderRadius: 22, borderWidth: 1, borderColor: palette.line, padding: 19 },
+  safetyChoiceRow: { minHeight: 52, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: palette.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   preferenceKicker: { color: palette.terracotta, fontSize: 10, fontWeight: '900', letterSpacing: 1.3 },
   preferenceTitle: { color: palette.ink, fontFamily: Platform.select({ ios: 'Georgia-Bold', default: 'serif' }), fontSize: 21, marginTop: 6, marginBottom: 9 },
   preferenceRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 14, paddingVertical: 14, borderTopWidth: 1, borderTopColor: palette.line },
@@ -1136,6 +1184,7 @@ const styles = StyleSheet.create({
   modalBody: { color: palette.muted, fontSize: 14, lineHeight: 22, marginTop: 12, marginBottom: 22 },
   modalButton: { width: '100%', marginTop: 12, justifyContent: 'center' },
   demoLink: { color: palette.burgundy, textAlign: 'center', fontSize: 12, fontWeight: '800', textDecorationLine: 'underline', marginTop: 21 },
+  dangerLink: { color: palette.danger, textAlign: 'center', fontSize: 12, fontWeight: '800', textDecorationLine: 'underline', marginTop: 16 },
   analyzingPanel: { flex: 1, backgroundColor: palette.burgundyDark },
   analysisPreview: { width: '100%', height: '100%', opacity: 0.62 },
   demoPreview: { backgroundColor: palette.burgundy, alignItems: 'center', justifyContent: 'center' },
@@ -1213,6 +1262,7 @@ const styles = StyleSheet.create({
   emptyFeedText: { color: palette.muted, textAlign: 'center', fontSize: 12 },
   communityDish: { flexDirection: 'row', gap: 12, backgroundColor: palette.paper, borderWidth: 1, borderColor: palette.line, borderRadius: 17, padding: 12 },
   communityDishCopy: { flex: 1, gap: 4 },
+  inlineSafety: { marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: palette.line, gap: 4 },
   communityDishName: { color: palette.ink, fontFamily: Platform.select({ ios: 'Georgia-Bold', default: 'serif' }), fontSize: 17 },
   communityDishDescription: { color: palette.muted, fontSize: 11, lineHeight: 16 },
   communityDishMeta: { color: palette.terracotta, fontSize: 9, lineHeight: 13 },

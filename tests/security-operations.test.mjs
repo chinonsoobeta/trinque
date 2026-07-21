@@ -90,7 +90,24 @@ test("iOS exposes the same core dish safety actions", async () => {
   assert.match(source, /action: 'block'/);
   assert.match(source, /onHide\(dish\.id\)/);
   assert.match(source, /safety\.reportReason/);
+  assert.match(source, /safety\.details/);
+  assert.match(source, /maxLength=\{1000\}/);
   assert.match(source, /safety\.blockConfirm/);
+});
+
+test("iOS safety uses a signed-in app session and supports onboarding and undo", async () => {
+  const source = await readFile(new URL("../ios/App.tsx", import.meta.url), "utf8");
+  assert.match(source, /\/api\/auth\/config/);
+  assert.match(source, /\/api\/auth\/session/);
+  assert.match(source, /Authorization: `Session \$\{token\}`/);
+  assert.match(source, /hydrate\(signedInToken, 'Session'\)/);
+  assert.match(source, /\/api\/onboarding/);
+  assert.match(source, /MobileSafetyCenter/);
+  assert.match(source, /method: 'DELETE'/);
+  assert.match(source, /safety\.unblock/);
+  assert.match(source, /safety\.unmute/);
+  assert.match(source, /safety\.unhide/);
+  assert.doesNotMatch(source, /\[\['18', t\('profile\.dishes'\)/);
 });
 
 test("users can review safety choices and moderators have a guarded queue", async () => {

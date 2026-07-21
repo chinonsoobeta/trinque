@@ -42,6 +42,8 @@ const enUS = {
   "auth.callback": "Completing sign-in…",
   "auth.notSetUp": "Sign-in is not set up.",
   "auth.linkExpired": "This sign-in link is invalid or expired.",
+  "auth.createFailed": "We could not create your account.",
+  "auth.signInNeeded": "Sign in to use this feature.",
   "settings.title": "Settings",
   "settings.language": "Language",
   "settings.language.en-CA": "Canadian English",
@@ -117,6 +119,11 @@ const enUS = {
   "analysis.useDemo": "Use labeled demo",
   "analysis.live": "Live dish check",
   "analysis.demo": "Demo result",
+  "analysis.demoName": "Brown butter filled pasta",
+  "analysis.demoCuisine": "Northern Italian",
+  "analysis.demoIngredients": "Filled pasta, brown butter, sage, lemon, and hard cheese",
+  "analysis.demoDietary": "Vegetarian. Contains milk and gluten.",
+  "analysis.demoDescription": "Filled pasta with toasted butter, herbs, and lemon.",
   "analysis.review": "Review before publishing",
   "analysis.reviewTitle": "Check this dish before you post it.",
   "analysis.confident": "{confidence}% confident",
@@ -140,6 +147,7 @@ const enUS = {
   "publish.selectRestaurant": "Select this restaurant",
   "publish.selectedRestaurant": "Selected restaurant: {restaurant}",
   "publish.googleAttribution": "Place information from Google Maps",
+  "restaurant.rating": "{rating} out of 5 stars",
   "publish.knowledgeTitle": "What do you know?",
   "publish.priceKnowledge": "What you know about the price",
   "publish.priceUnknown": "I do not know the price",
@@ -391,6 +399,7 @@ const enUS = {
   "onboarding.name": "Name",
   "onboarding.username": "Username",
   "onboarding.country": "Country",
+  "onboarding.countryExample": "Two-letter country code, for example CA",
   "onboarding.language": "Preferred language",
   "onboarding.cuisines": "Favourite cuisines (optional)",
   "onboarding.cuisineExample": "Italian, Mexican",
@@ -625,6 +634,41 @@ Object.assign(es, { "dish.notFound": "Plato no encontrado", "dish.removed": "Est
 Object.assign(de, { "dish.notFound": "Gericht nicht gefunden", "dish.removed": "Dieses Gericht wurde entfernt oder ist nicht verfügbar.", "dish.noRestaurant": "Kein Restaurant hinzugefügt", "dish.noRetainedPhoto": "Die Person hat das Foto nicht behalten.", "dish.sharedBy": "Geteilt von", "dish.facts": "Angaben zum Gericht", "dish.about": "Über dieses Gericht", "dish.notListed": "Nicht angegeben", "dish.priceSeen": "Gesehener Preis", "dish.menuStatus": "Stand der Speisekarte", "dish.checkedBy": "Geprüft von", "dish.source": "Quelle", "dish.photoCheck": "Fotoprüfung", "dish.related": "Ähnliche Gerichte" });
 Object.assign(it, { "dish.notFound": "Piatto non trovato", "dish.removed": "Questo piatto è stato rimosso o non è disponibile.", "dish.noRestaurant": "Nessun ristorante aggiunto", "dish.noRetainedPhoto": "La persona che ha pubblicato il piatto non ha conservato la foto.", "dish.sharedBy": "Pubblicato da", "dish.facts": "Dati del piatto", "dish.about": "Informazioni sul piatto", "dish.notListed": "Non indicato", "dish.priceSeen": "Prezzo visto", "dish.menuStatus": "Stato del menu", "dish.checkedBy": "Verificato da", "dish.source": "Fonte", "dish.photoCheck": "Verifica della foto", "dish.related": "Piatti simili" });
 Object.assign(pt, { "dish.notFound": "Prato não encontrado", "dish.removed": "Este prato foi removido ou não está disponível.", "dish.noRestaurant": "Nenhum restaurante adicionado", "dish.noRetainedPhoto": "A pessoa que publicou o prato não guardou a foto.", "dish.sharedBy": "Publicado por", "dish.facts": "Dados do prato", "dish.about": "Sobre este prato", "dish.notListed": "Não indicado", "dish.priceSeen": "Preço visto", "dish.menuStatus": "Estado do menu", "dish.checkedBy": "Verificado por", "dish.source": "Fonte", "dish.photoCheck": "Verificação da foto", "dish.related": "Pratos parecidos" });
+
+Object.assign(fr, { "auth.createFailed": "Impossible de créer votre compte.", "auth.signInNeeded": "Connectez-vous pour utiliser cette fonction.", "restaurant.rating": "{rating} étoiles sur 5", "onboarding.countryExample": "Code pays à deux lettres, par exemple CA" });
+Object.assign(es, { "auth.createFailed": "No pudimos crear tu cuenta.", "auth.signInNeeded": "Inicia sesión para usar esta función.", "restaurant.rating": "{rating} estrellas de 5", "onboarding.countryExample": "Código de país de dos letras, por ejemplo MX" });
+Object.assign(de, { "auth.createFailed": "Wir konnten dein Konto nicht erstellen.", "auth.signInNeeded": "Melde dich an, um diese Funktion zu nutzen.", "restaurant.rating": "{rating} von 5 Sternen", "onboarding.countryExample": "Ländercode mit zwei Buchstaben, zum Beispiel DE" });
+Object.assign(it, { "auth.createFailed": "Non abbiamo potuto creare il tuo profilo.", "auth.signInNeeded": "Accedi per usare questa funzione.", "restaurant.rating": "{rating} stelle su 5", "onboarding.countryExample": "Codice paese di due lettere, per esempio IT" });
+Object.assign(pt, { "auth.createFailed": "Não foi possível criar a sua conta.", "auth.signInNeeded": "Inicie sessão para usar esta função.", "restaurant.rating": "{rating} estrelas em 5", "onboarding.countryExample": "Código do país com duas letras, por exemplo PT" });
+Object.assign(fr, { "analysis.demoName": "Pâtes farcies au beurre noisette", "analysis.demoCuisine": "Cuisine du nord de l’Italie", "analysis.demoIngredients": "Pâtes farcies, beurre noisette, sauge, citron et fromage à pâte dure", "analysis.demoDietary": "Végétarien. Contient du lait et du gluten.", "analysis.demoDescription": "Pâtes farcies avec beurre grillé, herbes et citron." });
+Object.assign(es, { "analysis.demoName": "Pasta rellena con mantequilla tostada", "analysis.demoCuisine": "Cocina del norte de Italia", "analysis.demoIngredients": "Pasta rellena, mantequilla tostada, salvia, limón y queso curado", "analysis.demoDietary": "Vegetariano. Contiene leche y gluten.", "analysis.demoDescription": "Pasta rellena con mantequilla tostada, hierbas y limón." });
+Object.assign(de, { "analysis.demoName": "Gefüllte Nudeln mit brauner Butter", "analysis.demoCuisine": "Norditalienische Küche", "analysis.demoIngredients": "Gefüllte Nudeln, braune Butter, Salbei, Zitrone und Hartkäse", "analysis.demoDietary": "Vegetarisch. Enthält Milch und Gluten.", "analysis.demoDescription": "Gefüllte Nudeln mit gerösteter Butter, Kräutern und Zitrone." });
+Object.assign(it, { "analysis.demoName": "Pasta ripiena al burro nocciola", "analysis.demoCuisine": "Cucina del nord Italia", "analysis.demoIngredients": "Pasta ripiena, burro nocciola, salvia, limone e formaggio stagionato", "analysis.demoDietary": "Vegetariano. Contiene latte e glutine.", "analysis.demoDescription": "Pasta ripiena con burro tostato, erbe e limone." });
+Object.assign(pt, { "analysis.demoName": "Massa recheada com manteiga tostada", "analysis.demoCuisine": "Cozinha do norte de Itália", "analysis.demoIngredients": "Massa recheada, manteiga tostada, salva, limão e queijo curado", "analysis.demoDietary": "Vegetariano. Contém leite e glúten.", "analysis.demoDescription": "Massa recheada com manteiga tostada, ervas e limão." });
+
+// Final plain-language review. These values replace older editorial copy with
+// short, direct instructions and remove model or system terms from the UI.
+Object.assign(enUS, enCA, enGB, {
+  "home.title": "Find good food with friends.", "home.savedTitle": "Your saved dishes", "home.gather": "Good choices", "home.editorial": "Find a dish. Then find a place to eat it.",
+  "home.tasteprint": "Your food likes", "analysis.live": "Live dish check", "home.analyze": "Check a dish", "group.lock": "Choose this place", "group.bestTable": "Your choice", "group.finalized": "The place is chosen",
+});
+Object.assign(fr, {
+  "home.eyebrow": "Trouver des plats", "home.title": "Trouvez de bons plats avec vos proches.", "home.savedTitle": "Vos plats enregistrés", "home.body": "Prenez un plat en photo. Voyez ce qu’il peut être. Trouvez un plat similaire près de vous.", "home.savedBody": "Gardez ici les plats que vous voulez essayer.", "home.demo": "Essayer la démo marquée", "home.curated": "Près de {location}", "home.gather": "Bons choix", "home.emptyTitle": "Trouvez votre prochain plat ici.", "home.emptyBody": "Enregistrez des plats. Trinque les utilisera pour proposer d’autres plats.", "home.localTip": "Les membres peuvent ajouter des détails absents des listes de restaurants.", "home.tasteprint": "Vos goûts", "home.tasteBody": "Vous enregistrez souvent des plats aux goûts vifs, grillés et riches.", "home.editorial": "Trouvez un plat. Puis trouvez où le manger.",
+  "analysis.loadingKicker": "Vérification du plat", "analysis.loadingTitle": "Recherche des détails utiles…", "analysis.unavailableKicker": "Vérification impossible", "analysis.live": "Vérification du plat", "analysis.reviewTitle": "Vérifiez ce plat avant de le publier.", "analysis.canonicalNotice": "Trinque utilise un nom commun pour trouver des résultats. Cela ne dit pas si le plat est sans danger pour vous.",
+  "match.confirmedTier": "Plats proches vérifiés", "match.communityTier": "Plats publiés par des membres", "match.restaurantTier": "Restaurants proches", "match.semanticReason": "Plat similaire par son type, ses ingrédients ou son goût. Nous le classons selon la distance et les faits connus.", "match.nearbyReason": "Un membre a publié ce plat près de vous. Certains détails restent inconnus.", "match.restaurantReason": "Restaurant proche. Nous ne savons pas s’il sert ce plat maintenant.", "match.noResults": "Aucun résultat pour le moment.", "match.providerUnavailable": "La recherche de restaurants est indisponible. Nous n’avons pas ajouté de résultats de démo.", "match.recordsUnavailable": "La recherche de plats publiés est indisponible. Nous n’avons pas ajouté de résultats de démo.", "match.providerPlace": "Résultat de restaurant",
+  "group.eyebrow": "Planifier un repas", "group.createTitle": "Choisissez un lieu en groupe.", "group.createBody": "Indiquez vos besoins. Trinque trie les lieux proches, montre les problèmes et recueille les votes.", "group.start": "Créer un plan de groupe", "group.rank": "Chercher des lieux", "group.voteTitle": "Votez après avoir lu les faits.", "group.finalTitle": "Le groupe a choisi un lieu.", "group.constraints": "Chaque lieu indique s’il respecte vos besoins.", "group.hardConflict": "Ne respecte pas le plan", "group.lock": "Choisir ce lieu", "group.bestTable": "Votre choix", "group.finalized": "Le lieu est choisi", "group.ownerFinalizes": "Seul le créateur du groupe peut choisir le lieu. Votre vote reste enregistré.",
+  "location.unavailable": "La recherche de lieux n’est pas prête.", "publish.providerUnavailable": "La recherche de restaurants n’est pas prête. Vous pouvez saisir un restaurant que vous connaissez.", "group.noLiveCandidates": "Aucun lieu proche ne respecte ce plan. Nous n’avons pas ajouté de lieu de démo.", "group.fitEligible": "Le prix et la distance conviennent. Vérifiez les notes sur le plat.", "group.fitIneligible": "Un besoin n’est pas respecté.", "group.conflict.vegetarianUnsupported": "Aucun choix végétarien n’est confirmé",
+});
+Object.assign(es, {
+  "home.eyebrow": "Buscar platos", "home.title": "Encuentra buena comida con tus amigos.", "home.savedTitle": "Tus platos guardados", "home.body": "Haz una foto de un plato. Mira qué puede ser. Busca un plato parecido cerca de ti.", "home.savedBody": "Guarda aquí los platos que quieres probar.", "home.demo": "Probar la demo marcada", "home.curated": "Cerca de {location}", "home.gather": "Buenas opciones", "home.emptyTitle": "Encuentra aquí tu próximo plato.", "home.emptyBody": "Guarda platos. Trinque los usará para sugerir otros.", "home.localTip": "Los usuarios pueden añadir datos que no aparecen en las listas de restaurantes.", "home.tasteprint": "Tus gustos", "home.tasteBody": "Sueles guardar platos con sabores frescos, tostados e intensos.", "home.editorial": "Encuentra un plato. Luego busca dónde comerlo.",
+  "analysis.loadingKicker": "Revisión del plato", "analysis.loadingTitle": "Buscando datos útiles…", "analysis.unavailableKicker": "No se puede revisar el plato", "analysis.live": "Revisión del plato", "analysis.reviewTitle": "Revisa este plato antes de publicarlo.", "analysis.canonicalNotice": "Trinque usa un nombre común para buscar resultados. Esto no indica si el plato es seguro para ti.",
+  "match.confirmedTier": "Platos cercanos revisados", "match.communityTier": "Platos publicados por usuarios", "match.restaurantTier": "Restaurantes cercanos", "match.semanticReason": "Plato parecido por su tipo, ingredientes o sabor. Lo ordenamos por distancia y datos conocidos.", "match.nearbyReason": "Un usuario publicó este plato cerca. Algunos datos no se conocen.", "match.restaurantReason": "Restaurante cercano. No sabemos si sirve este plato ahora.", "match.noResults": "Aún no hay resultados.", "match.providerUnavailable": "La búsqueda de restaurantes no está disponible. No añadimos resultados de demo.", "match.recordsUnavailable": "La búsqueda de platos publicados no está disponible. No añadimos resultados de demo.", "match.providerPlace": "Resultado de restaurante",
+  "group.eyebrow": "Planear una comida", "group.createTitle": "Elijan un lugar en grupo.", "group.createBody": "Indiquen sus necesidades. Trinque ordena los lugares cercanos, muestra los problemas y recoge los votos.", "group.start": "Crear un plan de grupo", "group.rank": "Buscar lugares", "group.voteTitle": "Vota después de leer los datos.", "group.finalTitle": "El grupo eligió un lugar.", "group.constraints": "Cada lugar indica si cumple las necesidades.", "group.hardConflict": "No cumple el plan", "group.lock": "Elegir este lugar", "group.bestTable": "Su elección", "group.finalized": "El lugar está elegido", "group.ownerFinalizes": "Solo quien creó el grupo puede elegir el lugar. Tu voto queda guardado.",
+  "location.unavailable": "La búsqueda de lugares no está lista.", "publish.providerUnavailable": "La búsqueda de restaurantes no está lista. Puedes escribir un restaurante que conozcas.", "group.noLiveCandidates": "Ningún lugar cercano cumple el plan. No añadimos lugares de demo.", "group.fitEligible": "Cumple el gasto máximo y la distancia. Revisa las notas sobre la comida.", "group.fitIneligible": "No cumple una de las condiciones.", "group.conflict.vegetarianUnsupported": "No se confirma una opción vegetariana", "privacy.analyticsConsent": "Permitir el uso de datos para mejorar Trinque",
+});
+Object.assign(de, { "auth.account": "Persönlicher Bereich", "auth.password": "Kennwort", "diet.vegan": "Rein pflanzlich", "safety.reason.spam": "Unerwünschter Inhalt", "onboarding.name": "Vor- und Nachname" });
+Object.assign(it, { "auth.account": "Area personale", "auth.password": "Parola d’accesso", "diet.kosher": "Casher" });
+Object.assign(pt, { "diet.vegan": "Só alimentos vegetais", "diet.kosher": "Casher" });
 
 export const translations: Record<UiLanguage, Messages> = { "en-CA": enCA, "en-US": enUS, "en-GB": enGB, fr, es, de, it, pt };
 

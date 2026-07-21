@@ -1,6 +1,6 @@
 import { and, count, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { follows, profiles, publishedDishes, users } from "@/db/schema";
+import { follows, profiles, publishedDishes, restaurants, users } from "@/db/schema";
 import { AuthenticationError, getOptionalIdentity, normalizeHandle, requireAuthenticatedIdentity } from "@/lib/auth";
 
 export const runtime = "edge";
@@ -10,6 +10,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ hand
   const handle = normalizeHandle(rawHandle);
   if (!handle) return Response.json({ error: "Profile not found." }, { status: 404 });
   const db = await getDb();
+  const origin = new URL(request.url).origin;
   const [profile] = await db.select({
     userId: profiles.userId,
     displayName: profiles.displayName,
@@ -24,7 +25,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ hand
     db.select({ count: count() }).from(follows).where(eq(follows.followingId, profile.userId)),
     db.select({ count: count() }).from(follows).where(eq(follows.followerId, profile.userId)),
     db.select({ count: count() }).from(publishedDishes).where(eq(publishedDishes.ownerId, profile.userId)),
-    db.select({ id: publishedDishes.id, name: publishedDishes.name, cuisine: publishedDishes.cuisine, description: publishedDishes.description, confidence: publishedDishes.confidence, createdAt: publishedDishes.createdAt }).from(publishedDishes).where(eq(publishedDishes.ownerId, profile.userId)).orderBy(desc(publishedDishes.createdAt)).limit(24),
+    db.select({ id: publishedDishes.id, name: publishedDishes.name, cuisine: publishedDishes.cuisine, description: publishedDishes.description, confidence: publishedDishes.confidence, createdAt: publishedDishes.createdAt, imageKey: publishedDishes.imageKey, provenance: publishedDishes.provenance, verificationStatus: publishedDishes.verificationStatus, restaurantName: restaurants.name, locality: restaurants.locality }).from(publishedDishes).leftJoin(restaurants, eq(restaurants.id, publishedDishes.restaurantId)).where(eq(publishedDishes.ownerId, profile.userId)).orderBy(desc(publishedDishes.createdAt)).limit(24),
     getOptionalIdentity(request),
   ]);
   let viewerFollowing = false;
@@ -32,7 +33,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ hand
     const [row] = await db.select({ followerId: follows.followerId }).from(follows).where(and(eq(follows.followerId, viewer.id), eq(follows.followingId, profile.userId))).limit(1);
     viewerFollowing = Boolean(row);
   }
-  return Response.json({ profile, counts: { followers: followers?.count ?? 0, following: following?.count ?? 0, dishes: dishCount?.count ?? 0 }, dishes, viewerFollowing, viewerIsOwner: Boolean(viewer && viewer.authType !== "guest" && viewer.id === profile.userId) }, { headers: { "Cache-Control": "no-store" } });
+  const publicDishes = dishes.map(({ imageKey, ...dish }) => ({ ...dish, imageUrl: imageKey ? `${origin}/api/media/${imageKey}` : null }));
+  return Response.json({ profile, counts: { followers: followers?.count ?? 0, following: following?.count ?? 0, dishes: dishCount?.count ?? 0 }, dishes: publicDishes, viewerFollowing, viewerIsOwner: Boolean(viewer && viewer.authType !== "guest" && viewer.id === profile.userId) }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ handle: string }> }) {

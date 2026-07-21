@@ -1,6 +1,6 @@
 import { and, desc, eq, lt, or } from "drizzle-orm";
 import { getDb } from "@/db";
-import { follows, profiles, publishedDishes } from "@/db/schema";
+import { follows, profiles, publishedDishes, restaurants } from "@/db/schema";
 import { AuthenticationError, requireAuthenticatedIdentity } from "@/lib/auth";
 
 export const runtime = "edge";
@@ -14,6 +14,7 @@ export async function GET(request: Request) {
     const limit = clampLimit(url.searchParams.get("limit"));
     const cursor = parseCursor(url.searchParams.get("cursor"));
     const db = await getDb();
+    const origin = new URL(request.url).origin;
     const rows = await db.select({
       id: publishedDishes.id,
       name: publishedDishes.name,
@@ -22,19 +23,25 @@ export async function GET(request: Request) {
       confidence: publishedDishes.confidence,
       createdAt: publishedDishes.createdAt,
       ownerId: publishedDishes.ownerId,
+      imageKey: publishedDishes.imageKey,
+      provenance: publishedDishes.provenance,
+      verificationStatus: publishedDishes.verificationStatus,
+      restaurantName: restaurants.name,
+      locality: restaurants.locality,
       contributorName: profiles.displayName,
       contributorHandle: profiles.handle,
       contributorAvatarUrl: profiles.avatarUrl,
     }).from(publishedDishes)
       .innerJoin(follows, and(eq(follows.followingId, publishedDishes.ownerId), eq(follows.followerId, identity.id)))
       .leftJoin(profiles, eq(profiles.userId, publishedDishes.ownerId))
+      .leftJoin(restaurants, eq(restaurants.id, publishedDishes.restaurantId))
       .where(cursor ? or(lt(publishedDishes.createdAt, cursor.createdAt), and(eq(publishedDishes.createdAt, cursor.createdAt), lt(publishedDishes.id, cursor.id))) : undefined)
       .orderBy(desc(publishedDishes.createdAt), desc(publishedDishes.id))
       .limit(limit + 1);
     const hasMore = rows.length > limit;
     const dishes = hasMore ? rows.slice(0, limit) : rows;
     const last = dishes.at(-1);
-    return Response.json({ dishes, nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null });
+    return Response.json({ dishes: dishes.map(({ imageKey, ...dish }) => ({ ...dish, imageUrl: imageKey ? `${origin}/api/media/${imageKey}` : null })), nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null });
   } catch (error) {
     const status = error instanceof AuthenticationError ? error.status : 503;
     return Response.json({ error: error instanceof AuthenticationError ? error.message : "Unable to load following feed." }, { status });

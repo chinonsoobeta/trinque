@@ -1,16 +1,26 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { requestPasswordReset, safeReturnPath, signInWithGoogle, signInWithPassword, signUpWithPassword, updatePassword } from "@/lib/auth-client";
 
 export type AuthMode = "signin" | "signup" | "recovery";
 
-export function AuthModal({ open, onClose, initialMode = "signin" }: { open: boolean; onClose: () => void; initialMode?: AuthMode }) {
+type AuthModalProps = { open: boolean; onClose: () => void; initialMode?: AuthMode; embedded?: boolean; contextMessage?: string };
+
+export function AuthModal({ open, onClose, initialMode = "signin", embedded = false, contextMessage }: AuthModalProps) {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    if (!open || embedded) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [embedded, onClose, open]);
+
   if (!open) return null;
 
   async function submit(event: FormEvent) {
@@ -57,20 +67,23 @@ export function AuthModal({ open, onClose, initialMode = "signin" }: { open: boo
     return safeReturnPath(new URLSearchParams(window.location.search).get("next"));
   }
 
-  return <div role="dialog" aria-modal="true" aria-label={mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Reset password"} className="auth-modal-backdrop">
+  const title = mode === "signin" ? "Welcome back" : mode === "signup" ? "Create your Trinque account" : "Choose a new password";
+  return <div role="dialog" aria-modal={embedded ? undefined : true} aria-labelledby="auth-title" className={`auth-modal-backdrop${embedded ? " embedded" : ""}`} onMouseDown={(event) => { if (!embedded && event.target === event.currentTarget) onClose(); }}>
     <div className="auth-modal">
-      <button type="button" className="text-button" onClick={onClose} aria-label="Close authentication dialog">×</button>
-      <h2>{mode === "signin" ? "Welcome back" : mode === "signup" ? "Create your Trinque account" : "Choose a new password"}</h2>
-      <p>{mode === "signin" ? "Sign in to save, publish, follow, like, comment, and manage groups." : mode === "signup" ? "Create an account to join Trinque’s social features." : "Enter a new password for your Trinque account."}</p>
+      {!embedded && <button type="button" className="auth-close" onClick={onClose} aria-label="Close authentication dialog">×</button>}
+      <div className="auth-brand-mark" aria-hidden="true">T</div><span className="kicker">Trinque account</span><h2 id="auth-title">{title}</h2>
+      <p>{contextMessage ?? (mode === "signin" ? "Sign in to save, publish, follow, like, comment, and plan meals with people you trust." : mode === "signup" ? "Create an account to turn dish discovery into a personal food library and social circle." : "Enter a new password for your Trinque account.")}</p>
+      {mode !== "recovery" && <button type="button" className="oauth-button" disabled={busy} onClick={() => void google()}><span aria-hidden="true">G</span>Continue with Google</button>}
+      {mode !== "recovery" && <div className="auth-divider"><span>or continue with email</span></div>}
       <form onSubmit={submit}>
-        {mode !== "recovery" && <label>Email<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>}
-        <label>Password<input type="password" autoComplete={mode === "signin" ? "current-password" : "new-password"} minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
-        <button className="primary full" disabled={busy}>{busy ? "Working…" : mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Update password"}</button>
+        {mode !== "recovery" && <label><span>Email</span><input type="email" autoComplete="email" inputMode="email" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>}
+        <label><span>{mode === "recovery" ? "New password" : "Password"}</span><input type="password" autoComplete={mode === "signin" ? "current-password" : "new-password"} minLength={8} placeholder="At least 8 characters" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
+        <button className="primary full" disabled={busy} aria-busy={busy}>{busy ? "Working…" : mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Update password"}</button>
       </form>
-      {mode !== "recovery" && <button className="secondary full" disabled={busy} onClick={() => void google()}>Continue with Google</button>}
-      {mode === "signin" && <button className="text-button full" disabled={busy} onClick={() => void reset()}>Forgot password?</button>}
-      <button className="text-button full" onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setStatus(""); }}>{mode === "signin" ? "Need an account? Sign up" : "Back to sign in"}</button>
-      {status && <p role="status" className="location-status">{status}</p>}
+      {mode === "signin" && <button className="text-button auth-inline-action" disabled={busy} onClick={() => void reset()}>Forgot password?</button>}
+      {mode !== "recovery" && <button className="text-button auth-switch" onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setStatus(""); }}>{mode === "signin" ? "New to Trinque? Create an account" : "Already have an account? Sign in"}</button>}
+      {status && <p role="status" aria-live="polite" className="auth-status">{status}</p>}
+      <small className="auth-footnote">Browsing stays public. Trinque only asks you to sign in for actions that need an identity.</small>
     </div>
   </div>;
 }

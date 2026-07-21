@@ -4,15 +4,19 @@ import { useEffect, useState } from "react";
 import { FollowButton } from "@/components/FollowButton";
 import { ProfileCard, type PublicProfile } from "@/components/ProfileCard";
 import { ProfileEditor } from "@/components/ProfileEditor";
+import { EmptyState, LoadingState, PageContainer } from "@/components/AppPrimitives";
+import { SocialDishCard, type SocialDish } from "@/components/SocialDishCard";
+import { useAuth } from "@/components/AuthProvider";
 
-type Dish = { id: string; name: string; cuisine: string; description: string; confidence: number; createdAt: string };
+type Dish = SocialDish & { confidence: number; createdAt: string };
 type Payload = { profile: PublicProfile; counts: { followers: number; following: number; dishes: number }; dishes: Dish[]; viewerFollowing: boolean; viewerIsOwner: boolean };
 
 export function ProfileView({ handle }: { handle: string }) {
+  const { authHeaders } = useAuth();
   const [payload, setPayload] = useState<Payload | null>(null);
   const [error, setError] = useState("");
-  useEffect(() => { void fetch(`/api/profiles/${encodeURIComponent(handle)}`, { cache: "no-store" }).then(async (response) => { if (!response.ok) throw new Error("Profile not found."); return response.json() as Promise<Payload>; }).then(setPayload).catch((reason: Error) => setError(reason.message)); }, [handle]);
-  if (error) return <main><h1>{error}</h1></main>;
-  if (!payload) return <main><p>Loading profile…</p></main>;
-  return <main className="profile-page"><ProfileCard profile={payload.profile} counts={payload.counts} action={payload.viewerIsOwner ? <ProfileEditor profile={payload.profile} /> : <FollowButton handle={payload.profile.handle} initialFollowing={payload.viewerFollowing} initialCount={payload.counts.followers} />} /><section><h2>Published dishes</h2>{payload.dishes.length ? <div className="dish-grid">{payload.dishes.map((dish) => <article className="dish-card" key={dish.id}><div className="dish-body"><h3>{dish.name}</h3><p>{dish.description}</p><small>{dish.cuisine} · {dish.confidence}% confidence</small></div></article>)}</div> : <p>No published dishes yet.</p>}</section></main>;
+  useEffect(() => { let active = true; void fetch(`/api/profiles/${encodeURIComponent(handle)}`, { headers: authHeaders(), cache: "no-store" }).then(async (response) => { if (!response.ok) throw new Error("Profile not found."); return response.json() as Promise<Payload>; }).then((value) => { if (active) { setPayload(value); setError(""); } }).catch((reason: Error) => { if (active) setError(reason.message); }); return () => { active = false; }; }, [authHeaders, handle]);
+  if (error) return <PageContainer className="profile-page"><EmptyState eyebrow="Profile" title={error} body="This profile may have moved or is not public." action={<a className="secondary button-link" href="/explore">Back to Explore</a>} /></PageContainer>;
+  if (!payload) return <PageContainer className="profile-page"><LoadingState label="Loading profile…" /></PageContainer>;
+  return <PageContainer className="profile-page"><ProfileCard profile={payload.profile} counts={payload.counts} action={payload.viewerIsOwner ? <ProfileEditor profile={payload.profile} /> : <FollowButton handle={payload.profile.handle} initialFollowing={payload.viewerFollowing} initialCount={payload.counts.followers} />} /><section className="profile-dishes"><div className="section-heading"><div><span className="kicker">From this table</span><h2>Published dishes</h2></div></div>{payload.dishes.length ? <div className="profile-dish-grid">{payload.dishes.map((dish) => <SocialDishCard key={dish.id} dish={{ ...dish, contributorName: payload.profile.displayName, contributorHandle: payload.profile.handle, contributorAvatarUrl: payload.profile.avatarUrl }} />)}</div> : <EmptyState title="No published dishes yet." body="When this contributor publishes a reviewed dish, it will appear here." />}</section></PageContainer>;
 }

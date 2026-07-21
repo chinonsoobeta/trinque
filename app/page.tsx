@@ -7,6 +7,7 @@ import { REGIONAL_DEFAULTS, type MeasurementSystem, type ThemePreference } from 
 import { LANGUAGE_LABEL_KEYS, resolveUiLanguage, translate, UI_LANGUAGES, type MessageKey, type UiLanguage } from "@/ios/i18n";
 import { AuthControls } from "@/components/AuthControls";
 import { NotificationBell } from "@/components/NotificationBell";
+import { useAuth } from "@/components/AuthProvider";
 
 type Dish = {
   id: number; name: string; restaurant: string; area: string; distance: string;
@@ -60,9 +61,10 @@ const colors = ["#7a263a", "#c7654f", "#667449", "#b9772d"];
 const emptyMatchTiers: MatchTiers = { confirmedNearbyDishes: [], communityOrInferredDishes: [], restaurantLevelAlternatives: [] };
 
 export default function Home() {
+  const { authenticated } = useAuth();
   const [view, setView] = useState<"discover" | "groups" | "saved">("discover");
   const [filter, setFilter] = useState("For you");
-  const [saved, setSaved] = useState<Set<number>>(new Set([2]));
+  const [saved, setSaved] = useState<Set<number>>(new Set());
   const [modal, setModal] = useState(false);
   const [phase, setPhase] = useState<"idle" | "loading" | "review" | "error" | "published">("idle");
   const [preview, setPreview] = useState(dishes[0].image);
@@ -109,10 +111,23 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      if (new URLSearchParams(window.location.search).has("join")) setView("groups");
-    }, 0);
-    return () => window.clearTimeout(timer);
+    const syncView = () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has("join") || params.get("view") === "groups") setView("groups");
+      else if (params.get("view") === "saved") setView("saved");
+      else setView("discover");
+      if (params.get("settings") === "1") setSettingsOpen(true);
+    };
+    const timer = window.setTimeout(syncView, 0);
+    const openCapture = () => fileRef.current?.click();
+    const switchView = (event: Event) => {
+      const next = (event as CustomEvent<string>).detail;
+      if (next === "discover" || next === "groups" || next === "saved") setView(next);
+    };
+    window.addEventListener("trinque:create", openCapture);
+    window.addEventListener("trinque:view", switchView);
+    window.addEventListener("popstate", syncView);
+    return () => { window.clearTimeout(timer); window.removeEventListener("trinque:create", openCapture); window.removeEventListener("trinque:view", switchView); window.removeEventListener("popstate", syncView); };
   }, []);
 
   useEffect(() => {
@@ -227,6 +242,7 @@ export default function Home() {
     flash(response?.ok ? t("feedback.thanks") : t("error.generic"));
   }, [flash, guestToken, location?.countryCode, t]);
   function toggleSaved(id: number) {
+    if (!authenticated) { window.location.assign("/auth/login?context=save&next=%2F%3Fview%3Dsaved"); return; }
     const shouldSave = !saved.has(id);
     setSaved((current) => {
       const next = new Set(current);
@@ -328,7 +344,7 @@ export default function Home() {
           <GroupPlanner guestToken={guestToken} flash={flash} t={t} location={location} language={language} track={trackAnalytics} />
         ) : (
           <>
-            <section className="hero">
+            <section className="hero" id="capture">
               <div className="hero-copy">
                 <div className="eyebrow"><span>✦</span> {t("home.eyebrow")}</div>
                 <h1>{view === "saved" ? t("home.savedTitle") : t("home.title")}</h1>
@@ -340,15 +356,15 @@ export default function Home() {
                 </div>}
               </div>
               <div className="taste-card">
-                <b>Your tasteprint</b><div className="taste-orbit"><span>CO</span><i /><i /><i /></div>
-                <div className="taste-tags"><span>Smoky</span><span>Bright</span><span>Comforting</span></div>
-                <small>12 new matches this week</small>
+                <b>Tasteprint preview</b><div className="taste-orbit"><span>T</span><i /><i /><i /></div>
+                <div className="taste-tags"><span>Save dishes</span><span>Publish favourites</span><span>Follow people</span></div>
+                <small>Your taste identity grows from real activity.</small>
               </div>
             </section>
 
             <section className="discover-section">
               <div className="section-heading">
-                <div><span className="kicker">{t("home.curated", { location: location?.locality ?? "—" })}</span><h2>{view === "saved" ? t("home.savedHeading") : t("home.gather")}</h2></div>
+                <div><span className="kicker">{location ? t("home.curated", { location: location.locality }) : "Curated for you"}</span><h2>{view === "saved" ? t("home.savedHeading") : t("home.gather")}</h2>{!location && view === "discover" && <button className="location-inline" onClick={() => setSettingsOpen(true)}>Set your location to discover nearby dishes</button>}</div>
                 {view === "discover" && <div className="filters" role="group" aria-label="Feed filters">
                   {["For you", "Near you", "Hidden gems"].map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item}</button>)}
                 </div>}
@@ -357,13 +373,13 @@ export default function Home() {
               {(view === "discover" ? communityFeed.length : visible.length) ? <div className="dish-grid">
                 {view === "discover" && communityFeed.map((dish) => <PublishedDishCard key={dish.id} dish={dish} t={t} onDelete={dish.isOwner ? deletePublishedDish : undefined} />)}
                 {view === "saved" && visible.map((dish, index) => <DishCard key={dish.id} dish={dish} featured={index === 0} isSaved={saved.has(dish.id)} onSave={toggleSaved} t={t} />)}
-              </div> : <div className="empty-state"><span>♡</span><h3>{t("home.emptyTitle")}</h3><p>{t("home.emptyBody")}</p><button className="primary" onClick={() => setView("discover")}>{t("home.explore")}</button></div>}
+              </div> : view === "saved" ? <div className="empty-state"><span>♡</span><h3>Nothing saved yet.</h3><p>Save dishes you want to remember. Suggestions stay in Discover until you choose to save them.</p><button className="primary" onClick={() => setView("discover")}>Explore dishes</button></div> : <div className="empty-state editorial-fallback"><span>✦</span><h3>Your next obsession belongs here.</h3><p>There are no community dishes to show yet. Explore the public trending feed or try the clearly labeled deterministic demo—no social activity has been invented to fill this space.</p><div className="hero-actions"><a className="primary button-link" href="/explore">Explore trending</a><button className="secondary" onClick={() => { setPreview(dishes[0].image); void analyze(undefined, true); }}>Try the labeled demo</button></div></div>}
             </section>
 
             {view === "discover" && <section className="insider-strip">
               <div className="insider-number">03</div>
               <div><span className="kicker">{t("home.localNote")}</span><h2>Ask for the off-menu chile crisp.</h2><p>{t("home.localTip")}</p></div>
-              <div className="people">{["AM", "JR", "SK"].map((name, i) => <span key={name} style={{ background: colors[i] }}>{name}</span>)}<small>18 locals agree</small></div>
+              <div className="people"><small>Editorial note · example content</small></div>
             </section>}
           </>
         )}
@@ -401,11 +417,12 @@ function DishCard({ dish, featured, isSaved, onSave, t }: { dish: Dish; featured
 function PublishedDishCard({ dish, t, onDelete }: { dish: PublishedDish; t: Translator; onDelete?: (id: string, imageOnly?: boolean) => void }) {
   return <article className="dish-card published-card">
     <div className="dish-image" style={{ backgroundImage: `linear-gradient(180deg,transparent 55%,rgba(22,13,10,.68)),url(${dish.localPreview ?? dish.imageUrl ?? dishes[0].image})` }}><span className="match"><b>NEW</b> {t("analysis.publishedTitle")}</span><div className="photo-caption"><b>{dish.sourceMode === "live" ? t("analysis.live") : t("analysis.demo")}</b><small>{t("analysis.review")}</small></div></div>
-    <div className="dish-body"><div className="dish-title"><div><h3>{dish.name}</h3><p>{dish.description}</p></div><strong>{dish.confidence}%</strong></div><div className="dish-meta"><div><span>{dish.cuisine}</span></div><small>{dish.restaurant?.name ?? t("analysis.review")}{dish.contributorLabel ? ` · ${dish.contributorLabel}` : ""}</small></div>{dish.provenance && <p className="record-honesty">{t(`provenance.${dish.provenance}` as MessageKey)} · {t(`verification.${dish.verificationStatus ?? "unverified"}` as MessageKey)} · {t(dish.availabilityKnowledge === "recently_confirmed" ? "availability.confirmed" : "availability.unknown")}</p>}{onDelete && <div className="modal-actions">{dish.imageUrl && <button className="text-button" onClick={() => onDelete(dish.id, true)}>{t("privacy.deleteImage")}</button>}<button className="text-button" onClick={() => onDelete(dish.id)}>{t("privacy.deleteDish")}</button></div>}</div>
+    <div className="dish-body"><div className="dish-title"><div><h3>{dish.name}</h3><p>{dish.description}</p></div><strong>{dish.confidence}%</strong></div><div className="dish-meta"><div><span>{dish.cuisine}</span></div><small>{dish.restaurant?.name ?? t("analysis.review")}{dish.contributorLabel ? ` · ${dish.contributorLabel}` : ""}</small></div>{dish.provenance && <p className="record-honesty">{t(`provenance.${dish.provenance}` as MessageKey)} · {t(`verification.${dish.verificationStatus ?? "unverified"}` as MessageKey)} · {t(dish.availabilityKnowledge === "recently_confirmed" ? "availability.confirmed" : "availability.unknown")}</p>}<a className="find-button" href={`/dishes/${dish.id}`}>View dish <span>→</span></a>{onDelete && <div className="modal-actions">{dish.imageUrl && <button className="text-button" onClick={() => onDelete(dish.id, true)}>{t("privacy.deleteImage")}</button>}<button className="text-button" onClick={() => onDelete(dish.id)}>{t("privacy.deleteDish")}</button></div>}</div>
   </article>;
 }
 
 function Analyzer({ guestToken, preview, phase, analysis, analysisMode, warning, error, matches, matchProviderUnavailable, matchRecordsUnavailable, publishing, close, update, publish, retry, demo, t, language, measurementSystem, location, onMatchOpened, onFeedback }: { guestToken: string | null; preview: string; phase: string; analysis: Analysis; analysisMode: "live" | "demo" | null; warning: string; error: string; matches: MatchTiers; matchProviderUnavailable: boolean; matchRecordsUnavailable: boolean; publishing: boolean; close: () => void; update: (field: "name" | "cuisine" | "ingredients" | "dietary" | "description", value: string) => void; publish: (event: FormEvent, metadata: PublicationMetadata) => void; retry: () => void; demo: () => void; t: Translator; language: UiLanguage; measurementSystem: MeasurementSystem; location: NormalizedLocation | null; onMatchOpened: () => void; onFeedback: (reason: FeedbackReason, targetType: "analysis" | "published_dish" | "restaurant", targetId?: string | null) => void }) {
+  const { authenticated } = useAuth();
   const [restaurants, setRestaurants] = useState<RestaurantPlace[]>([]);
   const [selectedRestaurant, setSelectedRestaurant] = useState<PublishRestaurant | null>(null);
   const [restaurantStatus, setRestaurantStatus] = useState("");
@@ -447,6 +464,7 @@ function Analyzer({ guestToken, preview, phase, analysis, analysisMode, warning,
   const validAvailability = availabilityKnowledge === "unknown" || availabilityKnowledge === "recently_confirmed" || (availabilityKnowledge === "historical" && Boolean(lastConfirmedAt));
   const ready = Boolean(selectedRestaurant && priceKnowledge && availabilityKnowledge && validPrice && validAvailability && reviewConfirmed && restaurantConfirmed);
   function submit(event: FormEvent) {
+    if (!authenticated) { event.preventDefault(); window.location.assign("/auth/login?context=publish&next=%2F%23capture"); return; }
     if (!ready || !selectedRestaurant || !priceKnowledge || !availabilityKnowledge) { event.preventDefault(); setRestaurantStatus(t("publish.requirements")); return; }
     publish(event, { restaurant: selectedRestaurant, knowledge: { priceKnowledge, priceAmount: priceKnowledge === "unknown" ? undefined : Number(priceAmount), availabilityKnowledge, lastConfirmedAt: availabilityKnowledge === "historical" ? lastConfirmedAt : undefined }, retainImage, reviewConfirmed: true, restaurantConfirmed: true });
   }
@@ -579,6 +597,7 @@ function SettingsPanel({ guestToken, t, language, theme, measurementSystem, loca
 }
 
 function GroupPlanner({ guestToken, flash, t, location, language, track }: { guestToken: string | null; flash: (text: string) => void; t: Translator; location: NormalizedLocation | null; language: UiLanguage; track: (event: AnalyticsEvent, details?: { mode?: "live" | "demo"; outcome?: string; durationMs?: number }) => void }) {
+  const { authenticated } = useAuth();
   const [group, setGroup] = useState<GroupSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [placesUnavailable, setPlacesUnavailable] = useState(false);
@@ -607,7 +626,8 @@ function GroupPlanner({ guestToken, flash, t, location, language, track }: { gue
   }, [flash, guestToken, language, t, track]);
 
   async function createGroup() {
-    if (!guestToken) { flash("Guest session is still connecting"); return; }
+    if (!authenticated) { window.location.assign("/auth/login?context=group&next=%2F%3Fview%3Dgroups"); return; }
+    if (!guestToken) { flash("Getting things ready…"); return; }
     if (!location) { flash(t("location.change")); return; }
     setBusy(true);
     try {

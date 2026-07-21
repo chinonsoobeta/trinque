@@ -12,6 +12,8 @@ iOS JS exceptions are reported only as consent-gated, bounded metadata: error ki
 
 ## Physical-device/TestFlight checklist
 
+The local iOS type check and Expo export pass. The dish feed now shows localized report reasons, hide, mute, and block controls. These actions are not pilot-ready because the current native client sends a guest token and the safety API correctly requires a signed-in, onboarded account. Add the supported account session to iOS and test it before marking any native safety item complete.
+
 - [ ] Owner configures the production EAS environment with the deployed API URL and universal-link host.
 - [ ] Owner configures `APPLE_DEVELOPER_TEAM_ID` and verifies the AASA endpoint from an unauthenticated HTTPS client.
 - [ ] Owner confirms the production API is reachable from an iOS device under the approved Sites access policy; the current owner-only policy will fail this until resolved.

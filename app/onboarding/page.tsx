@@ -1,0 +1,16 @@
+"use client";
+
+import { FormEvent, useEffect, useState } from "react";
+import { useAuth } from "@/components/AuthProvider";
+import { SUPPORTED_COUNTRY_CODES } from "@/lib/regions";
+import { LANGUAGE_LABEL_KEYS, translate, UI_LANGUAGES, type UiLanguage } from "@/ios/i18n";
+
+export default function OnboardingPage() {
+  const { authenticated, authHeaders, loading } = useAuth();
+  const [name, setName] = useState(""); const [countryCode, setCountryCode] = useState("CA"); const [language, setLanguage] = useState<UiLanguage>("en-CA"); const [handle, setHandle] = useState(""); const [cuisines, setCuisines] = useState(""); const [status, setStatus] = useState(""); const [busy, setBusy] = useState(false);
+  useEffect(() => { if (!loading && !authenticated) window.location.replace("/auth/login?next=/onboarding"); }, [authenticated, loading]);
+  useEffect(() => { if (!authenticated) return; void fetch("/api/onboarding", { headers: authHeaders(), cache: "no-store" }).then(async (response) => response.ok ? response.json() as Promise<{ complete: boolean }> : null).then((result) => { if (result?.complete) window.location.replace("/"); }); }, [authHeaders, authenticated]);
+  async function submit(event: FormEvent) { event.preventDefault(); setBusy(true); setStatus(""); try { const response = await fetch("/api/onboarding", { method: "PUT", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ name, countryCode, language, handle, favoriteCuisines: cuisines.split(",") }) }); const payload = await response.json() as { error?: string }; if (!response.ok) { setStatus(payload.error ?? "We could not save your details."); return; } window.location.replace("/"); } finally { setBusy(false); } }
+  if (loading || !authenticated) return <main><p>Loading…</p></main>;
+  return <main className="auth-page"><section className="account-card"><h1>Set up your profile</h1><p>Fill in the required details. You can skip cuisines and a photo.</p><form onSubmit={submit}><label>Name<input value={name} onChange={(event) => setName(event.target.value)} maxLength={80} required /></label><label>Username<input value={handle} onChange={(event) => setHandle(event.target.value.toLowerCase())} minLength={3} maxLength={30} required /></label><label>Country<select value={countryCode} onChange={(event) => setCountryCode(event.target.value)}>{SUPPORTED_COUNTRY_CODES.map((code) => <option key={code} value={code}>{code}</option>)}</select></label><label>Preferred language<select value={language} onChange={(event) => setLanguage(event.target.value as UiLanguage)}>{UI_LANGUAGES.map((item) => <option key={item} value={item}>{translate(language, LANGUAGE_LABEL_KEYS[item])}</option>)}</select></label><label>Favourite cuisines (optional)<input value={cuisines} onChange={(event) => setCuisines(event.target.value)} placeholder="Italian, Mexican" /></label><p>You can add a profile photo from your profile page.</p><button className="primary" disabled={busy}>{busy ? "Saving…" : "Save profile"}</button>{status && <p role="status">{status}</p>}</form></section></main>;
+}

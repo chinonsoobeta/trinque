@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getSupabaseClient, safeReturnPath } from "@/lib/auth-client";
+import { getSupabaseClient } from "@/lib/auth-client";
 
 export default function AuthCallback() {
   const [message, setMessage] = useState("Completing sign-in…");
@@ -10,7 +10,6 @@ export default function AuthCallback() {
     if (!client) { setMessage("Sign-in is not configured."); return; }
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
-    const next = safeReturnPath(params.get("next"));
     if (code) {
       const { error } = await client.auth.exchangeCodeForSession(code);
       if (error) { setMessage("That sign-in link is invalid or expired."); return; }
@@ -22,7 +21,7 @@ export default function AuthCallback() {
     if (!response.ok || !payload.sessionToken) { setMessage(payload.error ?? "We could not create your Trinque session."); return; }
     window.localStorage.setItem("trinque.sessionToken", payload.sessionToken);
     window.localStorage.setItem("trinque.guestToken", payload.sessionToken);
-    window.location.replace(next);
+    window.location.replace("/onboarding");
   })(); }, []);
   return <main style={{ padding: "3rem", fontFamily: "serif" }}><h1>Trinque</h1><p>{message}</p></main>;
 }

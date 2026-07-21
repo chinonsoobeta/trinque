@@ -20,7 +20,7 @@ test("country allowlist accepts every required country and rejects unsupported c
 });
 
 test("regional defaults include UK English and remain separate from formatting", () => {
-  assert.deepEqual(SUPPORTED_LANGUAGES, ["en-CA", "en-US", "en-GB", "fr", "es"]);
+  assert.deepEqual(SUPPORTED_LANGUAGES, ["en-CA", "en-US", "en-GB", "fr", "es", "de", "it", "pt"]);
   assert.equal(REGIONAL_DEFAULTS.GB.defaultLanguage, "en-GB");
   assert.equal(REGIONAL_DEFAULTS.GB.currencyCode, "GBP");
   assert.equal(REGIONAL_DEFAULTS.CA.measurementSystem, "metric");

@@ -7,7 +7,7 @@ export const SUPPORTED_COUNTRY_CODES = [
 
 export type SupportedCountry = (typeof SUPPORTED_COUNTRY_CODES)[number];
 
-export const SUPPORTED_LANGUAGES = ["en-CA", "en-US", "en-GB", "fr", "es"] as const;
+export const SUPPORTED_LANGUAGES = ["en-CA", "en-US", "en-GB", "fr", "es", "de", "it", "pt"] as const;
 
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 export type ThemePreference = "system" | "light" | "dark";

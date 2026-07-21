@@ -37,8 +37,7 @@ export function AuthModal({ open, onClose, initialMode = "signin", embedded = fa
       const result = mode === "signup" ? await signUpWithPassword(email, password) : await signInWithPassword(email, password);
       if (result.error) { setStatus(result.error.message); return; }
       if (mode === "signup" && !result.data.session) setStatus("Check your email, then sign in.");
-      else if (window.location.pathname === "/auth/login") window.location.replace(loginReturnPath());
-      else onClose();
+      else window.location.replace("/onboarding");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Sign-in failed.");
     } finally { setBusy(false); }

@@ -1,4 +1,4 @@
-export const UI_LANGUAGES = ["en-CA", "en-US", "en-GB", "fr", "es"] as const;
+export const UI_LANGUAGES = ["en-CA", "en-US", "en-GB", "fr", "es", "de", "it", "pt"] as const;
 export type UiLanguage = (typeof UI_LANGUAGES)[number];
 
 const enUS = {
@@ -15,6 +15,9 @@ const enUS = {
   "settings.language.en-GB": "UK English",
   "settings.language.fr": "French",
   "settings.language.es": "Spanish",
+  "settings.language.de": "German",
+  "settings.language.it": "Italian",
+  "settings.language.pt": "Portuguese",
   "settings.theme": "Theme",
   "settings.theme.system": "System",
   "settings.theme.light": "Light",
@@ -289,7 +292,11 @@ const es: Messages = {
   "health.placesUnavailable": "La búsqueda de restaurantes en vivo no está configurada.", "privacy.title": "Privacidad y consentimiento", "privacy.location": "La ubicación solo se usa con tu permiso y se guarda de forma aproximada.", "privacy.analytics": "Las estadísticas están desactivadas hasta que decidas habilitarlas.", "privacy.retention": "La retención de imágenes se explica antes de publicar y las imágenes se pueden eliminar.", "privacy.delete": "Eliminar mis datos de Trinque", "privacy.export": "Exportar mis datos", "privacy.imageRetentionDetails": "Guardar la imagen es opcional. Si lo activas, permanecerá almacenada hasta que elimines la imagen, el platillo publicado o tus datos.", "privacy.locationConsent": "Permitir guardar la ubicación actual aproximada", "privacy.analyticsConsent": "Permitir estadísticas del producto con consentimiento", "privacy.imageConsent": "Permitir el almacenamiento opcional de imágenes publicadas", "privacy.saveConsent": "Guardar preferencias", "privacy.withdraw": "Retirar todos los consentimientos opcionales", "privacy.deleteConfirm": "Esto elimina permanentemente tus datos de Trinque y las imágenes almacenadas. ¿Continuar?", "privacy.exportReady": "Tu exportación de datos está lista.", "privacy.deleted": "Se eliminaron tus datos de Trinque.", "privacy.deleteDish": "Eliminar platillo publicado", "privacy.deleteImage": "Eliminar imagen almacenada", "feedback.wrongIdentification": "Reportar una identificación incorrecta", "feedback.staleDish": "Reportar que este platillo está desactualizado", "feedback.closedRestaurant": "Reportar que este restaurante cerró", "feedback.thanks": "Gracias, registramos tu reporte.", "error.generic": "Algo salió mal. Intenta de nuevo.",
 };
 
-export const translations: Record<UiLanguage, Messages> = { "en-CA": enCA, "en-US": enUS, "en-GB": enGB, fr, es };
+const de: Messages = { ...enUS, "settings.language": "Sprache", "settings.language.de": "Deutsch", "settings.language.it": "Italienisch", "settings.language.pt": "Portugiesisch", "settings.language.fr": "Französisch", "settings.language.es": "Spanisch", "settings.title": "Einstellungen", "settings.close": "Schließen", "location.change": "Ort ändern", "location.search": "Adresse oder Ort suchen", "privacy.title": "Datenschutz" };
+const it: Messages = { ...enUS, "settings.language": "Lingua", "settings.language.de": "Tedesco", "settings.language.it": "Italiano", "settings.language.pt": "Portoghese", "settings.language.fr": "Francese", "settings.language.es": "Spagnolo", "settings.title": "Impostazioni", "settings.close": "Chiudi", "location.change": "Cambia luogo", "location.search": "Cerca indirizzo o luogo", "privacy.title": "Privacy" };
+const pt: Messages = { ...enUS, "settings.language": "Idioma", "settings.language.de": "Alemão", "settings.language.it": "Italiano", "settings.language.pt": "Português", "settings.language.fr": "Francês", "settings.language.es": "Espanhol", "settings.title": "Definições", "settings.close": "Fechar", "location.change": "Mudar local", "location.search": "Procurar morada ou local", "privacy.title": "Privacidade" };
+
+export const translations: Record<UiLanguage, Messages> = { "en-CA": enCA, "en-US": enUS, "en-GB": enGB, fr, es, de, it, pt };
 
 export const LANGUAGE_LABEL_KEYS: Record<UiLanguage, MessageKey> = {
   "en-CA": "settings.language.en-CA",
@@ -297,6 +304,9 @@ export const LANGUAGE_LABEL_KEYS: Record<UiLanguage, MessageKey> = {
   "en-GB": "settings.language.en-GB",
   fr: "settings.language.fr",
   es: "settings.language.es",
+  de: "settings.language.de",
+  it: "settings.language.it",
+  pt: "settings.language.pt",
 };
 
 export function resolveUiLanguage(deviceLanguages: readonly string[], fallback: UiLanguage = "en-CA"): UiLanguage {
@@ -307,6 +317,9 @@ export function resolveUiLanguage(deviceLanguages: readonly string[], fallback: 
     if (value === "en-us" || value.startsWith("en-us-")) return "en-US";
     if (value === "fr" || value.startsWith("fr-")) return "fr";
     if (value === "es" || value.startsWith("es-")) return "es";
+    if (value === "de" || value.startsWith("de-")) return "de";
+    if (value === "it" || value.startsWith("it-")) return "it";
+    if (value === "pt" || value.startsWith("pt-")) return "pt";
   }
   return fallback;
 }

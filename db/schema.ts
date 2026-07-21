@@ -190,7 +190,15 @@ export const publishedDishes = sqliteTable("published_dishes", {
   latitude: real("latitude"),
   longitude: real("longitude"),
   countryCode: text("country_code", { enum: SUPPORTED_COUNTRY_CODES }),
-  language: text("language", { enum: ["en-CA", "en-US", "en-GB", "fr", "es"] }).notNull().default("en-CA"),
+  language: text("language", { enum: ["en-CA", "en-US", "en-GB", "fr", "es", "de", "it", "pt"] }).notNull().default("en-CA"),
+  caption: text("caption").notNull().default(""),
+  tasteNotes: text("taste_notes").notNull().default(""),
+  dietaryNotes: text("dietary_notes").notNull().default(""),
+  personalComments: text("personal_comments").notNull().default(""),
+  locationTag: text("location_tag").notNull().default(""),
+  imageRetained: integer("image_retained", { mode: "boolean" }).notNull().default(false),
+  moderationStatus: text("moderation_status", { enum: ["active", "hidden", "removed", "disputed", "deleted"] }).notNull().default("active"),
+  deletedAt: text("deleted_at"),
   originalName: text("original_name"),
   canonicalCuisine: text("canonical_cuisine"),
   canonicalIngredients: text("canonical_ingredients"),
@@ -218,12 +226,55 @@ export const comments = sqliteTable("comments", {
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   dishId: text("dish_id").notNull().references(() => publishedDishes.id, { onDelete: "cascade" }),
   body: text("body").notNull(),
+  moderationStatus: text("moderation_status", { enum: ["active", "hidden", "removed", "disputed", "deleted"] }).notNull().default("active"),
+  deletedAt: text("deleted_at"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [
   index("comments_dish_created_idx").on(table.dishId, table.createdAt),
   index("comments_user_created_idx").on(table.userId, table.createdAt),
 ]);
+
+export const blocks = sqliteTable("blocks", {
+  blockerId: text("blocker_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  blockedId: text("blocked_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [primaryKey({ columns: [table.blockerId, table.blockedId] }), check("blocks_no_self", sql`${table.blockerId} <> ${table.blockedId}`)]);
+
+export const mutes = sqliteTable("mutes", {
+  muterId: text("muter_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  mutedId: text("muted_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [primaryKey({ columns: [table.muterId, table.mutedId] }), check("mutes_no_self", sql`${table.muterId} <> ${table.mutedId}`)]);
+
+export const hiddenDishes = sqliteTable("hidden_dishes", {
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  dishId: text("dish_id").notNull().references(() => publishedDishes.id, { onDelete: "cascade" }),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [primaryKey({ columns: [table.userId, table.dishId] })]);
+
+export const contentReports = sqliteTable("content_reports", {
+  id: text("id").primaryKey(),
+  reporterId: text("reporter_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  targetType: text("target_type", { enum: ["user", "dish", "comment"] }).notNull(),
+  targetId: text("target_id").notNull(),
+  reason: text("reason", { enum: ["harmful", "spam", "false", "stale", "other"] }).notNull(),
+  details: text("details").notNull().default(""),
+  status: text("status", { enum: ["open", "resolved", "rejected"] }).notNull().default("open"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  resolvedAt: text("resolved_at"),
+}, (table) => [index("content_reports_status_created_idx").on(table.status, table.createdAt), index("content_reports_target_idx").on(table.targetType, table.targetId, table.createdAt)]);
+
+export const moderationActions = sqliteTable("moderation_actions", {
+  id: text("id").primaryKey(),
+  reportId: text("report_id").references(() => contentReports.id, { onDelete: "set null" }),
+  adminId: text("admin_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  targetType: text("target_type", { enum: ["user", "dish", "comment"] }).notNull(),
+  targetId: text("target_id").notNull(),
+  action: text("action", { enum: ["hide", "remove", "restore", "resolve", "reject"] }).notNull(),
+  reason: text("reason").notNull().default(""),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [index("moderation_actions_target_idx").on(table.targetType, table.targetId, table.createdAt)]);
 
 export const notifications = sqliteTable("notifications", {
   id: text("id").primaryKey(),

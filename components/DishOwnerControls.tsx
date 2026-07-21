@@ -8,7 +8,7 @@ export function DishOwnerControls({ dishId, ownerId }: { dishId: string; ownerId
   const [busy, setBusy] = useState(false);
   if (!identity || identity.id !== ownerId || !sessionToken) return null;
   async function remove() {
-    if (!window.confirm("Delete this published dish?")) return;
+    if (!window.confirm("Delete this dish?")) return;
     setBusy(true);
     try {
       const response = await fetch(`/api/dishes/${encodeURIComponent(dishId)}`, { method: "DELETE", headers: { Authorization: `Guest ${sessionToken}` } });

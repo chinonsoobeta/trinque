@@ -11,13 +11,13 @@ export async function generateMetadata(): Promise<Metadata> {
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const baseUrl = protocol + "://" + host;
-  const title = "Trinque — Good food finds good company";
-  const description = "AI-powered dish discovery, nearby matches, and group dining plans built with GPT-5.6 and Codex.";
+  const title = "Trinque — Find dishes with friends";
+  const description = "Find dishes you like, see similar food nearby, and plan meals with friends.";
   return {
     metadataBase: new URL(baseUrl),
     title,
     description,
-    openGraph: { title, description, type: "website", url: baseUrl, siteName: "Trinque", images: [{ url: baseUrl + "/og.png", width: 1732, height: 907, alt: "Trinque — Good food finds good company" }] },
+    openGraph: { title, description, type: "website", url: baseUrl, siteName: "Trinque", images: [{ url: baseUrl + "/og.png", width: 1732, height: 907, alt: "Trinque — Find dishes with friends" }] },
     twitter: { card: "summary_large_image", title, description, images: [baseUrl + "/og.png"] },
   };
 }

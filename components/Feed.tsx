@@ -29,7 +29,7 @@ export function Feed({ type }: { type: FeedType }) {
       try {
         const params = new URLSearchParams({ limit: "20" });
         const response = await fetch(`/api/feed/${type === "following" ? "personal" : "trending"}?${params}`, { headers: authHeaders(), cache: "no-store", signal: controller.signal });
-        if (!response.ok) throw new Error("Feed is temporarily unavailable.");
+        if (!response.ok) throw new Error("We cannot load dishes now.");
         const payload = await response.json() as { dishes: Dish[]; nextCursor?: string | null; nextOffset?: number | null };
         if (!active) return;
         setDishes(payload.dishes);
@@ -40,7 +40,7 @@ export function Feed({ type }: { type: FeedType }) {
       } catch (reason) {
         if (!active || controller.signal.aborted) return;
         setDishes([]);
-        setError(reason instanceof Error ? reason.message : "Feed is temporarily unavailable.");
+        setError(reason instanceof Error ? reason.message : "We cannot load dishes now.");
         setDone(true);
         setLoadedKey(feedKey);
       }
@@ -56,12 +56,12 @@ export function Feed({ type }: { type: FeedType }) {
       if (type === "following" && cursor) params.set("cursor", cursor);
       if (type === "trending" && offset) params.set("offset", String(offset));
       const response = await fetch(`/api/feed/${type === "following" ? "personal" : "trending"}?${params}`, { headers: authHeaders(), cache: "no-store" });
-      if (!response.ok) throw new Error("Feed is temporarily unavailable.");
+      if (!response.ok) throw new Error("We cannot load dishes now.");
       const payload = await response.json() as { dishes: Dish[]; nextCursor?: string | null; nextOffset?: number | null };
       setDishes((current) => { const map = new Map(current.map((dish) => [dish.id, dish])); for (const dish of payload.dishes) map.set(dish.id, dish); return [...map.values()]; });
       if (type === "following") { setCursor(payload.nextCursor ?? null); setDone(!payload.nextCursor); }
       else { setOffset(payload.nextOffset ?? null); setDone(payload.nextOffset == null); }
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Feed is temporarily unavailable."); }
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "We cannot load dishes now."); }
     finally { setLoadingMore(false); }
   }, [authHeaders, cursor, done, feedKey, loadedKey, loadingMore, offset, type]);
 

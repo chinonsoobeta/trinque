@@ -30,6 +30,10 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   const db = await getDb();
   const [dish] = await db.select({ id: publishedDishes.id, imageKey: publishedDishes.imageKey }).from(publishedDishes).where(and(eq(publishedDishes.id, id), eq(publishedDishes.ownerId, identity.id))).limit(1);
   if (!dish) return Response.json({ error: "published_dish_not_found" }, { status: 404 });
+  if (new URL(request.url).searchParams.get("hard") !== "true") {
+    await db.update(publishedDishes).set({ moderationStatus: "deleted", deletedAt: new Date().toISOString() }).where(and(eq(publishedDishes.id, id), eq(publishedDishes.ownerId, identity.id)));
+    return new Response(null, { status: 204 });
+  }
   if (dish.imageKey && !await deleteDishImage(dish.imageKey)) return Response.json({ error: "uploads_unavailable" }, { status: 503 });
   await db.delete(publishedDishes).where(and(eq(publishedDishes.id, id), eq(publishedDishes.ownerId, identity.id)));
   return new Response(null, { status: 204 });

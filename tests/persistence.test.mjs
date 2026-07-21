@@ -13,6 +13,10 @@ test("D1 migrations preserve durable identities and independent three-member gro
   const operationsSql = await readFile(new URL("../drizzle/0006_flimsy_kitty_pryde.sql", import.meta.url), "utf8");
   const evaluationSql = await readFile(new URL("../drizzle/0007_elite_black_bolt.sql", import.meta.url), "utf8");
   const diagnosticsSql = await readFile(new URL("../drizzle/0008_numerous_scrambler.sql", import.meta.url), "utf8");
+  const socialAuthSql = await readFile(new URL("../drizzle/0009_social_auth_foundation.sql", import.meta.url), "utf8");
+  const groupPlanRequirementsSql = await readFile(new URL("../drizzle/0010_group_plan_requirements.sql", import.meta.url), "utf8");
+  const onboardingSql = await readFile(new URL("../drizzle/0011_profile_onboarding.sql", import.meta.url), "utf8");
+  const safetySql = await readFile(new URL("../drizzle/0012_safety_and_editable_posts.sql", import.meta.url), "utf8");
   const db = new DatabaseSync(":memory:");
   db.exec("PRAGMA foreign_keys = ON");
   for (const statement of sql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
@@ -27,6 +31,10 @@ test("D1 migrations preserve durable identities and independent three-member gro
   for (const statement of operationsSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
   for (const statement of evaluationSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
   for (const statement of diagnosticsSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
+  for (const statement of socialAuthSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
+  for (const statement of groupPlanRequirementsSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
+  for (const statement of onboardingSql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
+  for (const statement of safetySql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) db.exec(statement);
 
   db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("guest-1", "guest", "Guest explorer", "hash-1");
   db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("guest-b", "guest", "Guest B", "hash-b");
@@ -80,6 +88,17 @@ test("D1 migrations preserve durable identities and independent three-member gro
   db.prepare("INSERT INTO feedback_reports (id, user_id, reason, target_type, target_id) VALUES (?, ?, ?, ?, ?)").run("feedback-1", "guest-1", "stale_dish", "published_dish", "dish-1");
   assert.deepEqual({ ...db.prepare("SELECT event, language, country_code FROM analytics_events WHERE id = ?").get("event-1") }, { event: "dish_published", language: "fr", country_code: "CA" });
   assert.deepEqual({ ...db.prepare("SELECT reason, target_type, status FROM feedback_reports WHERE id = ?").get("feedback-1") }, { reason: "stale_dish", target_type: "published_dish", status: "open" });
+  assert.deepEqual({ ...db.prepare("SELECT distance_unit, dietary_requirements, cuisine_types FROM groups WHERE id = ?").get("group-1") }, { distance_unit: "metric", dietary_requirements: "[]", cuisine_types: "[]" });
+  db.prepare("INSERT INTO profiles (user_id, display_name, handle, country_code, favorite_cuisines, onboarding_completed_at) VALUES (?, ?, ?, ?, ?, ?)").run("guest-1", "Guest explorer", "guest-explorer", "CA", "[\"West African\"]", "2026-07-18T12:30:00.000Z");
+  assert.deepEqual({ ...db.prepare("SELECT country_code, favorite_cuisines FROM profiles WHERE user_id = ?").get("guest-1") }, { country_code: "CA", favorite_cuisines: "[\"West African\"]" });
+  db.prepare("INSERT INTO blocks (blocker_id, blocked_id) VALUES (?, ?)").run("guest-1", "guest-b");
+  db.prepare("INSERT INTO mutes (muter_id, muted_id) VALUES (?, ?)").run("guest-1", "guest-c");
+  db.prepare("INSERT INTO hidden_dishes (user_id, dish_id) VALUES (?, ?)").run("guest-1", "dish-1");
+  db.prepare("INSERT INTO content_reports (id, reporter_id, target_type, target_id, reason) VALUES (?, ?, ?, ?, ?)").run("report-1", "guest-1", "dish", "dish-1", "stale");
+  db.prepare("INSERT INTO moderation_actions (id, report_id, admin_id, target_type, target_id, action) VALUES (?, ?, ?, ?, ?, ?)").run("action-1", "report-1", "guest-b", "dish", "dish-1", "hide");
+  db.prepare("UPDATE published_dishes SET caption = ?, moderation_status = ? WHERE id = ?").run("Still good", "disputed", "dish-1");
+  assert.deepEqual({ ...db.prepare("SELECT caption, moderation_status FROM published_dishes WHERE id = ?").get("dish-1") }, { caption: "Still good", moderation_status: "disputed" });
+  assert.equal(db.prepare("SELECT count(*) AS count FROM moderation_actions WHERE report_id = ?").get("report-1").count, 1);
   db.prepare("INSERT INTO client_error_reports (id, user_id, kind, code, platform, app_version, route) VALUES (?, ?, ?, ?, ?, ?, ?)").run("error-1", "guest-1", "js_exception", "TypeError", "ios", "1.0.0", "/groups");
   assert.deepEqual({ ...db.prepare("SELECT kind, code, platform, app_version, route FROM client_error_reports WHERE id = ?").get("error-1") }, { kind: "js_exception", code: "TypeError", platform: "ios", app_version: "1.0.0", route: "/groups" });
   assert.throws(() => db.prepare("INSERT INTO users (id, auth_type, display_name, guest_token_hash) VALUES (?, ?, ?, ?)").run("guest-2", "guest", "Other guest", "hash-1"));

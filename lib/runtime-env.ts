@@ -1,6 +1,7 @@
 export type TrinqueRuntimeEnv = {
   OPENAI_API_KEY?: string;
   GCP_API_KEY?: string;
+  TRINQUE_ADMIN_IDENTITY_HASHES?: string;
   GOOGLE_PLACES_API_KEY?: string;
   SUPABASE_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;

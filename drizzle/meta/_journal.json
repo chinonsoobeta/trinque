@@ -71,6 +71,27 @@
       "when": 1784575706205,
       "tag": "0009_social_auth_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1784575800000,
+      "tag": "0010_group_plan_requirements",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1784575900000,
+      "tag": "0011_profile_onboarding",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1784576000000,
+      "tag": "0012_safety_and_editable_posts",
+      "breakpoints": true
     }
   ]
 }

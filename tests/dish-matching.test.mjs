@@ -39,7 +39,7 @@ test("stale and unverified records are down-ranked", () => {
 });
 
 test("unsupported-country coordinates are rejected", () => {
-  assert.throws(() => matchNearby({ analysis, location: { latitude: 52.52, longitude: 13.4, countryCode: "DE" }, dishes: [] }), /unsupported_or_invalid_location/);
+  assert.throws(() => matchNearby({ analysis, location: { latitude: 46.2, longitude: 6.1, countryCode: "CH" }, dishes: [] }), /unsupported_or_invalid_location/);
 });
 
 test("restaurant alternatives never claim a menu item", () => {

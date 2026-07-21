@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
-import { SUPPORTED_COUNTRY_CODES, SUPPORTED_CURRENCY_CODES } from "@/lib/regions";
+import { SUPPORTED_COUNTRY_CODES, SUPPORTED_CURRENCY_CODES } from "../lib/regions.ts";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),

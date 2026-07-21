@@ -58,7 +58,7 @@ test("demo publishing remains seeded and unknown availability is explicit", () =
 });
 
 test("restaurant, price and historical availability validation reject unsupported claims", () => {
-  assert.throws(() => normalizePublicationRestaurant({ ...restaurantInput, countryCode: "DE" }), /unsupported_country/);
+  assert.throws(() => normalizePublicationRestaurant({ ...restaurantInput, countryCode: "CH" }), /unsupported_country/);
   assert.throws(() => normalizePublicationRestaurant({ ...restaurantInput, currencyCode: "USD" }), /invalid_restaurant_currency/);
   assert.throws(() => normalizePublicationRestaurant({ ...restaurantInput, providerPlaceId: null }), /provider_place_required/);
   const restaurant = normalizePublicationRestaurant(restaurantInput);

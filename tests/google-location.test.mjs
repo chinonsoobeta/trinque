@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { GoogleLocationProvider, googleLocationFieldMasks } from "../lib/places/google-location.ts";
 import { PlacesProviderError } from "../lib/places/types.ts";
+import { SUPPORTED_COUNTRY_CODES } from "../lib/regions.ts";
 
 test("Google autocomplete is country-bounded, field-masked and permits precise address selections", async () => {
   let captured;
@@ -16,7 +17,7 @@ test("Google autocomplete is country-bounded, field-masked and permits precise a
   assert.equal(captured.init.headers["X-Goog-FieldMask"], googleLocationFieldMasks.autocomplete);
   assert.equal(captured.init.cache, "no-store");
   const body = JSON.parse(captured.init.body);
-  assert.deepEqual(body.includedRegionCodes, ["us", "ca", "mx", "gb", "fr"]);
+  assert.deepEqual(body.includedRegionCodes, SUPPORTED_COUNTRY_CODES.map((country) => country.toLowerCase()));
   assert.equal(body.includedPrimaryTypes, undefined);
   assert.equal(body.languageCode, "en-GB");
 });
@@ -61,16 +62,16 @@ test("coordinate resolution preserves device coordinates and rejects unsupported
   const provider = new GoogleLocationProvider("server-secret", async (_url, init) => {
     assert.equal(init.headers["X-Goog-FieldMask"], googleLocationFieldMasks.coordinates);
     return Response.json({ places: [{
-      location: { latitude: 52.52, longitude: 13.405 },
-      timeZone: { id: "Europe/Berlin" },
+      location: { latitude: 46.2, longitude: 6.1 },
+      timeZone: { id: "Europe/Zurich" },
       addressComponents: [
-        { longText: "Berlin", types: ["locality"] },
-        { longText: "Berlin", shortText: "BE", types: ["administrative_area_level_1"] },
-        { longText: "Germany", shortText: "DE", types: ["country"] },
+        { longText: "Geneva", types: ["locality"] },
+        { longText: "Geneva", shortText: "GE", types: ["administrative_area_level_1"] },
+        { longText: "Switzerland", shortText: "CH", types: ["country"] },
       ],
     }] });
   });
-  await assert.rejects(() => provider.resolveCoordinates(52.52, 13.405, "en-GB"), (error) => error instanceof PlacesProviderError && error.code === "unsupported_country");
+  await assert.rejects(() => provider.resolveCoordinates(46.2, 6.1, "en-GB"), (error) => error instanceof PlacesProviderError && error.code === "unsupported_country");
 });
 
 test("credentials and provider payload errors remain explicit", async () => {

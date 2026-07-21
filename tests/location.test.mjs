@@ -10,7 +10,7 @@ const candidates = {
   FR: { latitude: 48.8566, longitude: 2.3522, locality: "Paris", administrativeRegion: "Île-de-France", countryCode: "FR", timeZone: "Europe/Paris", source: "manual" },
 };
 
-test("manual selections normalize all five countries without a city allowlist", () => {
+test("manual selections normalize representative countries without a city allowlist", () => {
   assert.equal(normalizeLocation(candidates.US, "en-US").currencyCode, "USD");
   assert.equal(normalizeLocation(candidates.CA, "fr").currencyCode, "CAD");
   assert.equal(normalizeLocation(candidates.MX, "es").measurementSystem, "metric");
@@ -19,7 +19,7 @@ test("manual selections normalize all five countries without a city allowlist", 
 });
 
 test("unsupported countries are rejected clearly", () => {
-  assert.throws(() => normalizeLocation({ ...candidates.FR, countryCode: "DE" }, "fr"), /unsupported_country/);
+  assert.throws(() => normalizeLocation({ ...candidates.FR, countryCode: "CH" }, "fr"), /unsupported_country/);
 });
 
 test("device permission denial always requires a manual fallback", async () => {

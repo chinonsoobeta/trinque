@@ -7,7 +7,7 @@ test("consent-aware analytics accepts only the eleven approved event contracts",
   assert.deepEqual(ANALYTICS_EVENTS, ["analysis_started", "analysis_completed", "analysis_failed", "analysis_corrected", "dish_published", "match_opened", "group_created", "invite_joined", "vote_cast", "plan_finalized", "rsvp_submitted"]);
   assert.deepEqual(parseAnalyticsInput({ event: "analysis_completed", language: "en-GB", countryCode: "GB", mode: "live", outcome: "success", durationMs: 1200 }), { event: "analysis_completed", language: "en-GB", countryCode: "GB", mode: "live", outcome: "success", durationMs: 1200 });
   assert.equal(parseAnalyticsInput({ event: "page_view" }), null);
-  assert.equal(parseAnalyticsInput({ event: "vote_cast", countryCode: "DE" }), null);
+  assert.equal(parseAnalyticsInput({ event: "vote_cast", countryCode: "CH" }), null);
   assert.equal(parseAnalyticsInput({ event: "analysis_failed", outcome: "contains personal text!" }), null);
 });
 

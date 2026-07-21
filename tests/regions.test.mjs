@@ -16,7 +16,7 @@ test("country allowlist accepts every required country and rejects unsupported c
     assert.ok(REGIONAL_DEFAULTS[countryCode].formattingLocale);
   }
   for (const countryCode of ["AU", "CH", "NO", "JP", "", null, undefined]) assert.equal(isSupportedCountry(countryCode), false);
-  assert.equal(supportedCountry(" ca "), "CA");
+  assert.equal(supportedCountry(" de "), "DE");
 });
 
 test("regional defaults include UK English and remain separate from formatting", () => {

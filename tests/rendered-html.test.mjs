@@ -15,11 +15,11 @@ test("server-renders the Trinque experience", async () => {
   assert.equal(response.status, 200);
   assert.match(response.headers.get("x-request-id"), /^[0-9a-f-]{36}$/);
   const html = await response.text();
-  assert.match(html, /<title>Trinque — Good food finds good company<\/title>/i);
-  assert.match(html, /Good food finds good company\./);
+  assert.match(html, /<title>Trinque — Find dishes with friends<\/title>/i);
+  assert.match(html, /Find good food with friends\./);
   assert.match(html, /Analyze a dish/);
-  assert.match(html, /Worth gathering around/);
-  assert.match(html, /GPT-5\.6/);
+  assert.match(html, /Good picks/);
+  assert.match(html, /Try the labeled demo/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview|Your site is taking shape/i);
 });
 

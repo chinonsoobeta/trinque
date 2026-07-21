@@ -61,9 +61,10 @@ test("PWA cache policy excludes private API responses and uploads", async () => 
 });
 
 test("safety controls are present on dish, profile, and comment surfaces", async () => {
-  const [actions, dish, profile, comments, route, invite] = await Promise.all([
+  const [actions, dish, dishView, profile, comments, route, invite] = await Promise.all([
     readFile(new URL("../components/SafetyActions.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/dishes/[id]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/DishDetailView.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/ProfileView.tsx", import.meta.url), "utf8"),
     readFile(new URL("../components/CommentSection.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/safety/route.ts", import.meta.url), "utf8"),
@@ -71,11 +72,39 @@ test("safety controls are present on dish, profile, and comment surfaces", async
   ]);
   assert.match(actions, /\/api\/reports/);
   for (const action of ["hide", "mute", "block"]) assert.match(actions, new RegExp(`\"${action}\"`));
-  assert.match(dish, /SafetyActions/);
+  assert.match(dish, /DishDetailView/);
+  assert.match(dishView, /SafetyActions/);
   assert.match(profile, /SafetyActions/);
   assert.match(comments, /targetType="comment"/);
   assert.match(comments, /dishOwnerId/);
   assert.match(route, /db\.delete\(follows\)/);
   assert.match(route, /db\.delete\(notifications\)/);
   assert.match(invite, /blocks\.blockerId/);
+});
+
+test("iOS exposes the same core dish safety actions", async () => {
+  const source = await readFile(new URL("../ios/App.tsx", import.meta.url), "utf8");
+  assert.match(source, /safety\.reportDish/);
+  assert.match(source, /action: 'hide'/);
+  assert.match(source, /action: 'mute'/);
+  assert.match(source, /action: 'block'/);
+  assert.match(source, /onHide\(dish\.id\)/);
+  assert.match(source, /safety\.reportReason/);
+  assert.match(source, /safety\.blockConfirm/);
+});
+
+test("users can review safety choices and moderators have a guarded queue", async () => {
+  const [center, account, moderationPage, moderationRoute, safetyRoute] = await Promise.all([
+    readFile(new URL("../components/SafetyCenter.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/account/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/moderation/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/moderation/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/safety/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(account, /SafetyCenter/);
+  for (const action of ["block", "mute", "hide"]) assert.match(center, new RegExp(`action: "${action}"`));
+  assert.match(safetyRoute, /export async function GET/);
+  assert.match(moderationPage, /\/api\/moderation/);
+  assert.match(moderationRoute, /isModerator/);
+  assert.match(moderationRoute, /moderator_required/);
 });

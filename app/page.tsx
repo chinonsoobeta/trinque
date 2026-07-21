@@ -282,7 +282,7 @@ export default function Home() {
       const envelope = await response.json() as AnalysisEnvelope;
       if (!response.ok || !envelope.ok) {
         trackAnalytics("analysis_failed", { mode: demo ? "demo" : "live", outcome: envelope.ok ? "provider_error" : envelope.error.code, durationMs: Math.round(performance.now() - startedAt) });
-        setAnalysisError(envelope.ok ? t("analysis.unavailableTitle") : envelope.error.message);
+        setAnalysisError(envelope.ok ? t("analysis.unavailableTitle") : t("analysis.networkError"));
         setPhase("error");
         return;
       }

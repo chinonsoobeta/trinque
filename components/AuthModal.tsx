@@ -32,12 +32,12 @@ export function AuthModal({ open, onClose, initialMode = "signin", embedded = fa
     try {
       if (mode === "recovery") {
         const { error } = await updatePassword(password);
-        if (error) { setStatus(error.message); return; }
+        if (error) { setStatus(t("auth.failed")); return; }
         window.location.replace("/");
         return;
       }
       const result = mode === "signup" ? await signUpWithPassword(email, password) : await signInWithPassword(email, password);
-      if (result.error) { setStatus(result.error.message); return; }
+      if (result.error) { setStatus(t("auth.failed")); return; }
       if (mode === "signup" && !result.data.session) setStatus(t("auth.checkEmail"));
       else window.location.replace("/onboarding");
     } catch {

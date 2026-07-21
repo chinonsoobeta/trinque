@@ -56,7 +56,7 @@ type AnalysisEnvelope =
 
 type MatchResult = { kind: 'dish' | 'restaurant_alternative'; id: string; dishName: string | null; restaurantName: string; locality: string; distanceKm: number; score: number; reasonCode: 'semantic_and_distance' | 'nearby_alternative' | 'restaurant_only'; provenance: string; verificationStatus: string; lastConfirmedAt: string | null; dietaryCaveat: string; currentAvailabilityConfirmed: boolean; priceAmount: number | null; currencyCode: string | null; imageUrl: string | null; attribution?: 'Google Maps' };
 type MatchTiers = { confirmedNearbyDishes: MatchResult[]; communityOrInferredDishes: MatchResult[]; restaurantLevelAlternatives: MatchResult[] };
-type CommunityDish = { id: string; name: string; cuisine: string; description: string; confidence: number; imageUrl?: string | null; contributorLabel: string; restaurant?: { name: string } | null; provenance?: string; verificationStatus?: string; availabilityKnowledge?: string };
+type CommunityDish = { id: string; ownerId: string; name: string; cuisine: string; description: string; confidence: number; imageUrl?: string | null; contributorLabel: string; restaurant?: { name: string } | null; provenance?: string; verificationStatus?: string; availabilityKnowledge?: string };
 type MobileGroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; explanation: string; conflicts: string[]; kind: 'published_dish' | 'provider_restaurant' | 'seed_demo'; provenance?: string | null; verificationStatus?: string | null; currentAvailabilityConfirmed: boolean; dietaryCaveat: string };
 type MobileGroup = { id: string; name: string; eventTime: string; eventLocalDate: string | null; eventLocalTime: string | null; neighborhood: string; budgetMax: number; maxDistanceKm: number; distanceUnit: MeasurementSystem; vegetarianRequired: number; allergies: string[]; dietaryRequirements: string[]; cuisineTypes: string[]; inviteCode: string; inviteExpiresAt: string | null; inviteRevokedAt: string | null; status: 'voting' | 'finalized'; selectedCandidateId: string | null; candidates: MobileGroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number>; memberCount: number; viewerRole: 'owner' | 'participant'; viewerVote: string | null; viewerRsvp: string | null; timeZone: string | null; currencyCode: string | null; locale: string | null; locality: string | null; countryCode: string | null };
 
@@ -351,7 +351,7 @@ export default function App() {
         }
         setAnalysis(sampleAnalysis);
         setAnalysisMode('demo');
-        setAnalysisWarning('This is seeded demo data, not an analysis of the uploaded photo.');
+        setAnalysisWarning(t('analysis.warning'));
       } else {
         const response = await fetch(`${remoteApi}/api/analyze`, {
           method: 'POST',
@@ -361,7 +361,7 @@ export default function App() {
         const envelope = (await response.json()) as AnalysisEnvelope;
         if (!response.ok || !envelope.ok) {
           trackAnalytics('analysis_failed', { mode: demo ? 'demo' : 'live', outcome: envelope.ok ? 'provider_error' : envelope.error.code, durationMs: Math.round(performance.now() - startedAt) });
-          setAnalysisError(envelope.ok ? 'Live identification failed.' : envelope.error.message);
+          setAnalysisError(envelope.ok ? t('analysis.unavailableTitle') : t('analysis.networkError'));
           setPhase('error');
           return;
         }
@@ -419,7 +419,7 @@ export default function App() {
       <SafeAreaView style={styles.safeArea}>
         <StatusBar style={effectiveTheme === 'dark' ? 'light' : 'dark'} />
         <View style={styles.appShell}>
-          {tab === 'Discover' && <DiscoverScreen onAnalyze={openAnalyzer} t={t} location={location} feed={communityFeed} />}
+          {tab === 'Discover' && <DiscoverScreen onAnalyze={openAnalyzer} t={t} location={location} feed={communityFeed} guestToken={guestToken} onHide={(id) => setCommunityFeed((current) => current.filter((dish) => dish.id !== id))} />}
           {tab === 'Groups' && <GroupsScreen guestToken={guestToken} t={t} location={location} language={language} inviteCode={pendingInvite} inviteHandled={inviteHandled} track={trackAnalytics} />}
           {tab === 'Saved' && <SavedScreen dishes={savedDishes} onSave={toggleSaved} onDiscover={() => setTab('Discover')} t={t} />}
           {tab === 'Profile' && <ProfileScreen guestToken={guestToken} t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} persist={persistPreferences} />}
@@ -464,7 +464,7 @@ export default function App() {
   );
 }
 
-function DiscoverScreen({ onAnalyze, t, location, feed }: { onAnalyze: () => void; t: Translator; location: MobileLocation | null; feed: CommunityDish[] }) {
+function DiscoverScreen({ onAnalyze, t, location, feed, guestToken, onHide }: { onAnalyze: () => void; t: Translator; location: MobileLocation | null; feed: CommunityDish[]; guestToken: string | null; onHide: (id: string) => void }) {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
       <Header eyebrow={location ? `${location.locality} · ${location.countryCode}` : t('location.change')} />
@@ -484,7 +484,7 @@ function DiscoverScreen({ onAnalyze, t, location, feed }: { onAnalyze: () => voi
 
       <SectionHeading kicker={t('home.curated', { location: location?.locality ?? '—' }).toUpperCase()} title={t('home.gather')} action="" />
       <View style={styles.seededNotice}><Text style={styles.seededNoticeText}>{t('home.communityFeedNotice')}</Text></View>
-      {feed.length ? <View style={styles.communityFeed}>{feed.map((dish) => <CommunityDishCard key={dish.id} dish={dish} t={t} />)}</View> : <View style={styles.emptyFeed}><Text style={styles.emptyFeedText}>{t('match.noResults')}</Text></View>}
+      {feed.length ? <View style={styles.communityFeed}>{feed.map((dish) => <CommunityDishCard key={dish.id} dish={dish} t={t} guestToken={guestToken} onHide={onHide} />)}</View> : <View style={styles.emptyFeed}><Text style={styles.emptyFeedText}>{t('match.noResults')}</Text></View>}
 
       <View style={styles.tasteCard}>
         <View style={styles.tasteTopLine}>
@@ -494,8 +494,8 @@ function DiscoverScreen({ onAnalyze, t, location, feed }: { onAnalyze: () => voi
         <Text style={styles.tasteTitle}>{t('home.tasteTitle')}</Text>
         <Text style={styles.tasteBody}>{t('home.tasteBody')}</Text>
         <View style={styles.tasteTags}>
-          {['Umami', 'Citrus', 'Char', 'Herby'].map((tag, index) => (
-            <View key={tag} style={[styles.tasteTag, index === 0 && styles.tasteTagStrong]}><Text style={[styles.tasteTagText, index === 0 && styles.tasteTagTextStrong]}>{tag}</Text></View>
+          {(['analysis.field.cuisine', 'analysis.field.dietary', 'analysis.field.ingredients', 'analysis.field.description'] as const).map((key, index) => (
+            <View key={key} style={[styles.tasteTag, index === 0 && styles.tasteTagStrong]}><Text style={[styles.tasteTagText, index === 0 && styles.tasteTagTextStrong]}>{t(key)}</Text></View>
           ))}
         </View>
       </View>
@@ -504,8 +504,35 @@ function DiscoverScreen({ onAnalyze, t, location, feed }: { onAnalyze: () => voi
   );
 }
 
-function CommunityDishCard({ dish, t }: { dish: CommunityDish; t: Translator }) {
-  return <View style={styles.communityDish}><View style={styles.communityDishCopy}><Text style={styles.communityDishName}>{dish.name}</Text><Text style={styles.communityDishDescription}>{dish.description}</Text><Text style={styles.communityDishMeta}>{dish.restaurant?.name ?? t('analysis.review')} · {dish.contributorLabel}</Text><Text style={styles.communityDishMeta}>{t(`provenance.${dish.provenance ?? 'ai_identified'}` as MessageKey)} · {t(`verification.${dish.verificationStatus ?? 'unverified'}` as MessageKey)} · {t(dish.availabilityKnowledge === 'recently_confirmed' ? 'availability.confirmed' : 'availability.unknown')}</Text></View>{dish.imageUrl ? <NativeImage source={{ uri: dish.imageUrl }} style={styles.communityDishImage} /> : <View style={[styles.communityDishImage, styles.mobileMatchPlaceholder]}><Text style={styles.mobileMatchPlaceholderText}>T</Text></View>}</View>;
+function CommunityDishCard({ dish, t, guestToken, onHide }: { dish: CommunityDish; t: Translator; guestToken: string | null; onHide: (id: string) => void }) {
+  async function act(path: string, body: Record<string, string>) {
+    if (!remoteApi || !guestToken) { Alert.alert(t('safety.title'), t('comments.signIn')); return; }
+    const response = await fetch(`${remoteApi}${path}`, { method: 'POST', headers: { Authorization: `Guest ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null);
+    Alert.alert(t('safety.title'), response?.ok ? t('safety.done') : t('safety.failed'));
+    if (response?.ok && body.action === 'hide') onHide(dish.id);
+  }
+  function reportDish() {
+    Alert.alert(t('safety.reportReason'), dish.name, [
+      ...(['harmful', 'spam', 'false', 'stale', 'other'] as const).map((reason) => ({ text: t(`safety.reason.${reason}`), onPress: () => void act('/api/reports', { targetType: 'dish', targetId: dish.id, reason }) })),
+      { text: t('safety.cancel'), style: 'cancel' as const },
+    ]);
+  }
+  function blockUser() {
+    Alert.alert(t('safety.blockUser'), t('safety.blockConfirm'), [
+      { text: t('safety.cancel'), style: 'cancel' },
+      { text: t('safety.blockUser'), style: 'destructive', onPress: () => void act('/api/safety', { action: 'block', targetId: dish.ownerId }) },
+    ]);
+  }
+  function openSafety() {
+    Alert.alert(t('safety.title'), dish.name, [
+      { text: t('safety.reportDish'), onPress: reportDish },
+      { text: t('safety.hideDish'), onPress: () => void act('/api/safety', { action: 'hide', targetId: dish.id }) },
+      { text: t('safety.muteUser'), onPress: () => void act('/api/safety', { action: 'mute', targetId: dish.ownerId }) },
+      { text: t('safety.blockUser'), style: 'destructive', onPress: blockUser },
+      { text: t('settings.close'), style: 'cancel' },
+    ]);
+  }
+  return <View style={styles.communityDish}><View style={styles.communityDishCopy}><Text style={styles.communityDishName}>{dish.name}</Text><Text style={styles.communityDishDescription}>{dish.description}</Text><Text style={styles.communityDishMeta}>{dish.restaurant?.name ?? t('analysis.review')} · {dish.contributorLabel}</Text><Text style={styles.communityDishMeta}>{t(`provenance.${dish.provenance ?? 'ai_identified'}` as MessageKey)} · {t(`verification.${dish.verificationStatus ?? 'unverified'}` as MessageKey)} · {t(dish.availabilityKnowledge === 'recently_confirmed' ? 'availability.confirmed' : 'availability.unknown')}</Text><Pressable accessibilityRole="button" onPress={openSafety}><Text style={styles.demoLink}>{t('safety.title')}</Text></Pressable></View>{dish.imageUrl ? <NativeImage source={{ uri: dish.imageUrl }} style={styles.communityDishImage} /> : <View style={[styles.communityDishImage, styles.mobileMatchPlaceholder]}><Text style={styles.mobileMatchPlaceholderText}>T</Text></View>}</View>;
 }
 
 function GroupsScreen({ guestToken, t, location, language, inviteCode, inviteHandled, track }: { guestToken: string | null; t: Translator; location: MobileLocation | null; language: UiLanguage; inviteCode: string | null; inviteHandled: () => void; track: (event: AnalyticsEvent, details?: { mode?: 'live' | 'demo'; outcome?: string; durationMs?: number }) => void }) {
@@ -608,7 +635,7 @@ function GroupsScreen({ guestToken, t, location, language, inviteCode, inviteHan
       </View>
 
       <SectionHeading kicker={t('group.ranking').toUpperCase()} title={group ? t('group.bestFits') : t('group.start')} action="" />
-      {!group ? <View style={styles.emptyCard}><Text style={styles.emptyIcon}>♢</Text><Text style={styles.emptyTitle}>{t('group.start')}</Text><Text style={styles.emptyBody}>{t('group.createBody')}</Text><Text style={styles.fieldLabel}>{t('group.date')}</Text><TextInput style={styles.fieldInput} value={eventLocalDate} onChangeText={setEventLocalDate} placeholder="YYYY-MM-DD" placeholderTextColor={palette.muted} /><Text style={styles.fieldLabel}>{t('group.time')}</Text><TextInput style={styles.fieldInput} value={eventLocalTime} onChangeText={setEventLocalTime} placeholder="19:30" placeholderTextColor={palette.muted} /><Text style={styles.fieldLabel}>{t('group.budget')}</Text><TextInput style={styles.fieldInput} value={budgetMax} onChangeText={setBudgetMax} keyboardType="decimal-pad" /><Text style={styles.fieldLabel}>{t('group.radius')}</Text><TextInput style={styles.fieldInput} value={maxDistance} onChangeText={setMaxDistance} keyboardType="decimal-pad" /><View style={styles.choiceRow}>{(['metric', 'imperial'] as const).map((value) => <Choice key={value} selected={distanceUnit === value} label={t(value === 'metric' ? 'location.metric' : 'location.imperial')} onPress={() => setDistanceUnit(value)} />)}</View><Text style={styles.fieldLabel}>{t('group.dietary')}</Text>{['vegan', 'vegetarian', 'celiac', 'gluten-free', 'dairy-free', 'nut-free', 'shellfish-free', 'halal', 'kosher'].map((item) => <Toggle key={item} selected={dietaryRequirements.includes(item)} label={item} onPress={() => setDietaryRequirements((current) => current.includes(item) ? current.filter((value) => value !== item) : [...current, item])} />)}<Text style={styles.fieldLabel}>{t('group.allergies')}</Text><TextInput style={styles.fieldInput} value={allergies} onChangeText={setAllergies} placeholder={t('group.allergyExample')} placeholderTextColor={palette.muted} /><Text style={styles.fieldLabel}>{t('group.cuisines')}</Text><TextInput style={styles.fieldInput} value={cuisineTypes} onChangeText={setCuisineTypes} placeholder={t('group.cuisineExample')} placeholderTextColor={palette.muted} /><Pressable disabled={busy || !location || !eventLocalDate || !eventLocalTime} style={styles.primaryButton} onPress={createGroup}><Text style={styles.primaryButtonText}>{busy ? t('group.building') : t('group.rank')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable></View> : candidates.length === 0 ? <View style={styles.emptyCard}><Text style={styles.emptyTitle}>{t('group.noLiveCandidates')}</Text></View> : candidates.map((candidate) => (
+      {!group ? <View style={styles.emptyCard}><Text style={styles.emptyIcon}>♢</Text><Text style={styles.emptyTitle}>{t('group.start')}</Text><Text style={styles.emptyBody}>{t('group.createBody')}</Text><Text style={styles.fieldLabel}>{t('group.date')}</Text><TextInput style={styles.fieldInput} value={eventLocalDate} onChangeText={setEventLocalDate} placeholder="YYYY-MM-DD" placeholderTextColor={palette.muted} /><Text style={styles.fieldLabel}>{t('group.time')}</Text><TextInput style={styles.fieldInput} value={eventLocalTime} onChangeText={setEventLocalTime} placeholder="19:30" placeholderTextColor={palette.muted} /><Text style={styles.fieldLabel}>{t('group.budget')}</Text><TextInput style={styles.fieldInput} value={budgetMax} onChangeText={setBudgetMax} keyboardType="decimal-pad" /><Text style={styles.fieldLabel}>{t('group.radius')}</Text><TextInput style={styles.fieldInput} value={maxDistance} onChangeText={setMaxDistance} keyboardType="decimal-pad" /><View style={styles.choiceRow}>{(['metric', 'imperial'] as const).map((value) => <Choice key={value} selected={distanceUnit === value} label={t(value === 'metric' ? 'location.metric' : 'location.imperial')} onPress={() => setDistanceUnit(value)} />)}</View><Text style={styles.fieldLabel}>{t('group.dietary')}</Text>{['vegan', 'vegetarian', 'celiac', 'gluten-free', 'dairy-free', 'nut-free', 'shellfish-free', 'halal', 'kosher'].map((item) => <Toggle key={item} selected={dietaryRequirements.includes(item)} label={t(`diet.${item}` as MessageKey)} onPress={() => setDietaryRequirements((current) => current.includes(item) ? current.filter((value) => value !== item) : [...current, item])} />)}<Text style={styles.fieldLabel}>{t('group.allergies')}</Text><TextInput style={styles.fieldInput} value={allergies} onChangeText={setAllergies} placeholder={t('group.allergyExample')} placeholderTextColor={palette.muted} /><Text style={styles.fieldLabel}>{t('group.cuisines')}</Text><TextInput style={styles.fieldInput} value={cuisineTypes} onChangeText={setCuisineTypes} placeholder={t('group.cuisineExample')} placeholderTextColor={palette.muted} /><Pressable disabled={busy || !location || !eventLocalDate || !eventLocalTime} style={styles.primaryButton} onPress={createGroup}><Text style={styles.primaryButtonText}>{busy ? t('group.building') : t('group.rank')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable></View> : candidates.length === 0 ? <View style={styles.emptyCard}><Text style={styles.emptyTitle}>{t('group.noLiveCandidates')}</Text></View> : candidates.map((candidate) => (
         <View key={candidate.candidateId} style={[styles.voteCard, !candidate.eligible && styles.ineligibleCard]}>
           {candidate.image ? <NativeImage source={{ uri: candidate.image }} style={styles.voteImage} /> : <View style={styles.voteImage} />}
           <View style={styles.voteInfo}>

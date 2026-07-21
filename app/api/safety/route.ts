@@ -1,9 +1,34 @@
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { getDb } from "@/db";
-import { blocks, follows, hiddenDishes, mutes, notifications } from "@/db/schema";
+import { blocks, follows, hiddenDishes, mutes, notifications, profiles, publishedDishes } from "@/db/schema";
 import { AuthenticationError, requireOnboardedIdentity } from "@/lib/auth";
 
 export const runtime = "edge";
+
+export async function GET(request: Request) {
+  try {
+    const identity = await requireOnboardedIdentity(request);
+    const db = await getDb();
+    const [blockedRows, mutedRows, hiddenRows] = await Promise.all([
+      db.select().from(blocks).where(eq(blocks.blockerId, identity.id)),
+      db.select().from(mutes).where(eq(mutes.muterId, identity.id)),
+      db.select().from(hiddenDishes).where(eq(hiddenDishes.userId, identity.id)),
+    ]);
+    const userIds = [...new Set([...blockedRows.map((row) => row.blockedId), ...mutedRows.map((row) => row.mutedId)])];
+    const dishIds = hiddenRows.map((row) => row.dishId);
+    const [profileRows, dishRows] = await Promise.all([
+      userIds.length ? db.select({ id: profiles.userId, label: profiles.displayName, handle: profiles.handle }).from(profiles).where(inArray(profiles.userId, userIds)) : [],
+      dishIds.length ? db.select({ id: publishedDishes.id, label: publishedDishes.name }).from(publishedDishes).where(inArray(publishedDishes.id, dishIds)) : [],
+    ]);
+    const profileById = new Map(profileRows.map((row) => [row.id, row]));
+    const dishById = new Map(dishRows.map((row) => [row.id, row]));
+    return Response.json({
+      blocks: blockedRows.map((row) => ({ id: row.blockedId, label: profileById.get(row.blockedId)?.label ?? row.blockedId, handle: profileById.get(row.blockedId)?.handle ?? null })),
+      mutes: mutedRows.map((row) => ({ id: row.mutedId, label: profileById.get(row.mutedId)?.label ?? row.mutedId, handle: profileById.get(row.mutedId)?.handle ?? null })),
+      hiddenDishes: hiddenRows.map((row) => ({ id: row.dishId, label: dishById.get(row.dishId)?.label ?? row.dishId })),
+    }, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) { return Response.json({ error: error instanceof AuthenticationError ? error.message : "safety_action_unavailable" }, { status: error instanceof AuthenticationError ? error.status : 503 }); }
+}
 
 export async function POST(request: Request) {
   try {

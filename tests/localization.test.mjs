@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { resolveUiLanguage, translate, translations, UI_LANGUAGES } from "../ios/i18n.ts";
 
@@ -42,6 +43,37 @@ test("non-English catalogues do not fall back to English", () => {
     for (const key of keys) {
       if (allowedSame[language].has(key)) continue;
       assert.notEqual(translations[language][key], translations["en-US"][key], `${language}:${key} must not use English copy`);
+    }
+  }
+});
+
+test("user-facing catalogues do not use technical terms", () => {
+  const technicalTerms = /\b(?:API|endpoint|payload|metadata|canonical|semantic|OAuth|HTTP)\b/i;
+  for (const language of UI_LANGUAGES) {
+    for (const [key, message] of Object.entries(translations[language])) {
+      assert.doesNotMatch(message, technicalTerms, `${language}:${key} contains a technical term`);
+    }
+  }
+});
+
+test("main interactive views do not contain raw user-facing prose", () => {
+  const files = [
+    "components/AuthModal.tsx",
+    "components/SafetyActions.tsx",
+    "components/SafetyCenter.tsx",
+    "app/moderation/page.tsx",
+    "components/Feed.tsx",
+    "components/ProfileView.tsx",
+    "components/CommentSection.tsx",
+    "components/NotificationList.tsx",
+    "components/DishDetailView.tsx",
+  ];
+  const rawJsxText = />\s*([A-Za-z][A-Za-z0-9 ,.!?’'&:+-]*)\s*</g;
+  const allowedMarks = new Set(["T", "G"]);
+  for (const file of files) {
+    const source = readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
+    for (const match of source.matchAll(rawJsxText)) {
+      assert.ok(allowedMarks.has(match[1]), `${file} contains raw UI text: ${match[1]}`);
     }
   }
 });

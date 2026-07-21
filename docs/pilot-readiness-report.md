@@ -1,31 +1,42 @@
-# Trinque regional pilot readiness report
+# Trinque pilot readiness report
 
-Report date: 2026-07-18  ·  Validated source: `main` commit `07d8b09`  ·  Recommendation: **NO-GO**
+Report date: 2026-07-21. Validated source: `main` commit `6a680f4`. Recommendation: **NO-GO**.
 
-## Scope and validation anchors
+## What passed locally
 
-Runtime support is dynamic for every locality in US, CA, MX, GB and FR. The 15 anchors in `lib/pilot-anchors.ts` are fixtures only: New York, Los Angeles, Austin; Vancouver, Toronto, Montréal; Mexico City, Guadalajara, Monterrey; London, Manchester, Edinburgh; Paris, Lyon and Marseille. No runtime city allowlist is derived from these fixtures.
+- `npm run lint` passed with no errors.
+- `npm run verify` passed: 86 web tests, production web build, iOS type check, and iOS Expo export.
+- The clean D1 test applies migrations `0000` through `0012`. It checks the social, group, onboarding, and safety tables.
+- Region tests cover all 27 EU countries, GB, CA, US, MX, and an unsupported country. The supported-country list is shared in `lib/regions.ts`. No runtime city allowlist exists.
+- The Worker web app has a manifest, static-only service worker, safe-area CSS, and touch target rules. The service worker does not cache `/api` responses or uploaded media.
 
-## Automated evidence
+## Current production check
 
-- `npm run verify`: 74 tests passed; production web build passed; iOS TypeScript check and Expo export passed.
-- `npm run lint`: 0 errors; seven pre-existing accessibility/performance warnings remain (image alt text and the existing web `<img>` path).
-- Secret scan: no API-key/token/private-key signatures found.
-- D1 migrations `0001` through `0008` apply in sequence; the latest migration adds consent-aware analytics, feedback, and client diagnostics.
-- `npm run evaluate:identifier`: 50 planned cases across all five countries and all five UI languages; **unmeasured** because no approved image fixtures are present. No score is inferred.
+The current Worker is `trinque2` at `https://trinque2.chinonsoobeta.workers.dev`.
 
-## Provider and production checks
+On 2026-07-21 its health endpoint returned `degraded`: D1, R2, and Places were configured, but OpenAI was unavailable because `OPENAI_API_KEY` was missing. This report contains no secret value. `GCP_API_KEY` is the current server-side Places secret; `GOOGLE_PLACES_API_KEY` is a legacy fallback only.
 
-Mocked provider contracts cover all five countries, normalized addresses/coordinates/currency/time zones, attribution, retry/error taxonomy, and unsupported-country behavior. `GOOGLE_PLACES_API_KEY` is configured as a server-side Sites secret. On 2026-07-18, deployed live nearby searches returned restaurant results and correct country/currency/time-zone/measurement normalization for New York (US), Toronto (CA), Mexico City (MX), London (GB), and Paris (FR); a Paris restaurant-detail response included Google Maps attribution. A follow-up provider guard filters non-restaurant primary types before the normalized response. The production Sites host is `https://trinque-dish-discovery.r7bv67rgkk.chatgpt.site` and is public by owner approval.
+Do not run a production migration from this report. First export or back up D1, apply the migration sequence to a preview D1 database, run smoke checks, then deploy the Worker. Record the deployed commit, migration result, and health response. Roll back the Worker to the prior known-good version if health or smoke checks fail. A schema rollback needs its own reviewed migration; do not delete production tables as a rollback action.
 
-## Privacy, operations, and group journey
+## Safety and data controls
 
-Rate limits, request IDs, upload signatures, consent withdrawal, export/deletion, analytics/diagnostics consent gating, feedback, and three-session group authorization are covered by automated tests. The live provider search is complete. A temporary production guest used for this read-only check was deleted through Trinque’s privacy deletion endpoint immediately afterward. On 2026-07-18, three independent public guest sessions created and joined a Toronto group; each could read the same plan with its correct owner/participant role, and all test identities were then deleted. The fresh plan had only restaurant-level alternatives with unknown prices, so every candidate was correctly ineligible and finalization was not attempted. A live identifier smoke test and physical-device/TestFlight run remain unexecuted because approved fixture files and owner devices/accounts are still required.
+The database now stores blocks, mutes, hidden dishes, reports, moderation actions, moderation state, and soft-deletion time. Authenticated users can submit rate-limited reports and block, mute, or hide content. Normal dish deletion is a soft deletion; hard deletion is explicit. The moderation queue requires a server-only comma-separated SHA-256 allowlist in `TRINQUE_ADMIN_IDENTITY_HASHES`.
 
-## iOS/TestFlight
+This is not yet complete pilot evidence. The web and iOS surfaces do not yet expose all safety actions, and feeds do not yet apply every block, mute, and hide rule. The report and moderation routes need route-level authorization and abuse tests beyond the schema migration test.
 
-`ios/eas.json` contains internal preview and store production profiles with public API/link variables only. `applinks:` entitlement and Worker AASA interception are implemented, but Apple verification requires `APPLE_DEVELOPER_TEAM_ID` and an unauthenticated HTTPS association endpoint. The current owner-only Sites policy blocks both the public API use case and Apple’s association fetch. No App Store/TestFlight submission was made.
+## Group and mobile limits
 
-## Go/no-go
+Group ranking rejects unknown required dietary data. The server stores distance unit, dietary needs, and cuisine types, and the existing automated three-session authorization, vote, finalization, RSVP, and calendar tests pass. The owner-only finalization rule remains enforced. The web and iOS form contracts still need full UI parity, real provider candidate proof, and physical-device flows.
 
-NO-GO until approved evaluation image fixtures are supplied and a live identifier smoke test is measured; a real group plan has at least one eligible candidate and completes voting/finalization/independent RSVPs/calendar export; Apple Team ID and an approved AASA design are supplied for iOS; and physical iPhone/TestFlight validation completes. Google billing, Places restrictions, and applicable France terms have been owner-confirmed. The implementation is pilot-ready in code and test scaffolding, but these external checks are required before claiming a live regional pilot.
+The PWA is built and exported locally. Safari on iOS and Chrome on Android have not been tested on physical supported devices. The iOS Expo export is not a TestFlight validation.
+
+## Required evidence before a controlled pilot
+
+- Set and verify `OPENAI_API_KEY`, `GCP_API_KEY`, D1 `DB`, R2 `UPLOADS`, and Supabase public configuration in the Worker. Configure the hashed moderator allowlist only if the moderation queue is enabled.
+- Complete native review and removal of English fallback copy for French, Spanish, German, Italian, and Portuguese.
+- Complete group UI and iOS request/response parity, then run a live multi-account group plan with an eligible candidate, vote, finalization, RSVP, and calendar export.
+- Complete report, block, mute, hide, and owner controls in web and iOS UI. Test moderation actions, feed filtering, account deletion, privacy export, and R2 media deletion against a safe preview environment.
+- Run real-device auth and mobile browser flows on supported iOS and Android devices.
+- Run preview migration and smoke checks, take a production backup/export, deploy, and record the rollback version.
+
+The product remains **NO-GO**. Automated checks are useful, but the missing live credentials, incomplete native translation work, incomplete UI parity, and unmeasured production journeys block a controlled pilot.

@@ -15,6 +15,19 @@ test("group ranking excludes hard conflicts and provider-only unknowns", () => {
   assert.deepEqual(candidates.find((candidate) => candidate.candidateId === "restaurant").conflicts, ["price_unknown", "vegetarian_unknown", "allergen_unknown:sesame"]);
 });
 
+test("an unknown price needs review but does not invent a budget conflict", () => {
+  const [candidate] = rankGroupCandidates([sources[2]], { budgetMax: 25, maxDistanceKm: 4, vegetarianRequired: 0, allergies: [], dietaryRequirements: [], cuisineTypes: [] }, "en-GB");
+  assert.equal(candidate.eligible, true);
+  assert.equal(candidate.explanation, "review_required");
+  assert.deepEqual(candidate.conflicts, ["price_unknown"]);
+});
+
+test("an unknown allergy still blocks a restaurant-level result", () => {
+  const [candidate] = rankGroupCandidates([sources[2]], { budgetMax: 25, maxDistanceKm: 4, vegetarianRequired: 0, allergies: ["sesame"], dietaryRequirements: [], cuisineTypes: [] }, "en-GB");
+  assert.equal(candidate.eligible, false);
+  assert.ok(candidate.conflicts.includes("allergen_unknown:sesame"));
+});
+
 test("votes win among eligible candidates and score breaks ties", () => {
   const second = { ...sources[0], candidateId: "pasta-2", distanceKm: 2 };
   const candidates = rankGroupCandidates([sources[0], second], { budgetMax: 35, maxDistanceKm: 4, vegetarianRequired: 1, allergies: [], dietaryRequirements: [], cuisineTypes: [] });

@@ -182,6 +182,7 @@ const enUS = {
   "group.createTitle": "Pick a place with your group.",
   "group.createBody": "Set what matters. Trinque sorts nearby picks, shows problems, collects votes, and helps you make a plan.",
   "group.start": "Start a group plan",
+  "group.changePlan": "Change plan",
   "group.name": "Friday supper",
   "group.budget": "Maximum per person",
   "group.radius": "How far to go",
@@ -203,8 +204,10 @@ const enUS = {
   "group.inviteCopied": "Invite link copied",
   "group.ranking": "How we sorted these picks",
   "group.bestFits": "Best picks",
+  "group.placesToCheck": "Nearby places to check",
   "group.finalPlan": "Your meal plan",
   "group.hardConflict": "Does not fit the plan",
+  "group.needsCheck": "Check before you vote",
   "group.groupFit": "{score}% fit for your group",
   "group.lock": "Choose this table",
   "group.bestTable": "Your best table",
@@ -226,7 +229,9 @@ const enUS = {
   "group.revokeInvite": "Revoke invite",
   "group.ownerFinalizes": "Only the owner can choose the final place. Your vote stays your own.",
   "group.noLiveCandidates": "No nearby places fit this plan yet. We did not add demo restaurants.",
+  "group.noEligibleCandidates": "No nearby place has confirmed information for every must-have. Check the places below before you choose one.",
   "group.fitEligible": "It fits the budget and distance. Check the food notes before you go.",
+  "group.fitReview": "The place is nearby. Its price is not confirmed. Check before you vote.",
   "group.fitIneligible": "It does not fit one of your must-haves.",
   "group.conflict.priceUnknown": "Price is not confirmed",
   "group.conflict.overBudget": "Over the group budget",
@@ -235,6 +240,7 @@ const enUS = {
   "group.conflict.vegetarianUnsupported": "This dish may not suit vegetarians",
   "group.conflict.allergenUnknown": "We cannot check {allergen} from this restaurant page",
   "group.conflict.allergenConflict": "It may have {allergen}",
+  "group.conflict.cuisineUnknownOrMismatch": "Cuisine does not match or is not confirmed",
   "group.providerCaveat": "We cannot check the dish, ingredients, allergens, vegetarian choice, price, or menu for this restaurant.",
   "profile.dishes": "Dishes",
   "profile.lists": "Lists",
@@ -660,18 +666,23 @@ Object.assign(fr, {
   "analysis.loadingKicker": "Vérification du plat", "analysis.loadingTitle": "Recherche des détails utiles…", "analysis.unavailableKicker": "Vérification impossible", "analysis.live": "Vérification du plat", "analysis.reviewTitle": "Vérifiez ce plat avant de le publier.", "analysis.canonicalNotice": "Trinque utilise un nom commun pour trouver des résultats. Cela ne dit pas si le plat est sans danger pour vous.",
   "match.confirmedTier": "Plats proches vérifiés", "match.communityTier": "Plats publiés par des membres", "match.restaurantTier": "Restaurants proches", "match.semanticReason": "Plat similaire par son type, ses ingrédients ou son goût. Nous le classons selon la distance et les faits connus.", "match.nearbyReason": "Un membre a publié ce plat près de vous. Certains détails restent inconnus.", "match.restaurantReason": "Restaurant proche. Nous ne savons pas s’il sert ce plat maintenant.", "match.noResults": "Aucun résultat pour le moment.", "match.providerUnavailable": "La recherche de restaurants est indisponible. Nous n’avons pas ajouté de résultats de démo.", "match.recordsUnavailable": "La recherche de plats publiés est indisponible. Nous n’avons pas ajouté de résultats de démo.", "match.providerPlace": "Résultat de restaurant",
   "group.eyebrow": "Planifier un repas", "group.createTitle": "Choisissez un lieu en groupe.", "group.createBody": "Indiquez vos besoins. Trinque trie les lieux proches, montre les problèmes et recueille les votes.", "group.start": "Créer un plan de groupe", "group.rank": "Chercher des lieux", "group.voteTitle": "Votez après avoir lu les faits.", "group.finalTitle": "Le groupe a choisi un lieu.", "group.constraints": "Chaque lieu indique s’il respecte vos besoins.", "group.hardConflict": "Ne respecte pas le plan", "group.lock": "Choisir ce lieu", "group.bestTable": "Votre choix", "group.finalized": "Le lieu est choisi", "group.ownerFinalizes": "Seul le créateur du groupe peut choisir le lieu. Votre vote reste enregistré.",
-  "location.unavailable": "La recherche de lieux n’est pas prête.", "publish.providerUnavailable": "La recherche de restaurants n’est pas prête. Vous pouvez saisir un restaurant que vous connaissez.", "group.noLiveCandidates": "Aucun lieu proche ne respecte ce plan. Nous n’avons pas ajouté de lieu de démo.", "group.fitEligible": "Le prix et la distance conviennent. Vérifiez les notes sur le plat.", "group.fitIneligible": "Un besoin n’est pas respecté.", "group.conflict.vegetarianUnsupported": "Aucun choix végétarien n’est confirmé",
+  "location.unavailable": "La recherche de lieux n’est pas prête.", "publish.providerUnavailable": "La recherche de restaurants n’est pas prête. Vous pouvez saisir un restaurant que vous connaissez.", "group.noLiveCandidates": "Aucun lieu proche ne respecte ce plan. Nous n’avons pas ajouté de lieu de démo.", "group.placesToCheck": "Lieux proches à vérifier", "group.needsCheck": "À vérifier avant de voter", "group.noEligibleCandidates": "Aucun lieu proche ne confirme tous vos besoins. Vérifiez les lieux ci-dessous avant de choisir.", "group.fitEligible": "Le prix et la distance conviennent. Vérifiez les notes sur le plat.", "group.fitReview": "Le lieu est proche. Le prix n’est pas confirmé. Vérifiez avant de voter.", "group.fitIneligible": "Un besoin n’est pas respecté.", "group.conflict.cuisineUnknownOrMismatch": "La cuisine ne correspond pas ou n’est pas confirmée", "group.conflict.vegetarianUnsupported": "Aucun choix végétarien n’est confirmé",
 });
 Object.assign(es, {
   "home.eyebrow": "Buscar platos", "home.title": "Encuentra buena comida con tus amigos.", "home.savedTitle": "Tus platos guardados", "home.body": "Haz una foto de un plato. Mira qué puede ser. Busca un plato parecido cerca de ti.", "home.savedBody": "Guarda aquí los platos que quieres probar.", "home.demo": "Probar la demo marcada", "home.curated": "Cerca de {location}", "home.gather": "Buenas opciones", "home.emptyTitle": "Encuentra aquí tu próximo plato.", "home.emptyBody": "Guarda platos. Trinque los usará para sugerir otros.", "home.localTip": "Los usuarios pueden añadir datos que no aparecen en las listas de restaurantes.", "home.tasteprint": "Tus gustos", "home.tasteBody": "Sueles guardar platos con sabores frescos, tostados e intensos.", "home.editorial": "Encuentra un plato. Luego busca dónde comerlo.",
   "analysis.loadingKicker": "Revisión del plato", "analysis.loadingTitle": "Buscando datos útiles…", "analysis.unavailableKicker": "No se puede revisar el plato", "analysis.live": "Revisión del plato", "analysis.reviewTitle": "Revisa este plato antes de publicarlo.", "analysis.canonicalNotice": "Trinque usa un nombre común para buscar resultados. Esto no indica si el plato es seguro para ti.",
   "match.confirmedTier": "Platos cercanos revisados", "match.communityTier": "Platos publicados por usuarios", "match.restaurantTier": "Restaurantes cercanos", "match.semanticReason": "Plato parecido por su tipo, ingredientes o sabor. Lo ordenamos por distancia y datos conocidos.", "match.nearbyReason": "Un usuario publicó este plato cerca. Algunos datos no se conocen.", "match.restaurantReason": "Restaurante cercano. No sabemos si sirve este plato ahora.", "match.noResults": "Aún no hay resultados.", "match.providerUnavailable": "La búsqueda de restaurantes no está disponible. No añadimos resultados de demo.", "match.recordsUnavailable": "La búsqueda de platos publicados no está disponible. No añadimos resultados de demo.", "match.providerPlace": "Resultado de restaurante",
   "group.eyebrow": "Planear una comida", "group.createTitle": "Elijan un lugar en grupo.", "group.createBody": "Indiquen sus necesidades. Trinque ordena los lugares cercanos, muestra los problemas y recoge los votos.", "group.start": "Crear un plan de grupo", "group.rank": "Buscar lugares", "group.voteTitle": "Vota después de leer los datos.", "group.finalTitle": "El grupo eligió un lugar.", "group.constraints": "Cada lugar indica si cumple las necesidades.", "group.hardConflict": "No cumple el plan", "group.lock": "Elegir este lugar", "group.bestTable": "Su elección", "group.finalized": "El lugar está elegido", "group.ownerFinalizes": "Solo quien creó el grupo puede elegir el lugar. Tu voto queda guardado.",
-  "location.unavailable": "La búsqueda de lugares no está lista.", "publish.providerUnavailable": "La búsqueda de restaurantes no está lista. Puedes escribir un restaurante que conozcas.", "group.noLiveCandidates": "Ningún lugar cercano cumple el plan. No añadimos lugares de demo.", "group.fitEligible": "Cumple el gasto máximo y la distancia. Revisa las notas sobre la comida.", "group.fitIneligible": "No cumple una de las condiciones.", "group.conflict.vegetarianUnsupported": "No se confirma una opción vegetariana", "privacy.analyticsConsent": "Permitir el uso de datos para mejorar Trinque",
+  "location.unavailable": "La búsqueda de lugares no está lista.", "publish.providerUnavailable": "La búsqueda de restaurantes no está lista. Puedes escribir un restaurante que conozcas.", "group.noLiveCandidates": "Ningún lugar cercano cumple el plan. No añadimos lugares de demo.", "group.placesToCheck": "Lugares cercanos para revisar", "group.needsCheck": "Revisa antes de votar", "group.noEligibleCandidates": "Ningún lugar cercano confirma todas tus condiciones. Revisa los lugares de abajo antes de elegir.", "group.fitEligible": "Cumple el gasto máximo y la distancia. Revisa las notas sobre la comida.", "group.fitReview": "El lugar está cerca. El precio no está confirmado. Revisa antes de votar.", "group.fitIneligible": "No cumple una de las condiciones.", "group.conflict.cuisineUnknownOrMismatch": "La cocina no coincide o no está confirmada", "group.conflict.vegetarianUnsupported": "No se confirma una opción vegetariana", "privacy.analyticsConsent": "Permitir el uso de datos para mejorar Trinque",
 });
-Object.assign(de, { "auth.account": "Persönlicher Bereich", "auth.password": "Kennwort", "diet.vegan": "Rein pflanzlich", "safety.reason.spam": "Unerwünschter Inhalt", "onboarding.name": "Vor- und Nachname" });
-Object.assign(it, { "auth.account": "Area personale", "auth.password": "Parola d’accesso", "diet.kosher": "Casher" });
-Object.assign(pt, { "diet.vegan": "Só alimentos vegetais", "diet.kosher": "Casher" });
+Object.assign(de, { "auth.account": "Persönlicher Bereich", "auth.password": "Kennwort", "diet.vegan": "Rein pflanzlich", "safety.reason.spam": "Unerwünschter Inhalt", "onboarding.name": "Vor- und Nachname", "group.placesToCheck": "Nahe Orte zum Prüfen", "group.needsCheck": "Vor der Stimme prüfen", "group.noEligibleCandidates": "Kein naher Ort bestätigt alle eure Vorgaben. Prüft die Orte unten, bevor ihr wählt.", "group.fitReview": "Der Ort ist nah. Der Preis ist nicht bestätigt. Prüft ihn vor der Stimme.", "group.conflict.cuisineUnknownOrMismatch": "Die Küche passt nicht oder ist nicht bestätigt" });
+Object.assign(it, { "auth.account": "Area personale", "auth.password": "Parola d’accesso", "diet.kosher": "Casher", "group.placesToCheck": "Posti vicini da controllare", "group.needsCheck": "Controlla prima di votare", "group.noEligibleCandidates": "Nessun posto vicino conferma tutte le vostre esigenze. Controllate i posti qui sotto prima di scegliere.", "group.fitReview": "Il posto è vicino. Il prezzo non è confermato. Controlla prima di votare.", "group.conflict.cuisineUnknownOrMismatch": "La cucina non corrisponde o non è confermata" });
+Object.assign(pt, { "diet.vegan": "Só alimentos vegetais", "diet.kosher": "Casher", "group.placesToCheck": "Locais próximos a verificar", "group.needsCheck": "Verifique antes de votar", "group.noEligibleCandidates": "Nenhum local próximo confirma todas as suas condições. Verifiquem os locais abaixo antes de escolher.", "group.fitReview": "O local é próximo. O preço não está confirmado. Verifique antes de votar.", "group.conflict.cuisineUnknownOrMismatch": "A cozinha não corresponde ou não está confirmada" });
+Object.assign(fr, { "group.changePlan": "Modifier le plan" });
+Object.assign(es, { "group.changePlan": "Cambiar plan" });
+Object.assign(de, { "group.changePlan": "Plan ändern" });
+Object.assign(it, { "group.changePlan": "Modifica piano" });
+Object.assign(pt, { "group.changePlan": "Alterar plano" });
 
 export const translations: Record<UiLanguage, Messages> = { "en-CA": enCA, "en-US": enUS, "en-GB": enGB, fr, es, de, it, pt };
 

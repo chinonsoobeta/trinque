@@ -21,12 +21,16 @@ export function rankGroupCandidates(candidates: GroupCandidateSource[], constrai
       else if (searchable.includes(allergy)) conflicts.push(`allergen_conflict:${allergy}`);
     }
     if (constraints.cuisineTypes.length > 0 && (!candidate.cuisine || !constraints.cuisineTypes.some((cuisine) => candidate.cuisine?.toLocaleLowerCase().includes(cuisine.toLocaleLowerCase())))) conflicts.push("cuisine_unknown_or_mismatch");
-    const eligible = conflicts.length === 0;
+    // A missing price needs a clear warning, but it is not proof that a place
+    // exceeds the group's limit. Dietary, allergy, distance, and known price
+    // conflicts remain hard blocks.
+    const hardConflicts = conflicts.filter((conflict) => conflict !== "price_unknown");
+    const eligible = hardConflicts.length === 0;
     const budgetFit = candidate.priceAmount == null ? 0 : Math.max(0, 1 - candidate.priceAmount / Math.max(1, constraints.budgetMax * 1.5));
     const distanceFit = Math.max(0, 1 - candidate.distanceKm / Math.max(1, constraints.maxDistanceKm * 1.5));
     const recordQuality = candidate.verificationStatus === "restaurant_verified" ? 1 : candidate.verificationStatus === "community_confirmed" ? 0.75 : 0.3;
     const score = Math.round(Math.max(20, Math.min(98, 48 + budgetFit * 15 + distanceFit * 18 + recordQuality * 12 + Number(candidate.currentAvailabilityConfirmed) * 5 - conflicts.length * 16)));
-    const explanation = eligible ? "eligible" : "ineligible";
+    const explanation = !eligible ? "ineligible" : conflicts.includes("price_unknown") ? "review_required" : "eligible";
     const price = candidate.priceAmount == null ? "—" : new Intl.NumberFormat(locale, { style: "currency", currency: candidate.currencyCode }).format(candidate.priceAmount);
     return { ...candidate, price, image: candidate.image ?? "", score, eligible, explanation, conflicts };
   }).sort((a, b) => Number(b.eligible) - Number(a.eligible) || b.score - a.score || a.distanceKm - b.distanceKm);

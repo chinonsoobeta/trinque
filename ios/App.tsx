@@ -64,12 +64,12 @@ type MobileGroup = { id: string; name: string; eventTime: string; eventLocalDate
 
 function mobileGroupConflictLabel(t: Translator, conflict: string): string {
   const [code, detail = ''] = conflict.split(':', 2);
-  const keys: Record<string, MessageKey> = { price_unknown: 'group.conflict.priceUnknown', over_budget: 'group.conflict.overBudget', beyond_distance: 'group.conflict.beyondDistance', vegetarian_unknown: 'group.conflict.vegetarianUnknown', vegetarian_unsupported: 'group.conflict.vegetarianUnsupported', allergen_unknown: 'group.conflict.allergenUnknown', allergen_conflict: 'group.conflict.allergenConflict' };
+  const keys: Record<string, MessageKey> = { price_unknown: 'group.conflict.priceUnknown', over_budget: 'group.conflict.overBudget', beyond_distance: 'group.conflict.beyondDistance', vegetarian_unknown: 'group.conflict.vegetarianUnknown', vegetarian_unsupported: 'group.conflict.vegetarianUnsupported', allergen_unknown: 'group.conflict.allergenUnknown', allergen_conflict: 'group.conflict.allergenConflict', cuisine_unknown_or_mismatch: 'group.conflict.cuisineUnknownOrMismatch' };
   return keys[code] ? t(keys[code], { allergen: detail }) : conflict;
 }
 
 function mobileGroupCandidateCopy(t: Translator, candidate: MobileGroupCandidate) {
-  const explanation = candidate.explanation === 'eligible' ? t('group.fitEligible') : `${t('group.fitIneligible')} ${candidate.conflicts.map((conflict) => mobileGroupConflictLabel(t, conflict)).join('; ')}`.trim();
+  const explanation = candidate.explanation === 'eligible' ? t('group.fitEligible') : candidate.explanation === 'review_required' ? t('group.fitReview') : `${t('group.fitIneligible')} ${candidate.conflicts.map((conflict) => mobileGroupConflictLabel(t, conflict)).join('; ')}`.trim();
   const dietaryCaveat = candidate.dietaryCaveat === 'provider_information_unconfirmed' ? t('group.providerCaveat') : t('analysis.warning');
   return { explanation, dietaryCaveat };
 }
@@ -502,7 +502,7 @@ function GroupsScreen({ guestToken, canWrite, onSignIn, t, location, language, i
   const [budgetMax, setBudgetMax] = useState('35');
   const [maxDistance, setMaxDistance] = useState('4');
   const [distanceUnit, setDistanceUnit] = useState<MeasurementSystem>('metric');
-  const [allergies, setAllergies] = useState('sesame');
+  const [allergies, setAllergies] = useState('');
   const [cuisineTypes, setCuisineTypes] = useState('');
   const [dietaryRequirements, setDietaryRequirements] = useState<string[]>([]);
   const [eventLocalDate, setEventLocalDate] = useState(() => new Date(Date.now() + 86400000).toISOString().slice(0, 10));
@@ -569,8 +569,35 @@ function GroupsScreen({ guestToken, canWrite, onSignIn, t, location, language, i
     await Share.share({ title: group.name, message: `${t('group.copyInvite')}: ${remoteApi}/?join=${group.inviteCode}\ntrinque://join/${group.inviteCode}` });
   };
 
-  const candidates = group?.candidates.slice(0, 5) ?? [];
+  const changePlan = () => {
+    if (!group) return;
+    setBudgetMax(String(group.budgetMax));
+    setMaxDistance(String(group.distanceUnit === 'imperial' ? Math.round(group.maxDistanceKm * .621371 * 10) / 10 : group.maxDistanceKm));
+    setDistanceUnit(group.distanceUnit);
+    setAllergies(group.allergies.join(', '));
+    setDietaryRequirements(group.dietaryRequirements);
+    setCuisineTypes(group.cuisineTypes.join(', '));
+    if (group.eventLocalDate) setEventLocalDate(group.eventLocalDate);
+    if (group.eventLocalTime) setEventLocalTime(group.eventLocalTime);
+    setGroup(null);
+  };
+
+  const eligibleCandidates = group?.candidates.filter((candidate) => candidate.eligible).slice(0, 5) ?? [];
+  const placesToCheck = group?.candidates.filter((candidate) => !candidate.eligible).slice(0, 5) ?? [];
   const winner = group?.candidates.find((candidate) => candidate.candidateId === group.selectedCandidateId);
+  const renderCandidate = (candidate: MobileGroupCandidate) => (
+    <View key={candidate.candidateId} style={[styles.voteCard, !candidate.eligible && styles.ineligibleCard]}>
+      {candidate.image ? <NativeImage source={{ uri: candidate.image }} style={styles.voteImage} /> : <View style={styles.voteImage} />}
+      <View style={styles.voteInfo}>
+        <View style={styles.voteMeta}><Text style={styles.fitBadge}>{candidate.explanation === 'eligible' ? t('group.groupFit', { score: candidate.score }) : candidate.eligible ? t('group.needsCheck') : t('group.hardConflict')}</Text><Text style={styles.votePrice}>{candidate.price}</Text></View>
+        <Text style={styles.voteName}>{candidate.name}</Text>
+        <Text style={styles.voteReason}>{candidate.restaurant} · {new Intl.NumberFormat(language, { style: 'unit', unit: group?.distanceUnit === 'imperial' ? 'mile' : 'kilometer', unitDisplay: 'short', maximumFractionDigits: 1 }).format(group?.distanceUnit === 'imperial' ? candidate.distanceKm * .621371 : candidate.distanceKm)}{`\n`}{mobileGroupCandidateCopy(t, candidate).explanation}{`\n`}{mobileGroupCandidateCopy(t, candidate).dietaryCaveat}{candidate.kind === 'provider_restaurant' ? `\n${t('match.restaurantReason')}` : ''}</Text>
+        <Pressable disabled={busy || !candidate.eligible || group?.status === 'finalized'} style={({ pressed }) => [styles.voteButton, pressed && styles.pressed, (busy || !candidate.eligible || group?.status === 'finalized') && styles.disabledButton]} onPress={() => groupAction('vote', { candidateId: candidate.candidateId })}>
+          <Text style={styles.voteButtonText}>{group?.status === 'finalized' ? t('group.votingClosed') : `${group?.viewerVote === candidate.candidateId ? '♥' : '♡'}  ${t('group.vote')} · ${group?.votes[candidate.candidateId] ?? 0}`}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
       <Header eyebrow={t('group.eyebrow')} />
@@ -592,23 +619,11 @@ function GroupsScreen({ guestToken, canWrite, onSignIn, t, location, language, i
         <View style={styles.constraintRow}>
           {(group ? [t('group.underBudget', { amount: new Intl.NumberFormat(group.locale ?? language, { style: 'currency', currency: group.currencyCode ?? location?.currencyCode ?? 'CAD', maximumFractionDigits: 0 }).format(group.budgetMax) }), t('group.avoid', { allergens: group.allergies.join(', ') }), t('group.withinRadius', { distance: new Intl.NumberFormat(language, { style: 'unit', unit: group.distanceUnit === 'imperial' ? 'mile' : 'kilometer', unitDisplay: 'short', maximumFractionDigits: 1 }).format(group.distanceUnit === 'imperial' ? group.maxDistanceKm * .621371 : group.maxDistanceKm) })] : [t('group.budget'), t('group.allergies'), t('group.radius')]).map((item) => <View key={item} style={styles.constraint}><Text style={styles.constraintText}>✓ {item}</Text></View>)}
         </View>
-        {group?.viewerRole === 'owner' && !group.inviteRevokedAt ? <View style={styles.mobileFinalActions}><Pressable style={styles.finalAction} onPress={shareInvite}><Text style={styles.finalActionText}>{t('group.copyInvite')}</Text></Pressable><Pressable style={styles.finalAction} onPress={() => groupAction('invite/revoke')}><Text style={styles.finalActionText}>{t('group.revokeInvite')}</Text></Pressable></View> : null}
+        {group?.viewerRole === 'owner' ? <View style={styles.mobileFinalActions}><Pressable style={styles.finalAction} onPress={changePlan}><Text style={styles.finalActionText}>{t('group.changePlan')}</Text></Pressable>{!group.inviteRevokedAt ? <><Pressable style={styles.finalAction} onPress={shareInvite}><Text style={styles.finalActionText}>{t('group.copyInvite')}</Text></Pressable><Pressable style={styles.finalAction} onPress={() => groupAction('invite/revoke')}><Text style={styles.finalActionText}>{t('group.revokeInvite')}</Text></Pressable></> : null}</View> : null}
       </View>
 
       <SectionHeading kicker={t('group.ranking').toUpperCase()} title={group ? t('group.bestFits') : t('group.start')} action="" />
-      {!group ? <View style={styles.emptyCard}><Text style={styles.emptyIcon}>♢</Text><Text style={styles.emptyTitle}>{t('group.start')}</Text><Text style={styles.emptyBody}>{t('group.createBody')}</Text><Text style={styles.fieldLabel}>{t('group.date')}</Text><TextInput style={styles.fieldInput} value={eventLocalDate} onChangeText={setEventLocalDate} placeholder="YYYY-MM-DD" placeholderTextColor={palette.muted} /><Text style={styles.fieldLabel}>{t('group.time')}</Text><TextInput style={styles.fieldInput} value={eventLocalTime} onChangeText={setEventLocalTime} placeholder="19:30" placeholderTextColor={palette.muted} /><Text style={styles.fieldLabel}>{t('group.budget')}</Text><TextInput style={styles.fieldInput} value={budgetMax} onChangeText={setBudgetMax} keyboardType="decimal-pad" /><Text style={styles.fieldLabel}>{t('group.radius')}</Text><TextInput style={styles.fieldInput} value={maxDistance} onChangeText={setMaxDistance} keyboardType="decimal-pad" /><View style={styles.choiceRow}>{(['metric', 'imperial'] as const).map((value) => <Choice key={value} selected={distanceUnit === value} label={t(value === 'metric' ? 'location.metric' : 'location.imperial')} onPress={() => setDistanceUnit(value)} />)}</View><Text style={styles.fieldLabel}>{t('group.dietary')}</Text>{['vegan', 'vegetarian', 'celiac', 'gluten-free', 'dairy-free', 'nut-free', 'shellfish-free', 'halal', 'kosher'].map((item) => <Toggle key={item} selected={dietaryRequirements.includes(item)} label={t(`diet.${item}` as MessageKey)} onPress={() => setDietaryRequirements((current) => current.includes(item) ? current.filter((value) => value !== item) : [...current, item])} />)}<Text style={styles.fieldLabel}>{t('group.allergies')}</Text><TextInput style={styles.fieldInput} value={allergies} onChangeText={setAllergies} placeholder={t('group.allergyExample')} placeholderTextColor={palette.muted} /><Text style={styles.fieldLabel}>{t('group.cuisines')}</Text><TextInput style={styles.fieldInput} value={cuisineTypes} onChangeText={setCuisineTypes} placeholder={t('group.cuisineExample')} placeholderTextColor={palette.muted} /><Pressable disabled={busy || (canWrite && (!location || !eventLocalDate || !eventLocalTime))} style={styles.primaryButton} onPress={createGroup}><Text style={styles.primaryButtonText}>{busy ? t('group.building') : canWrite ? t('group.rank') : t('auth.signIn')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable></View> : candidates.length === 0 ? <View style={styles.emptyCard}><Text style={styles.emptyTitle}>{t('group.noLiveCandidates')}</Text></View> : candidates.map((candidate) => (
-        <View key={candidate.candidateId} style={[styles.voteCard, !candidate.eligible && styles.ineligibleCard]}>
-          {candidate.image ? <NativeImage source={{ uri: candidate.image }} style={styles.voteImage} /> : <View style={styles.voteImage} />}
-          <View style={styles.voteInfo}>
-            <View style={styles.voteMeta}><Text style={styles.fitBadge}>{candidate.eligible ? t('group.groupFit', { score: candidate.score }) : t('group.hardConflict')}</Text><Text style={styles.votePrice}>{candidate.price}</Text></View>
-            <Text style={styles.voteName}>{candidate.name}</Text>
-            <Text style={styles.voteReason}>{candidate.restaurant} · {new Intl.NumberFormat(language, { style: 'unit', unit: group.distanceUnit === 'imperial' ? 'mile' : 'kilometer', unitDisplay: 'short', maximumFractionDigits: 1 }).format(group.distanceUnit === 'imperial' ? candidate.distanceKm * .621371 : candidate.distanceKm)}{`\n`}{mobileGroupCandidateCopy(t, candidate).explanation}{`\n`}{mobileGroupCandidateCopy(t, candidate).dietaryCaveat}{candidate.kind === 'provider_restaurant' ? `\n${t('match.restaurantReason')}` : ''}</Text>
-            <Pressable disabled={busy || !candidate.eligible || group.status === 'finalized'} style={({ pressed }) => [styles.voteButton, pressed && styles.pressed, (busy || !candidate.eligible || group.status === 'finalized') && styles.disabledButton]} onPress={() => groupAction('vote', { candidateId: candidate.candidateId })}>
-              <Text style={styles.voteButtonText}>{group.status === 'finalized' ? t('group.votingClosed') : `${group.viewerVote === candidate.candidateId ? '♥' : '♡'}  ${t('group.vote')} · ${group.votes[candidate.candidateId] ?? 0}`}</Text>
-            </Pressable>
-          </View>
-        </View>
-      ))}
+      {!group ? <View style={styles.emptyCard}><Text style={styles.emptyIcon}>♢</Text><Text style={styles.emptyTitle}>{t('group.start')}</Text><Text style={styles.emptyBody}>{t('group.createBody')}</Text><Text style={styles.fieldLabel}>{t('group.date')}</Text><TextInput style={styles.fieldInput} value={eventLocalDate} onChangeText={setEventLocalDate} placeholder="YYYY-MM-DD" placeholderTextColor={palette.muted} /><Text style={styles.fieldLabel}>{t('group.time')}</Text><TextInput style={styles.fieldInput} value={eventLocalTime} onChangeText={setEventLocalTime} placeholder="19:30" placeholderTextColor={palette.muted} /><Text style={styles.fieldLabel}>{t('group.budget')}</Text><TextInput style={styles.fieldInput} value={budgetMax} onChangeText={setBudgetMax} keyboardType="decimal-pad" /><Text style={styles.fieldLabel}>{t('group.radius')}</Text><TextInput style={styles.fieldInput} value={maxDistance} onChangeText={setMaxDistance} keyboardType="decimal-pad" /><View style={styles.choiceRow}>{(['metric', 'imperial'] as const).map((value) => <Choice key={value} selected={distanceUnit === value} label={t(value === 'metric' ? 'location.metric' : 'location.imperial')} onPress={() => setDistanceUnit(value)} />)}</View><Text style={styles.fieldLabel}>{t('group.dietary')}</Text>{['vegan', 'vegetarian', 'celiac', 'gluten-free', 'dairy-free', 'nut-free', 'shellfish-free', 'halal', 'kosher'].map((item) => <Toggle key={item} selected={dietaryRequirements.includes(item)} label={t(`diet.${item}` as MessageKey)} onPress={() => setDietaryRequirements((current) => current.includes(item) ? current.filter((value) => value !== item) : [...current, item])} />)}<Text style={styles.fieldLabel}>{t('group.allergies')}</Text><TextInput style={styles.fieldInput} value={allergies} onChangeText={setAllergies} placeholder={t('group.allergyExample')} placeholderTextColor={palette.muted} /><Text style={styles.fieldLabel}>{t('group.cuisines')}</Text><TextInput style={styles.fieldInput} value={cuisineTypes} onChangeText={setCuisineTypes} placeholder={t('group.cuisineExample')} placeholderTextColor={palette.muted} /><Pressable disabled={busy || (canWrite && (!location || !eventLocalDate || !eventLocalTime))} style={styles.primaryButton} onPress={createGroup}><Text style={styles.primaryButtonText}>{busy ? t('group.building') : canWrite ? t('group.rank') : t('auth.signIn')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable></View> : group.candidates.length === 0 ? <View style={styles.emptyCard}><Text style={styles.emptyTitle}>{t('group.noLiveCandidates')}</Text></View> : <><>{eligibleCandidates.length === 0 ? <View style={styles.emptyCard}><Text style={styles.emptyTitle}>{t('group.noEligibleCandidates')}</Text></View> : eligibleCandidates.map(renderCandidate)}</>{placesToCheck.length ? <><SectionHeading kicker={t('group.ranking').toUpperCase()} title={t('group.placesToCheck')} action="" />{placesToCheck.map(renderCandidate)}</> : null}</>}
       {group?.status === 'voting' && group.viewerRole === 'owner' ? <Pressable disabled={busy} style={({ pressed }) => [styles.primaryButton, styles.lockButton, pressed && styles.pressed, busy && styles.disabledButton]} onPress={() => groupAction('finalize')}><Text style={styles.primaryButtonText}>{t('group.lock')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable> : group?.status === 'voting' ? <Text style={styles.editorialNote}>{t('group.ownerFinalizes')}</Text> : winner ? <View style={styles.mobileFinalPlan}><Text style={styles.planEyebrow}>{t('group.bestTable').toUpperCase()}</Text><Text style={styles.mobileFinalTitle}>{winner.restaurant}</Text><Text style={styles.mobileFinalBody}>{winner.name}. {mobileGroupCandidateCopy(t, winner).explanation}</Text><View style={styles.mobileFinalActions}><Pressable style={styles.finalAction} onPress={() => groupAction('rsvp', { status: 'yes' })}><Text style={styles.finalActionText}>{t('group.rsvpYes')} · {group?.rsvps.yes ?? 0}</Text></Pressable><Pressable style={styles.finalAction} onPress={shareCalendar}><Text style={styles.finalActionText}>{t('group.calendar')}</Text></Pressable></View></View> : null}
     </ScrollView>
   );

@@ -26,8 +26,8 @@ interface ExecutionContext {
 
 // Image security config. SVG sources with .svg extension auto-skip the
 // optimization endpoint on the client side (served directly, no proxy).
-// To route SVGs through the optimizer (with security headers), set
-// dangerouslyAllowSVG: true in next.config.js and uncomment below:
+// To route SVGs through the optimizer (with security headers), enable SVG
+// optimization in the image configuration and uncomment below:
 // const imageConfig: ImageConfig = { dangerouslyAllowSVG: true };
 
 const worker = {

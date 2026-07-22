@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { capabilityStatus } from "../lib/readiness.ts";
 import { selectGooglePlacesKey, selectOpenAIKey } from "../lib/runtime-env.ts";
@@ -53,4 +53,14 @@ test("Cloudflare production configuration includes public Supabase auth credenti
   assert.equal("SUPABASE_SERVICE_ROLE_KEY" in (wranglerConfig.vars ?? {}), false);
   assert.equal("GCP_API_KEY" in (wranglerConfig.vars ?? {}), false);
   assert.equal("GOOGLE_PLACES_API_KEY" in (wranglerConfig.vars ?? {}), false);
+});
+
+test("the deployment architecture has no Vercel integration", () => {
+  const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  const directPackages = { ...packageJson.dependencies, ...packageJson.devDependencies };
+  assert.equal(Object.keys(directPackages).some((name) => name === "vercel" || name.startsWith("@vercel/")), false);
+  assert.equal(existsSync(new URL("../vercel.json", import.meta.url)), false);
+  assert.equal(existsSync(new URL("../.vercel", import.meta.url)), false);
+  assert.equal(existsSync(new URL("../docs/vercel-ui-modernization-notes.md", import.meta.url)), false);
+  assert.doesNotMatch(readFileSync(new URL("../.gitignore", import.meta.url), "utf8"), /vercel/i);
 });

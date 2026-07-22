@@ -25,7 +25,13 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   let identity;
   try { identity = await requireOnboardedIdentity(request); }
-  catch (error) { return Response.json({ error: error instanceof AuthenticationError ? error.message : "authentication_required" }, { status: error instanceof AuthenticationError ? error.status : 503 }); }
+  catch (error) {
+    const authenticationError = error instanceof AuthenticationError ? error : null;
+    const code = authenticationError?.status === 403 && authenticationError.message === "Complete your profile first."
+      ? "profile_incomplete"
+      : "authentication_required";
+    return Response.json({ error: authenticationError?.message ?? "authentication_required", code }, { status: authenticationError?.status ?? 503 });
+  }
   const body = await request.json() as { name?: string; eventTime?: string; eventLocalDate?: string; eventLocalTime?: string; budgetMax?: number; maxDistanceKm?: number; maxDistance?: number; distanceUnit?: "metric" | "imperial"; vegetarianRequired?: number; allergies?: string[]; dietaryRequirements?: string[]; cuisineTypes?: string[]; location?: NormalizedLocation; language?: SupportedLanguage };
   if (!body.location || !body.language || !SUPPORTED_LANGUAGES.includes(body.language)) return Response.json({ error: "normalized_group_location_required" }, { status: 400 });
   let location: NormalizedLocation;

@@ -34,3 +34,13 @@ test("invite joining requires an unexpired, unrevoked code", async () => {
   assert.match(join, /role: group\.ownerId === identity\.id \? "owner" : "participant"/);
   assert.match(revoke, /eq\(groups\.ownerId, identity\.id\)/);
 });
+
+test("Group creation tells the client when profile setup is required", async () => {
+  const [route, page] = await Promise.all([
+    source("../app/api/groups/route.ts"),
+    source("../app/page.tsx"),
+  ]);
+  assert.match(route, /"profile_incomplete"/);
+  assert.match(page, /failure\?\.code === "profile_incomplete"/);
+  assert.match(page, /window\.location\.assign\("\/onboarding"\)/);
+});

@@ -650,7 +650,11 @@ function GroupPlanner({ flash, t, location, language, track, onRequestLocation }
     setBusy(true);
     try {
       const response = await fetch("/api/groups", { method: "POST", headers: { ...sessionHeaders, "Content-Type": "application/json" }, body: JSON.stringify({ name: t("group.name"), eventLocalDate, eventLocalTime, location, language, budgetMax: Number(budgetMax), maxDistance: Number(maxDistanceKm), distanceUnit, vegetarianRequired: dietaryRequirements.includes("vegetarian") ? 1 : 0, allergies: allergies.split(","), dietaryRequirements, cuisineTypes: cuisineTypes.split(",") }) });
-      if (!response.ok) throw new Error();
+      if (!response.ok) {
+        const failure = await response.json().catch(() => null) as { code?: string } | null;
+        if (failure?.code === "profile_incomplete") { window.location.assign("/onboarding"); return; }
+        throw new Error();
+      }
       const payload = await response.json() as { group: GroupSnapshot; providerStatus?: { status: "live" | "unavailable" } };
       setGroup(payload.group); setPlacesUnavailable(payload.providerStatus?.status === "unavailable"); flash(t("group.rank"));
       track("group_created", { outcome: "success" });

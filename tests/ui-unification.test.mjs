@@ -56,6 +56,10 @@ test("group planner uses the signed-in session and has one dietary control", asy
   assert.doesNotMatch(home, /setVegetarianRequired/);
   assert.doesNotMatch(home, /t\("group\.vegetarian"\).*inputMode="numeric"/);
   assert.match(home, /group-location-button/);
+  assert.match(home, /authenticated \? t\("group\.rank"\) : t\("auth\.signIn"\)/);
+  assert.doesNotMatch(home, /: t\("auth\.connecting"\)<\/button>/);
+  assert.match(mobile, /canWrite=\{canWrite\} onSignIn=\{\(\) => setTab\('Profile'\)\}/);
+  assert.match(mobile, /!canWrite\) \{ onSignIn\(\); return; \}/);
   assert.doesNotMatch(mobile, /group\.vegetarianCount/);
 });
 

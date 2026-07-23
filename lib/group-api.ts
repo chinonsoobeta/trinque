@@ -12,8 +12,8 @@ export async function groupMembership(groupId: string, userId: string) {
 function resolveReasons(conflicts: string[]): { tier: Tier; explanation: string; reasons: string[] } {
   if (!conflicts.length) return { tier: "fits", explanation: "Fits the plan", reasons: [] };
   const hard = conflicts.filter((code) => code.split(":", 1)[0] !== "price_unknown");
-  if (hard.length) return { tier: "does_not_fit", explanation: "Does not fit the plan", reasons: hard.map(humanReason) };
-  return { tier: "needs_checking", explanation: "Needs checking", reasons: conflicts.map((code) => humanReason(code)) };
+  if (hard.length) return { tier: "does_not_fit", explanation: "Does not fit the plan", reasons: hard };
+  return { tier: "needs_checking", explanation: "Needs checking", reasons: conflicts };
 }
 
 export async function groupSnapshot(groupId: string, viewerId: string) {

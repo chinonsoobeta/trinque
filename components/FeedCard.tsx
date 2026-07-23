@@ -37,7 +37,7 @@ export type FeedDish = {
 
 type Translator = (key: MessageKey, values?: Record<string, string | number>) => string;
 
-function timeAgo(dateString: string, t: Translator): string {
+function timeAgo(dateString: string, t: Translator, language?: string): string {
   const diff = Date.now() - new Date(dateString).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return t("time.now");
@@ -46,12 +46,13 @@ function timeAgo(dateString: string, t: Translator): string {
   if (hours < 24) return t("time.hours", { count: hours });
   const days = Math.floor(hours / 24);
   if (days < 7) return t("time.days", { count: days });
-  return new Date(dateString).toLocaleDateString();
+  return new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(new Date(dateString));
 }
 
-export function FeedCard({ dish, t, onSave, onDelete, onLike, onEdit }: {
+export function FeedCard({ dish, t, language, onSave, onDelete, onLike, onEdit }: {
   dish: FeedDish;
   t: Translator;
+  language?: string;
   onSave?: (id: string) => void;
   onDelete?: (id: string, imageOnly?: boolean) => void;
   onLike?: (id: string) => void;
@@ -60,7 +61,7 @@ export function FeedCard({ dish, t, onSave, onDelete, onLike, onEdit }: {
   const [safetyOpen, setSafetyOpen] = useState(false);
   const initials = dish.authorInitials ?? dish.contributorLabel?.slice(0, 2).toUpperCase() ?? "?";
   const authorName = dish.authorLabel ?? dish.contributorLabel ?? t("auth.guest");
-  const timeLabel = dish.createdAt ? timeAgo(dish.createdAt, t) : "";
+  const timeLabel = dish.createdAt ? timeAgo(dish.createdAt, t, language) : "";
   const provenance = dish.provenance && t(`provenance.${dish.provenance}` as MessageKey);
   const verification = dish.verificationStatus && t(`verification.${dish.verificationStatus}` as MessageKey);
   const availability = dish.availabilityKnowledge === "recently_confirmed" ? t("availability.confirmed") : dish.availabilityKnowledge ? t("availability.unknown") : "";

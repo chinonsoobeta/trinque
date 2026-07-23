@@ -17,7 +17,7 @@ Report date: 2026-07-23. Validated source: local commit `1995154`. Recommendatio
 | 8 — Group Planning | Group creation uses empty defaults, inline location search (web + iOS), 3-tier candidate display (fits/needs_checking/does_not_fit), human-readable reasons. Removed `vegetarianRequired` from API contract. No separate vegetarian guest section. |
 | 9 — Localization | Hardcoded strings moved to i18n (timeAgo, Follow/Following, Loading, engagement labels). 9 new translation keys added across all 6 languages. Translation parity tests (5 checks) added. |
 | 10 — PWA | Viewport meta with `viewport-fit=cover`, PNG icons (192+512), apple-touch-icon, offline fallback page, SW cache cleanup on activate. |
-| 11 — iOS Parity | GroupsScreen parity (3-tier candidates, empty defaults, location search, invite dedup guard, `profile_incomplete` error handling). Type definitions aligned with web contract. |
+| 11 — iOS Parity | GroupsScreen parity (3-tier candidates, empty defaults, location search, invite dedup guard, `profile_incomplete` error handling), plus a notification sheet. Full comments, dish detail, owner controls, profile editing, and native date/time controls remain out of scope for this pass. |
 | 12 — Tests | 108 tests pass (103 original + 5 translation). iOS type-checks pass. |
 | 13 — Commits | 4 small commits: Phase 8 (group rebuild), Phase 9 (localization), Phase 10 (PWA), Phase 11–14 (final) |
 | 14 — Preview Deploy | Preview live at `https://trinque2.chinonsoobeta.workers.dev` |

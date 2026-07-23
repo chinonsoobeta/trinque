@@ -27,6 +27,7 @@ export type FeedDish = {
   tasteNotes?: string;
   dietaryNotes?: string;
   personalComments?: string;
+  moderationStatus?: string;
 };
 
 type Translator = (key: MessageKey, values?: Record<string, string | number>) => string;
@@ -106,6 +107,8 @@ export function FeedCard({ dish, t, onSave, onDelete, onLike, onEdit }: {
             {dish.sourceMode === "live" ? t("analysis.live") : t("analysis.demo")} · {dish.confidence ?? "—"}% {t("analysis.confident", { confidence: 0 }).split("{")[0].trim()}
           </p>
         ) : null}
+
+        {dish.moderationStatus && dish.moderationStatus !== "active" && dish.isOwner ? <div className="moderation-banner">{dish.moderationStatus === "hidden" ? t("safety.moderationHidden") : t("safety.moderationRemoved")}</div> : null}
       </div>
 
       <div className="feed-card-actions">

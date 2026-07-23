@@ -12,6 +12,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { useAuth } from "@/components/AuthProvider";
 import { FeedCard, type FeedDish } from "@/components/FeedCard";
 import { DishEditDialog } from "@/components/DishEditDialog";
+import { DiscoverPeople } from "@/components/DiscoverPeople";
 
 type Dish = {
   id: number; name: string; restaurant: string; area: string; distance: string;
@@ -29,7 +30,7 @@ type MatchResult = { kind: "dish" | "restaurant_alternative"; id: string; dishNa
 type MatchTiers = { confirmedNearbyDishes: MatchResult[]; communityOrInferredDishes: MatchResult[]; restaurantLevelAlternatives: MatchResult[] };
 type PublishRestaurant = { provider: "google" | "community"; providerPlaceId?: string | null; name: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: NormalizedLocation["countryCode"]; address: string; currencyCode: string };
 type PublicationMetadata = { restaurant: PublishRestaurant; knowledge: { priceKnowledge: "unknown" | "exact" | "approximate"; priceAmount?: number; availabilityKnowledge: "unknown" | "recently_confirmed" | "historical"; lastConfirmedAt?: string }; retainImage: boolean; reviewConfirmed: true; restaurantConfirmed: true };
-type PublishedDish = Analysis & { id: string; sourceMode: "live" | "demo"; imageUrl?: string | null; localPreview?: string; provenance?: string; verificationStatus?: string; availabilityKnowledge?: string; contributorLabel?: string; isOwner?: boolean; restaurant?: { name: string } | null; caption?: string; tasteNotes?: string; dietaryNotes?: string; personalComments?: string; locationTag?: string };
+type PublishedDish = Analysis & { id: string; sourceMode: "live" | "demo"; imageUrl?: string | null; localPreview?: string; provenance?: string; verificationStatus?: string; availabilityKnowledge?: string; contributorLabel?: string; isOwner?: boolean; restaurant?: { name: string } | null; caption?: string; tasteNotes?: string; dietaryNotes?: string; personalComments?: string; locationTag?: string; moderationStatus?: string };
 type GroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; explanation: string; conflicts: string[]; kind: "published_dish" | "provider_restaurant" | "seed_demo"; provenance?: string | null; verificationStatus?: string | null; currentAvailabilityConfirmed: boolean; dietaryCaveat: string };
 type GroupSnapshot = { id: string; name: string; eventTime: string; eventLocalDate: string | null; eventLocalTime: string | null; neighborhood: string; budgetMax: number; maxDistanceKm: number; distanceUnit: "metric" | "imperial"; vegetarianRequired: number; allergies: string[]; dietaryRequirements: string[]; cuisineTypes: string[]; inviteCode: string; inviteExpiresAt: string | null; inviteRevokedAt: string | null; status: "voting" | "finalized"; selectedCandidateId: string | null; candidates: GroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number>; memberCount: number; viewerRole: "owner" | "participant"; viewerVote: string | null; viewerRsvp: string | null; timeZone: string | null; currencyCode: string | null; locale: string | null; locality: string | null; countryCode: string | null };
 type Translator = (key: MessageKey, values?: Record<string, string | number>) => string;
@@ -370,12 +371,18 @@ export default function Home() {
                 <button className={exploreTab === "people" ? "active" : ""} onClick={() => setExploreTab("people")}>{t("nav.people")}</button>
               </div>
             </div>
-            {communityFeed.length ? <div className="feed-list">
-              {communityFeed.map((dish) => {
-                const feedDish: FeedDish = { id: dish.id, name: dish.name, description: dish.description, caption: dish.caption, cuisine: dish.cuisine, confidence: dish.confidence, imageUrl: dish.imageUrl, localPreview: dish.localPreview, provenance: dish.provenance, verificationStatus: dish.verificationStatus, availabilityKnowledge: dish.availabilityKnowledge, contributorLabel: dish.contributorLabel, authorLabel: dish.contributorLabel, authorInitials: dish.contributorLabel?.slice(0,2).toUpperCase(), isOwner: dish.isOwner, sourceMode: dish.sourceMode, restaurant: dish.restaurant, tasteNotes: dish.tasteNotes, dietaryNotes: dish.dietaryNotes, personalComments: dish.personalComments };
-                return <FeedCard key={dish.id} dish={feedDish} t={t} onDelete={dish.isOwner ? (id, img) => deletePublishedDish(id, img) : undefined} onEdit={dish.isOwner ? () => setEditDish(feedDish) : undefined} />;
-              })}
-            </div> : <div className="empty-state"><span>◉</span><h3>{t("home.emptyTitle")}</h3><p>{t("home.emptyBody")}</p><button className="primary" onClick={() => setView("discover")}>{t("home.explore")}</button></div>}
+            {exploreTab === "people" ? (
+              <DiscoverPeople />
+            ) : communityFeed.length ? (
+              <div className="feed-list">
+                {communityFeed.map((dish) => {
+                  const feedDish: FeedDish = { id: dish.id, name: dish.name, description: dish.description, caption: dish.caption, cuisine: dish.cuisine, confidence: dish.confidence, imageUrl: dish.imageUrl, localPreview: dish.localPreview, provenance: dish.provenance, verificationStatus: dish.verificationStatus, availabilityKnowledge: dish.availabilityKnowledge, contributorLabel: dish.contributorLabel, authorLabel: dish.contributorLabel, authorInitials: dish.contributorLabel?.slice(0,2).toUpperCase(), isOwner: dish.isOwner, sourceMode: dish.sourceMode, restaurant: dish.restaurant, tasteNotes: dish.tasteNotes, dietaryNotes: dish.dietaryNotes, personalComments: dish.personalComments };
+                  return <FeedCard key={dish.id} dish={feedDish} t={t} onDelete={dish.isOwner ? (id, img) => deletePublishedDish(id, img) : undefined} onEdit={dish.isOwner ? () => setEditDish(feedDish) : undefined} />;
+                })}
+              </div>
+            ) : (
+              <div className="empty-state"><span>◉</span><h3>{t("home.emptyTitle")}</h3><p>{t("home.emptyBody")}</p><button className="primary" onClick={() => setView("discover")}>{t("home.explore")}</button></div>
+            )}
           </section>
         ) : view === "groups" ? (
           <GroupPlanner flash={flash} t={t} location={location} language={language} track={trackAnalytics} onRequestLocation={() => setSettingsOpen(true)} />

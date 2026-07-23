@@ -462,6 +462,11 @@ function DiscoverScreen({ onAnalyze, t, location, feed, guestToken, onHide }: { 
 
 function ExploreScreen({ t, feed, guestToken, onHide }: { t: Translator; feed: CommunityDish[]; guestToken: string | null; onHide: (id: string) => void }) {
   const [exploreTab, setExploreTab] = useState<'public' | 'following' | 'people'>('public');
+  const [suggested, setSuggested] = useState<{ userId: string; displayName: string; handle: string; bio: string; avatarUrl: string | null; location: string | null; followerCount: number }[]>([]);
+  useEffect(() => {
+    if (!remoteApi || exploreTab !== 'people') return;
+    void fetch(`${remoteApi}/api/profiles/suggested`, { headers: guestToken ? { Authorization: `Guest ${guestToken}` } : undefined }).then((r) => r.json()).then((payload: { profiles?: typeof suggested }) => setSuggested(payload.profiles ?? [])).catch(() => undefined);
+  }, [exploreTab, guestToken]);
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
       <View style={styles.sectionHeading}>
@@ -475,9 +480,26 @@ function ExploreScreen({ t, feed, guestToken, onHide }: { t: Translator; feed: C
           </Pressable>
         ))}
       </View>
-      {feed.length ? <View style={styles.communityFeed}>{feed.map((dish) => <CommunityDishCard key={dish.id} dish={dish} t={t} guestToken={guestToken} onHide={onHide} />)}</View> : <View style={styles.emptyFeed}><Text style={styles.emptyFeedEmoji}>◉</Text><Text style={styles.emptyFeedTitle}>{t('home.emptyTitle')}</Text><Text style={styles.emptyFeedText}>{t('home.emptyBody')}</Text></View>}
+      {exploreTab === 'people' ? (
+        suggested.length ? <View style={styles.profilesGrid}>{suggested.map((profile) => <View key={profile.userId} style={styles.profileRow}><View style={styles.profileInfo}><Text style={styles.profileName}>{profile.displayName}</Text><Text style={styles.profileHandle}>@{profile.handle}</Text>{profile.bio ? <Text style={styles.profileBio}>{profile.bio}</Text> : null}</View><ProfileFollowButton handle={profile.handle} initialFollowing={false} initialCount={profile.followerCount} guestToken={guestToken} /></View>)}</View> : null
+      ) : feed.length ? <View style={styles.communityFeed}>{feed.map((dish) => <CommunityDishCard key={dish.id} dish={dish} t={t} guestToken={guestToken} onHide={onHide} />)}</View> : <View style={styles.emptyFeed}><Text style={styles.emptyFeedEmoji}>◉</Text><Text style={styles.emptyFeedTitle}>{t('home.emptyTitle')}</Text><Text style={styles.emptyFeedText}>{t('home.emptyBody')}</Text></View>}
     </ScrollView>
   );
+}
+
+function ProfileFollowButton({ handle, initialFollowing, initialCount, guestToken }: { handle: string; initialFollowing: boolean; initialCount: number; guestToken: string | null }) {
+  const [following, setFollowing] = useState(initialFollowing);
+  const [count, setCount] = useState(initialCount);
+  const [busy, setBusy] = useState(false);
+  async function toggle() {
+    if (!remoteApi || busy) return;
+    setBusy(true);
+    const method = following ? 'DELETE' : 'POST';
+    const response = await fetch(`${remoteApi}/api/profiles/${handle}/follow`, { method, headers: guestToken ? { Authorization: `Guest ${guestToken}` } : undefined }).catch(() => null);
+    if (response?.ok) { setFollowing(!following); setCount((c) => following ? c - 1 : c + 1); }
+    setBusy(false);
+  }
+  return <Pressable style={[styles.followButton, following && styles.followButtonFollowing]} onPress={toggle}><Text style={[styles.followButtonText, following && styles.followButtonTextFollowing]}>{following ? '✓' : '+'} {count}</Text></Pressable>;
 }
 
 function CommunityDishCard({ dish, t, guestToken, onHide }: { dish: CommunityDish; t: Translator; guestToken: string | null; onHide: (id: string) => void }) {
@@ -1314,4 +1336,12 @@ const styles = StyleSheet.create({
   savedTitle: { color: palette.ink, fontWeight: '700', fontSize: 14 },
   savedCount: { color: palette.muted, fontSize: 11, marginTop: 2 },
   savedArrow: { marginLeft: 'auto', color: palette.muted, fontSize: 16 },
+  profilesGrid: { gap: 12 },
+  profileRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: palette.paper, borderWidth: 1, borderColor: palette.line, borderRadius: 14, padding: 14 },
+  profileInfo: { flex: 1, marginRight: 10 },
+  profileBio: { color: palette.muted, fontSize: 11, lineHeight: 15, marginTop: 4 },
+  followButton: { backgroundColor: palette.burgundy, borderRadius: 18, paddingVertical: 7, paddingHorizontal: 16, minWidth: 80, alignItems: 'center' },
+  followButtonFollowing: { backgroundColor: palette.paper, borderWidth: 1, borderColor: palette.line },
+  followButtonText: { color: palette.cream, fontSize: 12, fontWeight: '800' },
+  followButtonTextFollowing: { color: palette.ink },
 });

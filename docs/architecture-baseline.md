@@ -1,6 +1,6 @@
 # Trinque architecture and pilot baseline
 
-Baseline recorded on 2026-07-17 from clean commit `d6a2641` on `main`.
+Baseline refreshed on 2026-07-23 from the local `main` branch. The validated source commit is recorded in the pilot readiness report.
 
 ## Product thesis
 
@@ -19,9 +19,9 @@ Upload a dish, understand what makes it special, discover similar dishes nearby,
 
 ## Regional contracts
 
-Locations are accepted dynamically from coordinates or provider-normalized search results. There is no supported-city list. The only country allowlist is ISO `US`, `CA`, `MX`, `GB`, and `FR`.
+Locations are accepted dynamically from coordinates or provider-normalized search results. There is no supported-city list. The country allowlist is the shared ISO list for all 27 EU countries plus `GB`, `CA`, `US`, and `MX`.
 
-UI language is independent from location-derived formatting. Supported languages are Canadian English (`en-CA`), American English (`en-US`), UK English (`en-GB`), French (`fr`), and Spanish (`es`). New users default by region/device, while explicit choices persist separately. Theme choices are `system`, `light`, and `dark`.
+UI language is independent from location-derived formatting. Supported languages are English (`en`), French (`fr`), Spanish (`es`), German (`de`), Italian (`it`), and Portuguese (`pt`). New users choose a language during onboarding, and explicit choices persist separately. Theme choices are `system`, `light`, and `dark`.
 
 ## Terminology
 
@@ -43,7 +43,8 @@ When `GCP_API_KEY` is absent, live location search is unavailable. The product m
 The baseline `npm run verify` completed successfully:
 
 - production vinext web build: passed;
-- Node regression suite: 18 passed, 0 failed;
+- Node regression suite: 110 passed, 0 failed;
+- D1 migration journal/file check and clean/legacy-upgrade application: passed;
 - iOS TypeScript check: passed;
 - Expo iOS export: passed.
 

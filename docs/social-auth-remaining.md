@@ -56,5 +56,5 @@ After supported iOS versions have migrated, remove the authenticated `guestToken
 ## Still required
 
 - Run the production auth and safety flow on a physical iPhone. Local lint, web build, tests, iOS type checking, and Expo export pass in the complete repository.
-- Reconcile/generate `drizzle/meta/0009_snapshot.json` from the complete checkout so future `npm run db:generate` calls do not recreate the same schema changes. Preserve the custom backfill/token-migration/tombstone statements in `0009_social_auth_foundation.sql`.
+- Drizzle does not have generated snapshots for the custom migrations after `0008`. The committed journal and SQL files are checked by `npm run db:check`, and clean/legacy-upgrade application passes. If future schema generation is needed, regenerate metadata in a separate reviewed change and preserve the custom backfill/token-migration/tombstone statements in `0009_social_auth_foundation.sql`.
 - After supported iOS versions have migrated to `Session <token>`, remove the transitional authenticated `guestToken` alias and web local-storage compatibility copy.

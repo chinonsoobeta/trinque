@@ -5,9 +5,9 @@ Report date: 2026-07-23. Validated source: local commit `83869d9`. Recommendatio
 ## What passed locally
 
 - `npm run lint` passes with no errors.
-- `npm run verify` passes through the production build, all 108 web tests, iOS type check, and Expo export.
-- `npm test` — 108 tests, 0 failures. Translation parity tests check all 6 languages for key parity, empty values, English fallback, technical terms, and provider codes.
-- The clean D1 test applies migrations `0000` through `0013`. Social, group, onboarding, safety, and local group schedule data are verified.
+- `npm run verify` passes through the production build, all 110 web tests, iOS type check, and Expo export.
+- `npm test` — 110 tests, 0 failures. Translation parity tests check all 6 languages for key parity, empty values, English fallback, technical terms, and provider codes.
+- `npm run db:check` — migration journal/file lockstep plus clean and legacy-upgrade application pass for migrations `0000` through `0013`. Social, group, onboarding, safety, and local group schedule data are verified.
 - Region tests cover all 27 EU countries, GB, CA, US, MX, and an unsupported country. No runtime city allowlist exists.
 
 ## Phases 8–14 completed
@@ -18,7 +18,7 @@ Report date: 2026-07-23. Validated source: local commit `83869d9`. Recommendatio
 | 9 — Localization | Hardcoded strings moved to i18n (timeAgo, Follow/Following, Loading, engagement labels). 9 new translation keys added across all 6 languages. Translation parity tests (5 checks) added. |
 | 10 — PWA | Viewport meta with `viewport-fit=cover`, PNG icons (192+512), apple-touch-icon, offline fallback page, SW cache cleanup on activate. |
 | 11 — iOS Parity | GroupsScreen parity (3-tier candidates, empty defaults, location search, invite dedup guard, `profile_incomplete` error handling), plus a notification sheet. Full comments, dish detail, owner controls, profile editing, and native date/time controls remain out of scope for this pass. |
-| 12 — Tests | 108 tests pass (103 original + 5 translation). iOS type-checks pass. |
+| 12 — Tests | 110 tests pass (105 original + 5 translation). iOS type-checks pass. Migration checks pass. |
 | 13 — Commits | 4 small commits: Phase 8 (group rebuild), Phase 9 (localization), Phase 10 (PWA), Phase 11–14 (final) |
 | 14 — Preview Deploy | Preview live at `https://trinque2.chinonsoobeta.workers.dev` |
 

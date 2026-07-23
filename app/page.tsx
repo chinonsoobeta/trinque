@@ -4,15 +4,15 @@ import Image from "next/image";
 
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { coarseLocation, normalizeLocation, type NormalizedLocation } from "@/lib/location";
-import type { LocationSuggestion, RestaurantPlace } from "@/lib/places/types";
-import { REGIONAL_DEFAULTS, type MeasurementSystem, type ThemePreference } from "@/lib/regions";
-import { LANGUAGE_LABEL_KEYS, resolveUiLanguage, translate, UI_LANGUAGES, type MessageKey, type UiLanguage } from "@/ios/i18n";
-import { AuthControls } from "@/components/AuthControls";
+import type { RestaurantPlace } from "@/lib/places/types";
+import { type MeasurementSystem, type ThemePreference } from "@/lib/regions";
+import { resolveUiLanguage, translate, UI_LANGUAGES, type MessageKey, type UiLanguage } from "@/ios/i18n";
 import { NotificationBell } from "@/components/NotificationBell";
 import { useAuth } from "@/components/AuthProvider";
 import { FeedCard, type FeedDish } from "@/components/FeedCard";
 import { DishEditDialog } from "@/components/DishEditDialog";
 import { DiscoverPeople } from "@/components/DiscoverPeople";
+import { SettingsPanel } from "@/components/SettingsPanel";
 
 type Dish = {
   id: number; name: string; restaurant: string; area: string; distance: string;
@@ -408,7 +408,6 @@ export default function Home() {
                 {visible.map((dish, index) => <DishCard key={dish.id} dish={dish} featured={index === 0} isSaved={saved.has(dish.id)} onSave={toggleSaved} t={t} />)}
               </div> : <div className="empty-state"><span>♡</span><h3>{t("home.emptyTitle")}</h3><p>{t("home.emptyBody")}</p><button className="primary" onClick={() => setView("discover")}>{t("home.explore")}</button></div>}
             </section>
-            <button className="text-button full" onClick={() => setSettingsOpen(true)}>{t("settings.title")}</button>
           </>
         ) : (
           <>
@@ -574,85 +573,6 @@ function MatchTier({ title, results, t, language, measurementSystem, onFeedback 
     const price = match.priceAmount != null && match.currencyCode ? new Intl.NumberFormat(language, { style: "currency", currency: match.currencyCode }).format(match.priceAmount) : null;
     return <article key={match.id}>{match.imageUrl ? <Image src={match.imageUrl} alt="" width={640} height={480} sizes="(max-width: 768px) 100vw, 320px" unoptimized /> : <div className="match-placeholder">T</div>}<div><b>{match.dishName ?? match.restaurantName}</b><small>{match.dishName ? `${match.restaurantName} · ` : ""}{distance} · {match.score}%{price ? ` · ${price}` : ""}</small><p>{reason}</p><small>{provenance} · {verification}</small><small>{match.lastConfirmedAt ? t("match.lastConfirmed", { date: new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(new Date(match.lastConfirmedAt)) }) : t("match.neverConfirmed")}</small><small>{match.currentAvailabilityConfirmed ? t("availability.confirmed") : t("availability.unknown")}</small><p className="dietary-caveat">{match.dietaryCaveat === "provider_information_unconfirmed" ? t("group.providerCaveat") : t("analysis.warning")}</p>{match.attribution && <small translate="no">Google Maps</small>}<button className="text-button" onClick={() => onFeedback(match.kind === "dish" ? "stale_dish" : "closed_restaurant", match.kind === "dish" ? "published_dish" : "restaurant", match.id)}>{t(match.kind === "dish" ? "feedback.staleDish" : "feedback.closedRestaurant")}</button></div></article>;
   })}</div>}</section>;
-}
-
-function SettingsPanel({ guestToken, t, language, theme, measurementSystem, location, close, persist }: { guestToken: string | null; t: Translator; language: UiLanguage; theme: ThemePreference; measurementSystem: MeasurementSystem; location: NormalizedLocation | null; close: () => void; persist: (next: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: NormalizedLocation | null }) => Promise<void> }) {
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("");
-  const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [consent, setConsent] = useState({ locationConsent: false, analyticsConsent: false, imageRetentionConsent: false });
-
-  useEffect(() => {
-    if (!guestToken) return;
-    void fetch("/api/privacy", { headers: { Authorization: `Guest ${guestToken}` } }).then(async (response) => { if (response.ok) setConsent((await response.json() as { consent: typeof consent }).consent); });
-  }, [guestToken]);
-
-  async function saveConsent(next = consent) {
-    if (!guestToken) return;
-    setBusy(true);
-    try { const response = await fetch("/api/privacy", { method: "PUT", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify(next) }); if (!response.ok) throw new Error(); setConsent((await response.json() as { consent: typeof consent }).consent); if (!next.locationConsent) await persist({ location: null }); }
-    catch { setStatus(t("error.generic")); } finally { setBusy(false); }
-  }
-
-  async function exportData() {
-    if (!guestToken) return;
-    const response = await fetch("/api/privacy/export", { headers: { Authorization: `Guest ${guestToken}` } });
-    if (!response.ok) { setStatus(t("error.generic")); return; }
-    const url = URL.createObjectURL(await response.blob()); const link = document.createElement("a"); link.href = url; link.download = "trinque-data-export.json"; link.click(); URL.revokeObjectURL(url); setStatus(t("privacy.exportReady"));
-  }
-
-  async function deleteData() {
-    if (!guestToken || !window.confirm(t("privacy.deleteConfirm"))) return;
-    const response = await fetch("/api/privacy", { method: "DELETE", headers: { Authorization: `Guest ${guestToken}` } });
-    if (!response.ok) { setStatus(t("error.generic")); return; }
-    for (const key of ["trinque.guestToken", "trinque.location", "trinque.language", "trinque.theme", "trinque.measurement"]) window.localStorage.removeItem(key); window.location.reload();
-  }
-
-  async function search(payload: { input?: string; latitude?: number; longitude?: number; providerPlaceId?: string }) {
-    setBusy(true); setStatus(""); setSuggestions([]);
-    try {
-      const response = await fetch("/api/locations/autocomplete", { method: "POST", headers: { "Content-Type": "application/json", ...(guestToken ? { Authorization: `Guest ${guestToken}` } : {}) }, body: JSON.stringify({ ...payload, language, location }) });
-      const body = await response.json() as { suggestions?: LocationSuggestion[]; location?: NormalizedLocation; error?: { code?: string } };
-      if (!response.ok) {
-        setStatus(body.error?.code === "unsupported_country" ? t("location.unsupported") : body.error?.code === "credentials" ? t("location.unavailable") : t("location.providerError"));
-        return;
-      }
-      if (body.location) {
-        const defaults = REGIONAL_DEFAULTS[body.location.countryCode];
-        const selected = { ...body.location, language, measurementSystem: defaults.measurementSystem };
-        await persist({ location: selected, measurementSystem: defaults.measurementSystem });
-        setStatus(t("location.current", { location: `${selected.locality}, ${selected.countryCode}` }));
-        return;
-      }
-      setSuggestions(body.suggestions ?? []);
-    } catch { setStatus(t("location.unavailable")); }
-    finally { setBusy(false); }
-  }
-
-  function useDeviceLocation() {
-    if (!navigator.geolocation) { setStatus(t("location.permissionDenied")); return; }
-    setBusy(true); setStatus("");
-    navigator.geolocation.getCurrentPosition(
-      (position) => void search({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
-      () => { setBusy(false); setStatus(t("location.permissionDenied")); },
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 15 * 60 * 1000 },
-    );
-  }
-
-  async function selectSuggestion(suggestion: LocationSuggestion) {
-    await search({ providerPlaceId: suggestion.providerPlaceId });
-  }
-
-  return <div className="settings-backdrop" role="dialog" aria-modal="true" aria-labelledby="settings-title" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}><aside className="settings-panel">
-    <div className="settings-heading"><h2 id="settings-title">{t("settings.title")}</h2><button onClick={close} aria-label={t("settings.close")}>×</button></div>
-    <div className="setting-block"><span>{t("settings.language")}</span><div className="setting-options">{UI_LANGUAGES.map((item) => <button key={item} className={language === item ? "active" : ""} onClick={() => void persist({ language: item })}>{t(LANGUAGE_LABEL_KEYS[item])}</button>)}</div></div>
-    <div className="setting-block"><span>{t("settings.theme")}</span><div className="setting-options">{(["system", "light", "dark"] as const).map((item) => <button key={item} className={theme === item ? "active" : ""} onClick={() => void persist({ theme: item })}>{t(`settings.theme.${item}`)}</button>)}</div></div>
-    <div className="setting-block"><span>{t("settings.measurement")}</span><div className="setting-options">{(["metric", "imperial"] as const).map((item) => <button key={item} className={measurementSystem === item ? "active" : ""} onClick={() => void persist({ measurementSystem: item })}>{t(item === "metric" ? "location.metric" : "location.imperial")}</button>)}</div></div>
-    <div className="setting-block"><span>{t("settings.location")}</span>{location && <p className="location-status">{t("location.current", { location: `${location.locality}, ${location.countryCode}` })}</p>}<button className="location-chip" disabled={busy} onClick={useDeviceLocation}>{t("location.useDevice")}</button><form className="location-search" onSubmit={(event) => { event.preventDefault(); if (query.trim()) void search({ input: query.trim() }); }}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("location.search")} /><button disabled={busy || !query.trim()}>{t("location.searchAction")}</button></form>{status && <p className="location-status warning">{status}</p>}<div className="location-suggestions">{suggestions.map((suggestion) => <button key={suggestion.id} onClick={() => void selectSuggestion(suggestion)}><b>{suggestion.label}</b><br /><small>{suggestion.secondaryLabel}</small></button>)}{suggestions.length > 0 && <small className="google-attribution" translate="no">Google Maps</small>}</div><p className="privacy-note">{t("location.privacy")}</p></div>
-    <AuthControls />
-    <div className="setting-block"><span>{t("privacy.title")}</span>{([['locationConsent', 'privacy.locationConsent'], ['analyticsConsent', 'privacy.analyticsConsent'], ['imageRetentionConsent', 'privacy.imageConsent']] as const).map(([field, key]) => <label className="confirmation" key={field}><input type="checkbox" checked={consent[field]} onChange={(event) => setConsent((current) => ({ ...current, [field]: event.target.checked }))} />{t(key)}</label>)}<button className="location-chip" disabled={busy || !guestToken} onClick={() => void saveConsent()}>{t("privacy.saveConsent")}</button><button className="text-button full" disabled={busy || !guestToken} onClick={() => { const withdrawn = { locationConsent: false, analyticsConsent: false, imageRetentionConsent: false }; setConsent(withdrawn); void saveConsent(withdrawn); }}>{t("privacy.withdraw")}</button><button className="secondary full" disabled={!guestToken} onClick={() => void exportData()}>{t("privacy.export")}</button><button className="text-button full" disabled={!guestToken} onClick={() => void deleteData()}>{t("privacy.delete")}</button></div>
-  </aside></div>;
 }
 
 function GroupPlanner({ flash, t, location, language, track, onRequestLocation }: { flash: (text: string) => void; t: Translator; location: NormalizedLocation | null; language: UiLanguage; track: (event: AnalyticsEvent, details?: { mode?: "live" | "demo"; outcome?: string; durationMs?: number }) => void; onRequestLocation: () => void }) {

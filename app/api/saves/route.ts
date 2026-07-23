@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { saves } from "@/db/schema";
-import { AuthenticationError, requireAuthenticatedIdentity } from "@/lib/auth";
+import { AuthenticationError, requireOnboardedIdentity } from "@/lib/auth";
 
 export const runtime = "edge";
 const cors = { "Access-Control-Allow-Headers": "Authorization, Content-Type", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" };
@@ -9,7 +9,7 @@ export function OPTIONS() { return new Response(null, { status: 204, headers: co
 
 export async function GET(request: Request) {
   try {
-    const identity = await requireAuthenticatedIdentity(request);
+    const identity = await requireOnboardedIdentity(request);
     const db = await getDb();
     const rows = await db.select({ dishId: saves.dishId }).from(saves).where(eq(saves.userId, identity.id)).orderBy(desc(saves.createdAt));
     return Response.json({ savedDishIds: rows.map((row) => row.dishId) }, { headers: cors });
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const identity = await requireAuthenticatedIdentity(request);
+    const identity = await requireOnboardedIdentity(request);
     const body = await request.json() as { dishId?: number; saved?: boolean };
     if (!Number.isInteger(body.dishId) || Number(body.dishId) < 1) return Response.json({ error: "Valid dishId required." }, { status: 400, headers: cors });
     const db = await getDb();

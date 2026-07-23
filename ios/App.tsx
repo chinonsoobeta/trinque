@@ -404,7 +404,7 @@ export default function App() {
           {tab === 'Explore' && <ExploreScreen t={t} feed={communityFeed} guestToken={canWrite ? guestToken : null} onHide={(id) => setCommunityFeed((current) => current.filter((dish) => dish.id !== id))} />}
           {tab === 'Groups' && <GroupsScreen guestToken={canWrite ? guestToken : null} canWrite={canWrite} onSignIn={() => setTab('Profile')} t={t} location={location} language={language} inviteCode={pendingInvite} inviteHandled={inviteHandled} track={trackAnalytics} />}
           {tab === 'Saved' && <SavedScreen dishes={savedDishes} onSave={toggleSaved} onDiscover={() => setTab('Discover')} t={t} />}
-          {tab === 'Profile' && <ProfileScreen guestToken={guestToken} identity={identity} onboardingComplete={onboardingComplete} onAuthenticated={(token, nextIdentity, complete) => { setGuestToken(token); setIdentity(nextIdentity); setOnboardingComplete(complete); }} onSignedOut={() => { setIdentity(null); setOnboardingComplete(false); setGuestToken(null); }} onOnboardingComplete={() => setOnboardingComplete(true)} t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} persist={persistPreferences} savedCount={savedDishes.length} onSaved={() => setTab('Saved')} />}
+          {tab === 'Profile' && <ProfileScreen guestToken={guestToken} identity={identity} onboardingComplete={onboardingComplete} onAuthenticated={(token, nextIdentity, complete) => { setGuestToken(token); setIdentity(nextIdentity); setOnboardingComplete(complete); }} onSignedOut={() => { setIdentity(null); setOnboardingComplete(false); setGuestToken(null); }} onOnboardingComplete={() => setOnboardingComplete(true)} t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} persist={persistPreferences} savedCount={savedDishes.length} onSaved={() => setTab('Saved')} setLanguage={setLanguage} />}
           <TabBar active={tab} onSelect={setTab} onAnalyze={openAnalyzer} t={t} />
         </View>
         <AnalyzerModal
@@ -712,19 +712,34 @@ function MobileAuthPanel({ t, onAuthenticated }: { t: Translator; onAuthenticate
   return <View style={styles.preferenceCard}><Text style={styles.preferenceKicker}>{t('auth.account').toUpperCase()}</Text><Text style={styles.preferenceTitle}>{t(mode === 'signin' ? 'auth.signIn' : 'auth.create')}</Text><Text style={styles.privacyText}>{t(mode === 'signin' ? 'auth.signInBody' : 'auth.createBody')}</Text><TextInput autoCapitalize="none" autoCorrect={false} keyboardType="email-address" textContentType="emailAddress" style={styles.fieldInput} value={email} onChangeText={setEmail} placeholder={t('auth.email')} placeholderTextColor={palette.muted} /><TextInput secureTextEntry textContentType={mode === 'signin' ? 'password' : 'newPassword'} style={styles.fieldInput} value={password} onChangeText={setPassword} placeholder={t('auth.passwordHint')} placeholderTextColor={palette.muted} /><Pressable disabled={busy || !email.trim() || password.length < 8} style={[styles.primaryButton, (busy || !email.trim() || password.length < 8) && styles.disabledButton]} onPress={() => void submit()}><Text style={styles.primaryButtonText}>{busy ? t('auth.working') : t(mode === 'signin' ? 'auth.signIn' : 'auth.create')}</Text></Pressable><Pressable onPress={() => setMode((value) => value === 'signin' ? 'signup' : 'signin')}><Text style={styles.demoLink}>{t(mode === 'signin' ? 'auth.newHere' : 'auth.haveAccount')}</Text></Pressable></View>;
 }
 
-function MobileOnboarding({ token, t, language, location, onComplete }: { token: string; t: Translator; language: UiLanguage; location: MobileLocation | null; onComplete: () => void }) {
-  const [name, setName] = useState(''); const [handle, setHandle] = useState(''); const [countryCode, setCountryCode] = useState(location?.countryCode ?? 'CA'); const [cuisines, setCuisines] = useState(''); const [busy, setBusy] = useState(false);
+function CountryPicker({ value, onChange, language }: { value: string; onChange: (code: string) => void; language: UiLanguage }) {
+  const countryCodes: string[] = ["CA", "US", "MX", "GB", "FR", "BE", "BG", "CZ", "DK", "DE", "EE", "IE", "EL", "ES", "HR", "IT", "CY", "LV", "LT", "LU", "HU", "MT", "NL", "AT", "PL", "PT", "RO", "SI", "SK", "FI", "SE"];
+  const countryNames = new Intl.DisplayNames([language], { type: 'region' });
+  return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerScroll} contentContainerStyle={styles.pickerOptions}>
+    {countryCodes.map((code) => <Pressable key={code} style={[styles.pickerOption, value === code && styles.pickerOptionActive]} onPress={() => onChange(code)}><Text style={[styles.pickerOptionText, value === code && styles.pickerOptionTextActive]}>{countryNames.of(code) ?? code}</Text></Pressable>)}
+  </ScrollView>;
+}
+
+function LanguagePicker({ value, onChange }: { value: UiLanguage; onChange: (language: UiLanguage) => void }) {
+  return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerScroll} contentContainerStyle={styles.pickerOptions}>
+    {UI_LANGUAGES.map((item) => <Pressable key={item} style={[styles.pickerOption, value === item && styles.pickerOptionActive]} onPress={() => onChange(item)}><Text style={[styles.pickerOptionText, value === item && styles.pickerOptionTextActive]}>{translate(value, LANGUAGE_LABEL_KEYS[item])}</Text></Pressable>)}
+  </ScrollView>;
+}
+
+function MobileOnboarding({ token, t, language, location, onComplete, setLanguage }: { token: string; t: Translator; language: UiLanguage; location: MobileLocation | null; onComplete: () => void; setLanguage: (language: UiLanguage) => void }) {
+  const [name, setName] = useState(''); const [handle, setHandle] = useState(''); const [countryCode, setCountryCode] = useState(''); const [cuisines, setCuisines] = useState(''); const [busy, setBusy] = useState(false);
   async function save() {
-    if (!name.trim() || !handle.trim() || countryCode.trim().length !== 2) return;
+    if (!name.trim() || !handle.trim() || !countryCode) return;
     setBusy(true);
     try {
-      const response = await fetch(`${remoteApi}/api/onboarding`, { method: 'PUT', headers: { Authorization: `Session ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), handle: handle.trim().toLowerCase(), countryCode: countryCode.trim().toUpperCase(), language, favoriteCuisines: cuisines.split(',').map((item) => item.trim()).filter(Boolean) }) });
+      const response = await fetch(`${remoteApi}/api/onboarding`, { method: 'PUT', headers: { Authorization: `Session ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim(), handle: handle.trim().toLowerCase(), countryCode, language, favoriteCuisines: cuisines.split(',').map((item) => item.trim()).filter(Boolean) }) });
       if (!response.ok) { Alert.alert(t('onboarding.saveFailed')); return; }
       onComplete();
     } catch { Alert.alert(t('onboarding.saveFailed')); }
     finally { setBusy(false); }
   }
-  return <View style={styles.preferenceCard}><Text style={styles.preferenceKicker}>{t('onboarding.title').toUpperCase()}</Text><Text style={styles.privacyText}>{t('onboarding.help')}</Text><Field label={t('onboarding.name')} value={name} onChangeText={setName} /><Field label={t('onboarding.username')} value={handle} onChangeText={(value) => setHandle(value.toLowerCase())} /><Text style={styles.fieldLabel}>{t('onboarding.country')}</Text><TextInput autoCapitalize="characters" maxLength={2} style={styles.fieldInput} value={countryCode} onChangeText={setCountryCode} placeholder={t('onboarding.countryExample')} placeholderTextColor={palette.muted} /><Field label={t('onboarding.cuisines')} value={cuisines} onChangeText={setCuisines} /><Pressable disabled={busy || !name.trim() || !handle.trim() || countryCode.trim().length !== 2} style={[styles.primaryButton, (busy || !name.trim() || !handle.trim() || countryCode.trim().length !== 2) && styles.disabledButton]} onPress={() => void save()}><Text style={styles.primaryButtonText}>{busy ? t('onboarding.saving') : t('onboarding.save')}</Text></Pressable></View>;
+  const countryNames = new Intl.DisplayNames([language], { type: 'region' });
+  return <View style={styles.preferenceCard}><Text style={styles.preferenceKicker}>{t('onboarding.title').toUpperCase()}</Text><Text style={styles.privacyText}>{t('onboarding.help')}</Text><Field label={t('onboarding.name')} value={name} onChangeText={setName} /><Field label={t('onboarding.username')} value={handle} onChangeText={(value) => setHandle(value.toLowerCase())} /><Text style={styles.fieldLabel}>{t('onboarding.country')}</Text><CountryPicker value={countryCode} onChange={setCountryCode} language={language} /><Text style={styles.fieldLabel}>{t('onboarding.language')}</Text><LanguagePicker value={language} onChange={setLanguage} /><Field label={t('onboarding.cuisines')} value={cuisines} onChangeText={setCuisines} /><Pressable disabled={busy || !name.trim() || !handle.trim() || !countryCode} style={[styles.primaryButton, (busy || !name.trim() || !handle.trim() || !countryCode) && styles.disabledButton]} onPress={() => void save()}><Text style={styles.primaryButtonText}>{busy ? t('onboarding.saving') : t('onboarding.save')}</Text></Pressable></View>;
 }
 
 type MobileSafetyItem = { id: string; label: string; handle?: string | null };
@@ -761,7 +776,7 @@ function MobileSafetyCenter({ token, t, language }: { token: string; t: Translat
   return <View style={styles.preferenceCard}><Text style={styles.preferenceKicker}>{t('safety.manage').toUpperCase()}</Text>{lists.map((list) => <View key={list.key}><Text style={styles.preferenceTitle}>{t(list.title)}</Text>{choices[list.key].length ? choices[list.key].map((item) => <View key={item.id} style={styles.safetyChoiceRow}><View><Text style={styles.safetyTitle}>{item.label}</Text>{item.handle ? <Text style={styles.safetyBody}>@{item.handle}</Text> : null}</View><Pressable onPress={() => void undo(list.action, item.id)}><Text style={styles.demoLink}>{t(list.undo)}</Text></Pressable></View>) : <Text style={styles.privacyText}>{t('safety.none')}</Text>}</View>)}<Text style={styles.preferenceTitle}>{t('safety.reports')}</Text>{reports.length ? reports.map((report) => <View key={report.id} style={styles.safetyChoiceRow}><View><Text style={styles.safetyTitle}>{t(`safety.reason.${report.reason}`)}</Text><Text style={styles.safetyBody}>{new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(report.createdAt))}</Text></View><Text style={styles.safetyBody}>{t(report.status === 'open' ? 'safety.open' : 'safety.resolved')}</Text></View>) : <Text style={styles.privacyText}>{t('safety.none')}</Text>}</View>;
 }
 
-function ProfileScreen({ guestToken, identity, onboardingComplete, onAuthenticated, onSignedOut, onOnboardingComplete, t, language, theme, measurementSystem, location, persist, savedCount, onSaved }: { guestToken: string | null; identity: MobileIdentity | null; onboardingComplete: boolean; onAuthenticated: (token: string, identity: MobileIdentity, onboardingComplete: boolean) => void; onSignedOut: () => void; onOnboardingComplete: () => void; t: Translator; language: UiLanguage; theme: ThemePreference; measurementSystem: MeasurementSystem; location: MobileLocation | null; persist: (next: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: MobileLocation | null }) => Promise<void>; savedCount: number; onSaved: () => void }) {
+function ProfileScreen({ guestToken, identity, onboardingComplete, onAuthenticated, onSignedOut, onOnboardingComplete, t, language, theme, measurementSystem, location, persist, savedCount, onSaved, setLanguage }: { guestToken: string | null; identity: MobileIdentity | null; onboardingComplete: boolean; onAuthenticated: (token: string, identity: MobileIdentity, onboardingComplete: boolean) => void; onSignedOut: () => void; onOnboardingComplete: () => void; t: Translator; language: UiLanguage; theme: ThemePreference; measurementSystem: MeasurementSystem; location: MobileLocation | null; persist: (next: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: MobileLocation | null }) => Promise<void>; savedCount: number; onSaved: () => void; setLanguage: (language: UiLanguage) => void }) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<MobileLocationSuggestion[]>([]);
   const [busy, setBusy] = useState(false);
@@ -841,7 +856,7 @@ function ProfileScreen({ guestToken, identity, onboardingComplete, onAuthenticat
         <View><Text style={styles.savedTitle}>{t('nav.saved')}</Text><Text style={styles.savedCount}>{savedCount} {t('nav.saved')}</Text></View>
         <Text style={styles.savedArrow}>→</Text>
       </Pressable>
-      {!authenticated ? <MobileAuthPanel t={t} onAuthenticated={onAuthenticated} /> : !onboardingComplete && guestToken ? <MobileOnboarding token={guestToken} t={t} language={language} location={location} onComplete={onOnboardingComplete} /> : null}
+      {!authenticated ? <MobileAuthPanel t={t} onAuthenticated={onAuthenticated} /> : !onboardingComplete && guestToken ? <MobileOnboarding token={guestToken} t={t} language={language} location={location} onComplete={onOnboardingComplete} setLanguage={setLanguage} /> : null}
       {authenticated ? <Pressable style={styles.secondaryButtonStandalone} onPress={() => void signOut()}><Text style={styles.secondaryButtonText}>{t('auth.signOut')}</Text></Pressable> : null}
       <View style={styles.preferenceCard}>
         <Text style={styles.preferenceKicker}>{t('settings.title').toUpperCase()}</Text>
@@ -1344,4 +1359,10 @@ const styles = StyleSheet.create({
   followButtonFollowing: { backgroundColor: palette.paper, borderWidth: 1, borderColor: palette.line },
   followButtonText: { color: palette.cream, fontSize: 12, fontWeight: '800' },
   followButtonTextFollowing: { color: palette.ink },
+  pickerScroll: { marginBottom: 18 },
+  pickerOptions: { flexDirection: 'row', gap: 7, flexWrap: 'wrap' },
+  pickerOption: { borderWidth: 1, borderColor: palette.line, backgroundColor: palette.cream, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 15 },
+  pickerOptionActive: { backgroundColor: palette.burgundy, borderColor: palette.burgundy },
+  pickerOptionText: { color: palette.ink, fontSize: 11, fontWeight: '800' },
+  pickerOptionTextActive: { color: palette.cream },
 });

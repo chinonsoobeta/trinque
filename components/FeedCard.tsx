@@ -1,4 +1,8 @@
+"use client";
+
+import { useState } from "react";
 import type { MessageKey } from "@/ios/i18n";
+import { SafetyActions } from "@/components/SafetyActions";
 
 export type FeedDish = {
   id: string;
@@ -20,6 +24,7 @@ export type FeedDish = {
   commentCount?: number;
   isSaved?: boolean;
   isOwner?: boolean;
+  contributorId?: string;
   sourceMode?: "live" | "demo";
   restaurant?: { name: string } | null;
   locationTag?: string;
@@ -52,6 +57,7 @@ export function FeedCard({ dish, t, onSave, onDelete, onLike, onEdit }: {
   onLike?: (id: string) => void;
   onEdit?: (dish: FeedDish) => void;
 }) {
+  const [safetyOpen, setSafetyOpen] = useState(false);
   const initials = dish.authorInitials ?? dish.contributorLabel?.slice(0, 2).toUpperCase() ?? "?";
   const authorName = dish.authorLabel ?? dish.contributorLabel ?? t("auth.guest");
   const timeLabel = dish.createdAt ? timeAgo(dish.createdAt) : "";
@@ -70,9 +76,11 @@ export function FeedCard({ dish, t, onSave, onDelete, onLike, onEdit }: {
           </div>
         </div>
         <div className="feed-card-actions-top">
-          <button className="feed-card-safety" aria-label={t("safety.title")}>•••</button>
+          <button className="feed-card-safety" onClick={() => setSafetyOpen((v) => !v)} aria-label={t("safety.title")}>•••</button>
         </div>
       </div>
+
+      {safetyOpen ? <SafetyActions targetType="dish" targetId={dish.id} userId={dish.contributorId} allowHide /> : null}
 
       {dish.imageUrl || dish.localPreview ? (
         <div className="feed-card-image" style={{ backgroundImage: `url(${dish.localPreview ?? dish.imageUrl})` }} />
@@ -115,13 +123,13 @@ export function FeedCard({ dish, t, onSave, onDelete, onLike, onEdit }: {
         <button className="feed-card-action" onClick={() => onLike?.(dish.id)} aria-label={t("dish.like")}>
           ♡ {(dish.likes ?? 0) > 0 ? dish.likes : ""}
         </button>
-        <button className="feed-card-action" aria-label={t("comments.add")}>
+        <button className="feed-card-action" onClick={() => window.location.assign(`/dishes/${dish.id}`)} aria-label={t("comments.add")}>
           ◷ {(dish.commentCount ?? 0) > 0 ? dish.commentCount : ""}
         </button>
         <button className="feed-card-action" onClick={() => onSave?.(dish.id)} aria-label={dish.isSaved ? t("save.removed") : t("save.added")}>
           {dish.isSaved ? "♥" : "♡"}
         </button>
-        <button className="feed-card-action" aria-label={t("dish.share")}>↗</button>
+        <button className="feed-card-action" onClick={() => { const url = `${window.location.origin}/dishes/${dish.id}`; if (navigator.share) navigator.share({ title: dish.name, url }).catch(() => undefined); else navigator.clipboard?.writeText(url).catch(() => undefined); }} aria-label={t("dish.share")}>↗</button>
       </div>
 
       {onDelete || onEdit ? (

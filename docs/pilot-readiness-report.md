@@ -1,6 +1,6 @@
 # Trinque pilot readiness report
 
-Report date: 2026-07-23. Validated source: local commit `123688d`. Recommendation: **NO-GO**.
+Report date: 2026-07-23. Validated source: local commit `83869d9`. Recommendation: **NO-GO**.
 
 ## What passed locally
 

@@ -1,7 +1,7 @@
 import { and, count, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { likes, notifications, publishedDishes } from "@/db/schema";
-import { AuthenticationError, getOptionalIdentity, requireAuthenticatedIdentity } from "@/lib/auth";
+import { AuthenticationError, requireOnboardedIdentity } from "@/lib/auth";
 
 export const runtime = "edge";
 
@@ -20,7 +20,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const identity = await requireAuthenticatedIdentity(request);
+    const identity = await requireOnboardedIdentity(request);
     const { id } = await params;
     const db = await getDb();
     const [dish] = await db.select({ id: publishedDishes.id, ownerId: publishedDishes.ownerId }).from(publishedDishes).where(eq(publishedDishes.id, id)).limit(1);
@@ -41,7 +41,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const identity = await requireAuthenticatedIdentity(request);
+    const identity = await requireOnboardedIdentity(request);
     const { id } = await params;
     const db = await getDb();
     await db.delete(likes).where(and(eq(likes.userId, identity.id), eq(likes.dishId, id)));

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { translations, UI_LANGUAGES } from "../ios/i18n.ts";
+import { translations } from "../ios/i18n.ts";
 
 const FULL_LANGUAGES = ["fr", "es", "de", "it", "pt"];
 const ENGLISH_VARIANTS = ["en-CA", "en-US", "en-GB"];

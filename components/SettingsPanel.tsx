@@ -1,10 +1,10 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { coarseLocation, normalizeLocation, type NormalizedLocation } from "@/lib/location";
+import { FormEvent, useState } from "react";
+import type { NormalizedLocation } from "@/lib/location";
 import type { LocationSuggestion } from "@/lib/places/types";
 import { REGIONAL_DEFAULTS, type MeasurementSystem, type ThemePreference } from "@/lib/regions";
-import { LANGUAGE_LABEL_KEYS, translate, UI_LANGUAGES, type MessageKey, type UiLanguage } from "@/ios/i18n";
+import { LANGUAGE_LABEL_KEYS, UI_LANGUAGES, type MessageKey, type UiLanguage } from "@/ios/i18n";
 import { AuthControls } from "@/components/AuthControls";
 import { PrivacySettings } from "@/components/PrivacySettings";
 

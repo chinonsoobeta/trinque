@@ -5,7 +5,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { useUiText } from "@/components/useUiText";
 
 export function PrivacySettings() {
-  const { authenticated, authHeaders, sessionToken } = useAuth();
+  const { authenticated, authHeaders } = useAuth();
   const t = useUiText();
   const [consent, setConsent] = useState({ locationConsent: false, analyticsConsent: false, imageRetentionConsent: false });
   const [busy, setBusy] = useState(false);
@@ -38,5 +38,5 @@ export function PrivacySettings() {
   }
 
   if (!authenticated) return null;
-  return <div className="setting-block"><span>{t("privacy.title")}</span>{([['locationConsent', 'privacy.locationConsent'], ['analyticsConsent', 'privacy.analyticsConsent'], ['imageRetentionConsent', 'privacy.imageConsent']] as const).map(([field, key]) => <label className="confirmation" key={field}><input type="checkbox" checked={consent[field]} onChange={(event) => setConsent((current) => ({ ...current, [field]: event.target.checked }))} />{t(key)}</label>)}<button className="location-chip" disabled={busy || !authenticated} onClick={() => void saveConsent()}>{t("privacy.saveConsent")}</button><button className="text-button full" disabled={busy || !authenticated} onClick={() => { const withdrawn = { locationConsent: false, analyticsConsent: false, imageRetentionConsent: false }; setConsent(withdrawn); void saveConsent(withdrawn); }}>{t("privacy.withdraw")}</button><button className="secondary full" disabled={!authenticated} onClick={() => void exportData()}>{t("privacy.export")}</button><button className="text-button full" disabled={!authenticated} onClick={() => void deleteData()}>{t("privacy.delete")}</button></div>;
+  return <div className="setting-block"><span>{t("privacy.title")}</span>{([['locationConsent', 'privacy.locationConsent'], ['analyticsConsent', 'privacy.analyticsConsent'], ['imageRetentionConsent', 'privacy.imageConsent']] as const).map(([field, key]) => <label className="confirmation" key={field}><input type="checkbox" checked={consent[field]} onChange={(event) => setConsent((current) => ({ ...current, [field]: event.target.checked }))} />{t(key)}</label>)}{status && <p role="status">{status}</p>}<button className="location-chip" disabled={busy || !authenticated} onClick={() => void saveConsent()}>{t("privacy.saveConsent")}</button><button className="text-button full" disabled={busy || !authenticated} onClick={() => { const withdrawn = { locationConsent: false, analyticsConsent: false, imageRetentionConsent: false }; setConsent(withdrawn); void saveConsent(withdrawn); }}>{t("privacy.withdraw")}</button><button className="secondary full" disabled={!authenticated} onClick={() => void exportData()}>{t("privacy.export")}</button><button className="text-button full" disabled={!authenticated} onClick={() => void deleteData()}>{t("privacy.delete")}</button></div>;
 }

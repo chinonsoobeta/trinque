@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import { useUiText } from "@/components/useUiText";
+import { useUiLanguage, useUiText } from "@/components/useUiText";
 
 type Notification = { id: string; type: "like" | "comment" | "follow" | "group_invite"; targetId: string | null; read: boolean; createdAt: string; actorDisplayName: string | null; actorHandle: string | null };
 
 export function NotificationList({ onRead }: { onRead?: () => void }) {
   const { authHeaders } = useAuth();
   const t = useUiText();
+  const language = useUiLanguage();
   const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const load = useCallback(async () => {
@@ -24,7 +25,7 @@ export function NotificationList({ onRead }: { onRead?: () => void }) {
 
   if (loading) return <p>{t("notifications.loading")}</p>;
   if (!items.length) return <div className="empty-state"><p>{t("notifications.empty")}</p></div>;
-  return <div className="notification-list">{items.map((item) => <button key={item.id} className={item.read ? "notification read" : "notification unread"} onClick={() => void markRead(item)}><b>{item.actorDisplayName ?? t("notifications.someone")}</b> {t(notificationCopyKey(item.type))}<small>{new Date(item.createdAt).toLocaleString()}</small></button>)}</div>;
+  return <div className="notification-list">{items.map((item) => <button key={item.id} className={item.read ? "notification read" : "notification unread"} onClick={() => void markRead(item)}><b>{item.actorDisplayName ?? t("notifications.someone")}</b> {t(notificationCopyKey(item.type))}<small>{new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.createdAt))}</small></button>)}</div>;
 }
 
 function notificationHref(item: Notification) { if (item.type === "follow" && item.actorHandle) return `/profiles/${item.actorHandle}`; if ((item.type === "like" || item.type === "comment") && item.targetId) return `/dishes/${item.targetId}`; if (item.type === "group_invite" && item.targetId) return `/?join=${encodeURIComponent(item.targetId)}`; return null; }

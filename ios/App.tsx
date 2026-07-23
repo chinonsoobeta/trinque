@@ -783,7 +783,7 @@ function LanguagePicker({ value, onChange }: { value: UiLanguage; onChange: (lan
   </ScrollView>;
 }
 
-function MobileOnboarding({ token, t, language, location, onComplete, setLanguage }: { token: string; t: Translator; language: UiLanguage; location: MobileLocation | null; onComplete: () => void; setLanguage: (language: UiLanguage) => void }) {
+function MobileOnboarding({ token, t, language, onComplete, setLanguage }: { token: string; t: Translator; language: UiLanguage; onComplete: () => void; setLanguage: (language: UiLanguage) => void }) {
   const [name, setName] = useState(''); const [handle, setHandle] = useState(''); const [countryCode, setCountryCode] = useState(''); const [cuisines, setCuisines] = useState(''); const [busy, setBusy] = useState(false);
   async function save() {
     if (!name.trim() || !handle.trim() || !countryCode) return;
@@ -795,7 +795,6 @@ function MobileOnboarding({ token, t, language, location, onComplete, setLanguag
     } catch { Alert.alert(t('onboarding.saveFailed')); }
     finally { setBusy(false); }
   }
-  const countryNames = new Intl.DisplayNames([language], { type: 'region' });
   return <View style={styles.preferenceCard}><Text style={styles.preferenceKicker}>{t('onboarding.title').toUpperCase()}</Text><Text style={styles.privacyText}>{t('onboarding.help')}</Text><Field label={t('onboarding.name')} value={name} onChangeText={setName} /><Field label={t('onboarding.username')} value={handle} onChangeText={(value) => setHandle(value.toLowerCase())} /><Text style={styles.fieldLabel}>{t('onboarding.country')}</Text><CountryPicker value={countryCode} onChange={setCountryCode} language={language} /><Text style={styles.fieldLabel}>{t('onboarding.language')}</Text><LanguagePicker value={language} onChange={setLanguage} /><Field label={t('onboarding.cuisines')} value={cuisines} onChangeText={setCuisines} /><Pressable disabled={busy || !name.trim() || !handle.trim() || !countryCode} style={[styles.primaryButton, (busy || !name.trim() || !handle.trim() || !countryCode) && styles.disabledButton]} onPress={() => void save()}><Text style={styles.primaryButtonText}>{busy ? t('onboarding.saving') : t('onboarding.save')}</Text></Pressable></View>;
 }
 
@@ -913,7 +912,7 @@ function ProfileScreen({ guestToken, identity, onboardingComplete, onAuthenticat
         <View><Text style={styles.savedTitle}>{t('nav.saved')}</Text><Text style={styles.savedCount}>{savedCount} {t('nav.saved')}</Text></View>
         <Text style={styles.savedArrow}>→</Text>
       </Pressable>
-      {!authenticated ? <MobileAuthPanel t={t} onAuthenticated={onAuthenticated} /> : !onboardingComplete && guestToken ? <MobileOnboarding token={guestToken} t={t} language={language} location={location} onComplete={onOnboardingComplete} setLanguage={setLanguage} /> : null}
+      {!authenticated ? <MobileAuthPanel t={t} onAuthenticated={onAuthenticated} /> : !onboardingComplete && guestToken ? <MobileOnboarding token={guestToken} t={t} language={language} onComplete={onOnboardingComplete} setLanguage={setLanguage} /> : null}
       {authenticated ? <Pressable style={styles.secondaryButtonStandalone} onPress={() => void signOut()}><Text style={styles.secondaryButtonText}>{t('auth.signOut')}</Text></Pressable> : null}
       <View style={styles.preferenceCard}>
         <Text style={styles.preferenceKicker}>{t('settings.title').toUpperCase()}</Text>

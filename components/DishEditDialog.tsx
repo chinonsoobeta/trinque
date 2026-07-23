@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { MessageKey } from "@/ios/i18n";
 
 type Translator = (key: MessageKey, values?: Record<string, string | number>) => string;

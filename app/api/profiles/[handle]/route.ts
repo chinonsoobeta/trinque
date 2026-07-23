@@ -8,7 +8,7 @@ export const runtime = "edge";
 export async function GET(request: Request, { params }: { params: Promise<{ handle: string }> }) {
   const { handle: rawHandle } = await params;
   const handle = normalizeHandle(rawHandle);
-  if (!handle) return Response.json({ error: "Profile not found." }, { status: 404 });
+  if (!handle) return Response.json({ error: "profile_not_found", code: "profile_not_found" }, { status: 404 });
   const db = await getDb();
   const origin = new URL(request.url).origin;
   const [profile] = await db.select({
@@ -20,7 +20,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ hand
     location: profiles.location,
     joinedAt: profiles.joinedAt,
   }).from(profiles).where(eq(profiles.handle, handle)).limit(1);
-  if (!profile) return Response.json({ error: "Profile not found." }, { status: 404 });
+  if (!profile) return Response.json({ error: "profile_not_found", code: "profile_not_found" }, { status: 404 });
   const [[followers], [following], [dishCount], dishes, viewer] = await Promise.all([
     db.select({ count: count() }).from(follows).where(eq(follows.followingId, profile.userId)),
     db.select({ count: count() }).from(follows).where(eq(follows.followerId, profile.userId)),
@@ -31,7 +31,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ hand
   let viewerFollowing = false;
   if (viewer && viewer.id !== profile.userId && viewer.authType !== "guest") {
     const [blocked] = await db.select({ blockerId: blocks.blockerId }).from(blocks).where(or(and(eq(blocks.blockerId, viewer.id), eq(blocks.blockedId, profile.userId)), and(eq(blocks.blockerId, profile.userId), eq(blocks.blockedId, viewer.id)))).limit(1);
-    if (blocked) return Response.json({ error: "Profile not found." }, { status: 404 });
+    if (blocked) return Response.json({ error: "profile_not_found", code: "profile_not_found" }, { status: 404 });
     const [row] = await db.select({ followerId: follows.followerId }).from(follows).where(and(eq(follows.followerId, viewer.id), eq(follows.followingId, profile.userId))).limit(1);
     viewerFollowing = Boolean(row);
   }
@@ -44,24 +44,24 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ha
     const identity = await requireAuthenticatedIdentity(request);
     const { handle: rawHandle } = await params;
     const currentHandle = normalizeHandle(rawHandle);
-    if (!currentHandle) return Response.json({ error: "Profile not found." }, { status: 404 });
+    if (!currentHandle) return Response.json({ error: "profile_not_found", code: "profile_not_found" }, { status: 404 });
     const body = await request.json() as { displayName?: string; handle?: string; bio?: string; location?: string | null; avatarUrl?: string | null };
     const db = await getDb();
     const [current] = await db.select().from(profiles).where(eq(profiles.handle, currentHandle)).limit(1);
-    if (!current) return Response.json({ error: "Profile not found." }, { status: 404 });
-    if (current.userId !== identity.id) return Response.json({ error: "You can only edit your own profile." }, { status: 403 });
+    if (!current) return Response.json({ error: "profile_not_found", code: "profile_not_found" }, { status: 404 });
+    if (current.userId !== identity.id) return Response.json({ error: "own_profile_required", code: "own_profile_required" }, { status: 403 });
 
     const displayName = body.displayName === undefined ? current.displayName : body.displayName.trim();
     const bio = body.bio === undefined ? current.bio : body.bio.trim();
     const location = body.location === undefined ? current.location : body.location?.trim() || null;
     const avatarUrl = body.avatarUrl === undefined ? current.avatarUrl : body.avatarUrl?.trim() || null;
     const nextHandle = body.handle === undefined ? current.handle : normalizeHandle(body.handle);
-    if (!displayName || displayName.length > 80) return Response.json({ error: "Display name must be 1–80 characters." }, { status: 400 });
-    if (!nextHandle) return Response.json({ error: "Handle must be 3–30 lowercase letters, numbers, dots, underscores, or hyphens." }, { status: 400 });
-    if (bio.length > 500 || (location?.length ?? 0) > 100) return Response.json({ error: "Profile fields are too long." }, { status: 400 });
-    if (avatarUrl && !/^https:\/\//i.test(avatarUrl) && !avatarUrl.startsWith("/")) return Response.json({ error: "Avatar URL must be HTTPS or an app-relative URL." }, { status: 400 });
+    if (!displayName || displayName.length > 80) return Response.json({ error: "valid_display_name_required", code: "valid_display_name_required" }, { status: 400 });
+    if (!nextHandle) return Response.json({ error: "valid_handle_required", code: "valid_handle_required" }, { status: 400 });
+    if (bio.length > 500 || (location?.length ?? 0) > 100) return Response.json({ error: "profile_fields_too_long", code: "profile_fields_too_long" }, { status: 400 });
+    if (avatarUrl && !/^https:\/\//i.test(avatarUrl) && !avatarUrl.startsWith("/")) return Response.json({ error: "invalid_avatar_url", code: "invalid_avatar_url" }, { status: 400 });
     const [collision] = await db.select({ userId: profiles.userId }).from(profiles).where(eq(profiles.handle, nextHandle)).limit(1);
-    if (collision && collision.userId !== identity.id) return Response.json({ error: "That handle is already taken." }, { status: 409 });
+    if (collision && collision.userId !== identity.id) return Response.json({ error: "handle_taken", code: "handle_taken" }, { status: 409 });
 
     const now = new Date().toISOString();
     await db.update(profiles).set({ displayName, handle: nextHandle, bio, location, avatarUrl, updatedAt: now }).where(eq(profiles.userId, identity.id));

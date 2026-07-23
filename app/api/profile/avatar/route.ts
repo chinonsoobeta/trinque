@@ -28,13 +28,13 @@ export async function POST(request: Request) {
     const identity = await requireAuthenticatedIdentity(request);
     const data = await request.formData();
     const file = data.get("file");
-    if (!(file instanceof File)) return Response.json({ error: "Image file required." }, { status: 400 });
-    if (!AVATAR_CONTENT_TYPES.has(file.type)) return Response.json({ error: "Use JPEG, PNG, WebP, or AVIF." }, { status: 415 });
-    if (file.size < 1 || file.size > AVATAR_MAX_BYTES) return Response.json({ error: "Avatar must be 5 MB or smaller." }, { status: 413 });
+    if (!(file instanceof File)) return Response.json({ error: "image_file_required", code: "image_file_required" }, { status: 400 });
+    if (!AVATAR_CONTENT_TYPES.has(file.type)) return Response.json({ error: "avatar_type_unsupported", code: "avatar_type_unsupported" }, { status: 415 });
+    if (file.size < 1 || file.size > AVATAR_MAX_BYTES) return Response.json({ error: "avatar_size_invalid", code: "avatar_size_invalid" }, { status: 413 });
 
     const db = await getDb();
     const [current] = await db.select({ avatarUrl: profiles.avatarUrl }).from(profiles).where(eq(profiles.userId, identity.id)).limit(1);
-    if (!current) return Response.json({ error: "Profile not found." }, { status: 404 });
+    if (!current) return Response.json({ error: "profile_not_found", code: "profile_not_found" }, { status: 404 });
 
     const bucket = await getImageBucket();
     const key = avatarKey(identity.id, file.type);
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, avatarUrl });
   } catch (error) {
     if (error instanceof AuthenticationError) return Response.json({ error: error.message }, { status: error.status });
-    return Response.json({ error: "Unable to upload avatar." }, { status: 503 });
+    return Response.json({ error: "avatar_upload_failed", code: "avatar_upload_failed" }, { status: 503 });
   }
 }
 
@@ -66,6 +66,6 @@ export async function DELETE(request: Request) {
     return Response.json({ ok: true, avatarUrl: null });
   } catch (error) {
     if (error instanceof AuthenticationError) return Response.json({ error: error.message }, { status: error.status });
-    return Response.json({ error: "Unable to remove avatar." }, { status: 503 });
+    return Response.json({ error: "avatar_remove_failed", code: "avatar_remove_failed" }, { status: 503 });
   }
 }

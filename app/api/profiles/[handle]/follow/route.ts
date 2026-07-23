@@ -16,7 +16,7 @@ async function target(handleValue: string) {
 export async function GET(request: Request, { params }: { params: Promise<{ handle: string }> }) {
   const { handle } = await params;
   const profile = await target(handle);
-  if (!profile) return Response.json({ error: "Profile not found." }, { status: 404 });
+  if (!profile) return Response.json({ error: "profile_not_found", code: "profile_not_found" }, { status: 404 });
   const db = await getDb();
   const viewer = await getOptionalIdentity(request);
   const [[total], relation] = await Promise.all([
@@ -31,8 +31,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ han
     const identity = await requireOnboardedIdentity(request);
     const { handle } = await params;
     const profile = await target(handle);
-    if (!profile) return Response.json({ error: "Profile not found." }, { status: 404 });
-    if (profile.userId === identity.id) return Response.json({ error: "You cannot follow yourself." }, { status: 400 });
+    if (!profile) return Response.json({ error: "profile_not_found", code: "profile_not_found" }, { status: 404 });
+    if (profile.userId === identity.id) return Response.json({ error: "cannot_follow_self", code: "cannot_follow_self" }, { status: 400 });
     const db = await getDb();
     const now = new Date().toISOString();
     const inserted = await db.insert(follows).values({ followerId: identity.id, followingId: profile.userId, createdAt: now }).onConflictDoNothing().returning({ followerId: follows.followerId });
@@ -53,7 +53,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ h
     const identity = await requireOnboardedIdentity(request);
     const { handle } = await params;
     const profile = await target(handle);
-    if (!profile) return Response.json({ error: "Profile not found." }, { status: 404 });
+    if (!profile) return Response.json({ error: "profile_not_found", code: "profile_not_found" }, { status: 404 });
     const db = await getDb();
     await db.delete(follows).where(and(eq(follows.followerId, identity.id), eq(follows.followingId, profile.userId)));
     const [total] = await db.select({ count: count() }).from(follows).where(eq(follows.followingId, profile.userId));

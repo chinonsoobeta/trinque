@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   try {
     const identity = await requireOnboardedIdentity(request);
     const body = await request.json() as { dishId?: number; saved?: boolean };
-    if (!Number.isInteger(body.dishId) || Number(body.dishId) < 1) return Response.json({ error: "Valid dishId required." }, { status: 400, headers: cors });
+    if (!Number.isInteger(body.dishId) || Number(body.dishId) < 1) return Response.json({ error: "valid_dish_id_required", code: "valid_dish_id_required" }, { status: 400, headers: cors });
     const db = await getDb();
     if (body.saved === false) {
       await db.delete(saves).where(and(eq(saves.userId, identity.id), eq(saves.dishId, Number(body.dishId))));

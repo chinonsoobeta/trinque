@@ -19,7 +19,7 @@ export function OPTIONS() { return new Response(null, { status: 204, headers: co
 
 export async function GET(request: Request) {
   const identity = await requireIdentity(request);
-  if (!identity) return Response.json({ error: "Guest session required." }, { status: 401, headers: cors });
+  if (!identity) return Response.json({ error: "authentication_required", code: "authentication_required" }, { status: 401, headers: cors });
   const db = await getDb();
   const rows = await db.select({ dish: publishedDishes, restaurant: restaurants }).from(publishedDishes).leftJoin(restaurants, eq(publishedDishes.restaurantId, restaurants.id)).where(eq(publishedDishes.ownerId, identity.id)).orderBy(desc(publishedDishes.createdAt)).limit(30);
   return Response.json({ dishes: rows.map(({ dish, restaurant }) => ({ ...dish, restaurant, imageUrl: dish.imageKey ? `/api/media/${dish.imageKey}` : null })) }, { headers: cors });

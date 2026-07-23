@@ -8,7 +8,7 @@ export const runtime = "edge";
 /** Public-to-Trinque feed: only reviewed, published records; never raw profiles or email addresses. */
 export async function GET(request: Request) {
   const identity = await requireIdentity(request);
-  if (!identity) return Response.json({ error: "Guest session required." }, { status: 401 });
+  if (!identity) return Response.json({ error: "authentication_required", code: "authentication_required" }, { status: 401 });
   const db = await getDb();
   const origin = new URL(request.url).origin;
   const rows = await db.select({ dish: publishedDishes, restaurant: restaurants })

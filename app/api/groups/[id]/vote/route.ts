@@ -18,10 +18,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const db = await getDb();
   const membership = await groupMembership(id, identity.id);
   const [group] = await db.select().from(groups).where(eq(groups.id, id)).limit(1);
-  if (!membership || !group || group.status !== "voting") return Response.json({ error: "Open group plan not found." }, { status: 404 });
+  if (!membership || !group || group.status !== "voting") return Response.json({ error: "open_group_plan_not_found", code: "open_group_plan_not_found" }, { status: 404 });
   const { candidateId } = await request.json() as { candidateId?: string };
   const [candidate] = await db.select().from(groupCandidates).where(and(eq(groupCandidates.groupId, id), eq(groupCandidates.candidateId, candidateId ?? ""))).limit(1);
-  if (!candidate || !candidate.eligible) return Response.json({ error: "This candidate has an unresolved hard constraint." }, { status: 409 });
+  if (!candidate || !candidate.eligible) return Response.json({ error: "candidate_constraint_unresolved", code: "candidate_constraint_unresolved" }, { status: 409 });
   await db.insert(groupVotes).values({ groupId: id, userId: identity.id, candidateId: candidate.candidateId }).onConflictDoUpdate({ target: [groupVotes.groupId, groupVotes.userId], set: { candidateId: candidate.candidateId, createdAt: new Date().toISOString() } });
   return Response.json({ group: await groupSnapshot(id, identity.id) });
 }

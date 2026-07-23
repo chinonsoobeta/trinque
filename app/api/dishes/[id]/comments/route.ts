@@ -23,7 +23,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!text || text.length > COMMENT_LIMIT) return Response.json({ error: `Comment must be 1–${COMMENT_LIMIT} characters.` }, { status: 400 });
     const db = await getDb();
     const [dish] = await db.select({ id: publishedDishes.id, ownerId: publishedDishes.ownerId }).from(publishedDishes).where(eq(publishedDishes.id, id)).limit(1);
-    if (!dish) return Response.json({ error: "Dish not found." }, { status: 404 });
+    if (!dish) return Response.json({ error: "dish_not_found", code: "dish_not_found" }, { status: 404 });
     const commentId = crypto.randomUUID();
     const now = new Date().toISOString();
     await db.insert(comments).values({ id: commentId, userId: identity.id, dishId: id, body: text, createdAt: now, updatedAt: now });

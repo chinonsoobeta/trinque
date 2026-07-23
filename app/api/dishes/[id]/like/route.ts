@@ -9,7 +9,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const db = await getDb();
   const [dish] = await db.select({ id: publishedDishes.id }).from(publishedDishes).where(eq(publishedDishes.id, id)).limit(1);
-  if (!dish) return Response.json({ error: "Dish not found." }, { status: 404 });
+  if (!dish) return Response.json({ error: "dish_not_found", code: "dish_not_found" }, { status: 404 });
   const viewer = await getOptionalIdentity(request);
   const [[total], relation] = await Promise.all([
     db.select({ count: count() }).from(likes).where(eq(likes.dishId, id)),
@@ -24,7 +24,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     const db = await getDb();
     const [dish] = await db.select({ id: publishedDishes.id, ownerId: publishedDishes.ownerId }).from(publishedDishes).where(eq(publishedDishes.id, id)).limit(1);
-    if (!dish) return Response.json({ error: "Dish not found." }, { status: 404 });
+    if (!dish) return Response.json({ error: "dish_not_found", code: "dish_not_found" }, { status: 404 });
     const now = new Date().toISOString();
     const inserted = await db.insert(likes).values({ userId: identity.id, dishId: id, createdAt: now }).onConflictDoNothing().returning({ userId: likes.userId });
     if (inserted.length && dish.ownerId !== identity.id) {

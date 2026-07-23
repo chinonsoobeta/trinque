@@ -13,6 +13,6 @@ export async function POST(request: Request) {
     if (session.sessionToken && session.expiresAt) responseHeaders.set("Set-Cookie", sessionCookie(request, session.sessionToken, session.expiresAt));
     return Response.json({ ok: true, ...session }, { status: session.guestToken ? 201 : 200, headers: responseHeaders });
   } catch {
-    return Response.json({ ok: false, error: "Session persistence is temporarily unavailable." }, { status: 503, headers });
+    return Response.json({ ok: false, error: "session_persistence_unavailable", code: "session_persistence_unavailable" }, { status: 503, headers });
   }
 }

@@ -14,12 +14,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   const db = await getDb();
   const [owned] = await db.select().from(groups).where(and(eq(groups.id, id), eq(groups.ownerId, identity.id))).limit(1);
-  if (!owned) return Response.json({ error: "Group plan not found." }, { status: 404 });
+  if (!owned) return Response.json({ error: "group_plan_not_found", code: "group_plan_not_found" }, { status: 404 });
   const snapshot = await groupSnapshot(id, identity.id);
-  if (!snapshot) return Response.json({ error: "Group plan not found." }, { status: 404 });
+  if (!snapshot) return Response.json({ error: "group_plan_not_found", code: "group_plan_not_found" }, { status: 404 });
   const candidates = snapshot.candidates as RankedGroupCandidate[];
   const winner = selectGroupWinner(candidates, snapshot.votes);
-  if (!winner) return Response.json({ error: "No candidate satisfies every hard constraint." }, { status: 409 });
+  if (!winner) return Response.json({ error: "no_eligible_candidate", code: "no_eligible_candidate" }, { status: 409 });
   await db.update(groups).set({ status: "finalized", selectedCandidateId: winner.candidateId, updatedAt: new Date().toISOString() }).where(eq(groups.id, id));
   return Response.json({ group: await groupSnapshot(id, identity.id), winner });
 }

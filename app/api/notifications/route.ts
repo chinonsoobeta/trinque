@@ -29,7 +29,7 @@ export async function PATCH(request: Request) {
     if (body.all) await db.update(notifications).set({ read: true }).where(eq(notifications.userId, identity.id));
     else if (body.id) await db.update(notifications).set({ read: true }).where(and(eq(notifications.userId, identity.id), eq(notifications.id, body.id)));
     else if (body.ids?.length) await db.update(notifications).set({ read: true }).where(and(eq(notifications.userId, identity.id), inArray(notifications.id, body.ids.slice(0, 100))));
-    else return Response.json({ error: "Notification id or all=true required." }, { status: 400 });
+    else return Response.json({ error: "notification_id_or_all_required", code: "notification_id_or_all_required" }, { status: 400 });
     return Response.json({ ok: true });
   } catch (error) { return authError(error, "Unable to update notifications."); }
 }

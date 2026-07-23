@@ -66,7 +66,7 @@ export async function GET(request: Request) {
     }, { headers: { "Cache-Control": "no-store", "Content-Disposition": `attachment; filename="trinque-account-export-${new Date().toISOString().slice(0, 10)}.json"` } });
   } catch (error) {
     if (error instanceof AuthenticationError) return Response.json({ error: error.message }, { status: error.status });
-    return Response.json({ error: "Unable to export account data." }, { status: 500 });
+    return Response.json({ error: "privacy_export_failed", code: "privacy_export_failed" }, { status: 500 });
   }
 }
 
@@ -119,6 +119,6 @@ export async function DELETE(request: Request) {
     return Response.json({ ok: true, deletedAt: now }, { headers: { "Set-Cookie": clearedSessionCookie(request), "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof AuthenticationError) return Response.json({ error: error.message }, { status: error.status });
-    return Response.json({ error: "Unable to delete account data." }, { status: 500 });
+    return Response.json({ error: "privacy_delete_failed", code: "privacy_delete_failed" }, { status: 500 });
   }
 }

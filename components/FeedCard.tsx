@@ -4,6 +4,7 @@ export type FeedDish = {
   id: string;
   name: string;
   description?: string;
+  caption?: string;
   cuisine?: string;
   confidence?: number;
   imageUrl?: string | null;
@@ -23,6 +24,9 @@ export type FeedDish = {
   restaurant?: { name: string } | null;
   locationTag?: string;
   price?: string;
+  tasteNotes?: string;
+  dietaryNotes?: string;
+  personalComments?: string;
 };
 
 type Translator = (key: MessageKey, values?: Record<string, string | number>) => string;
@@ -39,12 +43,13 @@ function timeAgo(dateString: string): string {
   return new Date(dateString).toLocaleDateString();
 }
 
-export function FeedCard({ dish, t, onSave, onDelete, onLike }: {
+export function FeedCard({ dish, t, onSave, onDelete, onLike, onEdit }: {
   dish: FeedDish;
   t: Translator;
   onSave?: (id: string) => void;
   onDelete?: (id: string, imageOnly?: boolean) => void;
   onLike?: (id: string) => void;
+  onEdit?: (dish: FeedDish) => void;
 }) {
   const initials = dish.authorInitials ?? dish.contributorLabel?.slice(0, 2).toUpperCase() ?? "?";
   const authorName = dish.authorLabel ?? dish.contributorLabel ?? t("auth.guest");
@@ -78,7 +83,9 @@ export function FeedCard({ dish, t, onSave, onDelete, onLike }: {
           {dish.price ? <span className="feed-card-price">{dish.price}</span> : null}
         </div>
 
-        {dish.description ? <p className="feed-card-caption">{dish.description}</p> : null}
+        {dish.description ? <p className="feed-card-caption">{dish.caption ?? dish.description}</p> : null}
+
+        {dish.tasteNotes && dish.tasteNotes !== dish.description ? <p className="feed-card-taste-notes">{dish.tasteNotes}</p> : null}
 
         {dish.restaurant?.name ? (
           <div className="feed-card-restaurant">
@@ -114,10 +121,11 @@ export function FeedCard({ dish, t, onSave, onDelete, onLike }: {
         <button className="feed-card-action" aria-label={t("dish.share")}>↗</button>
       </div>
 
-      {onDelete ? (
+      {onDelete || onEdit ? (
         <div className="feed-card-owner-actions">
-          {dish.imageUrl ? <button className="text-button" onClick={() => onDelete(dish.id, true)}>{t("privacy.deleteImage")}</button> : null}
-          <button className="text-button" onClick={() => onDelete(dish.id)}>{t("privacy.deleteDish")}</button>
+          {onEdit ? <button className="text-button" onClick={() => onEdit(dish)}>{t("owner.edit")}</button> : null}
+          {dish.imageUrl && onDelete ? <button className="text-button" onClick={() => onDelete(dish.id, true)}>{t("privacy.deleteImage")}</button> : null}
+          {onDelete ? <button className="text-button" onClick={() => onDelete(dish.id)}>{t("privacy.deleteDish")}</button> : null}
         </div>
       ) : null}
     </article>

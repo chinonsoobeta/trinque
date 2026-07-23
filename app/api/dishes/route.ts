@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   catch (error) { return Response.json({ error: error instanceof AuthenticationError ? error.message : "authentication_required" }, { status: error instanceof AuthenticationError ? error.status : 503, headers: cors }); }
   try { await enforceUsageBudget("publish", identity.id); }
   catch (error) { if (error instanceof UsageBudgetError) return budgetResponse(error, requestId); throw error; }
-  const body = await request.json() as { analysis?: DishAnalysis; sourceMode?: "live" | "demo"; imageDataUrl?: string; retainImage?: boolean; restaurant?: PublishRestaurantInput; knowledge?: PublicationKnowledge; language?: SupportedLanguage; reviewConfirmed?: boolean; restaurantConfirmed?: boolean };
+  const body = await request.json() as { analysis?: DishAnalysis; sourceMode?: "live" | "demo"; imageDataUrl?: string; retainImage?: boolean; restaurant?: PublishRestaurantInput; knowledge?: PublicationKnowledge; language?: SupportedLanguage; reviewConfirmed?: boolean; restaurantConfirmed?: boolean; tasteNotes?: string; dietaryNotes?: string; personalComments?: string };
   if (!validAnalysis(body.analysis) || !["live", "demo"].includes(body.sourceMode ?? "") || !body.restaurant || !body.knowledge || !body.reviewConfirmed || !body.restaurantConfirmed || !body.language || !SUPPORTED_LANGUAGES.includes(body.language)) {
     return Response.json({ error: "review_and_restaurant_confirmation_required" }, { status: 400, headers: cors });
   }
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
     await db.insert(restaurants).values(restaurantValues);
   }
   const reviewedAnalysis = { name: body.analysis.name, cuisine: body.analysis.cuisine, ingredients: body.analysis.ingredients, dietary: body.analysis.dietary, confidence: body.analysis.confidence, description: body.analysis.description };
-  await db.insert(publishedDishes).values({ id, ownerId: identity.id, contributorId: identity.id, restaurantId, sourceMode: body.sourceMode!, ...reviewedAnalysis, ...dishRecord, confidence: Math.round(body.analysis.confidence), imageKey });
+  await db.insert(publishedDishes).values({ id, ownerId: identity.id, contributorId: identity.id, restaurantId, sourceMode: body.sourceMode!, ...reviewedAnalysis, ...dishRecord, confidence: Math.round(body.analysis.confidence), imageKey, caption: body.tasteNotes ? "" : undefined, tasteNotes: body.tasteNotes ?? "", dietaryNotes: body.dietaryNotes ?? "", personalComments: body.personalComments ?? "" });
   const dish = { id, ownerId: identity.id, contributorId: identity.id, restaurantId, sourceMode: body.sourceMode, ...body.analysis, ...dishRecord, restaurant: { ...restaurantInput, id: restaurantId }, imageKey, imageUrl: imageKey ? `/api/media/${imageKey}` : null };
   let matches = { confirmedNearbyDishes: [], communityOrInferredDishes: [], restaurantLevelAlternatives: [] } as ReturnType<typeof matchNearby>;
   let matchingStatus: { status: "live" | "unavailable"; code?: string; message?: string } = { status: "live" };

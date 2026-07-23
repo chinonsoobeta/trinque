@@ -11,6 +11,7 @@ import { AuthControls } from "@/components/AuthControls";
 import { NotificationBell } from "@/components/NotificationBell";
 import { useAuth } from "@/components/AuthProvider";
 import { FeedCard, type FeedDish } from "@/components/FeedCard";
+import { DishEditDialog } from "@/components/DishEditDialog";
 
 type Dish = {
   id: number; name: string; restaurant: string; area: string; distance: string;
@@ -28,7 +29,7 @@ type MatchResult = { kind: "dish" | "restaurant_alternative"; id: string; dishNa
 type MatchTiers = { confirmedNearbyDishes: MatchResult[]; communityOrInferredDishes: MatchResult[]; restaurantLevelAlternatives: MatchResult[] };
 type PublishRestaurant = { provider: "google" | "community"; providerPlaceId?: string | null; name: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: NormalizedLocation["countryCode"]; address: string; currencyCode: string };
 type PublicationMetadata = { restaurant: PublishRestaurant; knowledge: { priceKnowledge: "unknown" | "exact" | "approximate"; priceAmount?: number; availabilityKnowledge: "unknown" | "recently_confirmed" | "historical"; lastConfirmedAt?: string }; retainImage: boolean; reviewConfirmed: true; restaurantConfirmed: true };
-type PublishedDish = Analysis & { id: string; sourceMode: "live" | "demo"; imageUrl?: string | null; localPreview?: string; provenance?: string; verificationStatus?: string; availabilityKnowledge?: string; contributorLabel?: string; isOwner?: boolean; restaurant?: { name: string } | null };
+type PublishedDish = Analysis & { id: string; sourceMode: "live" | "demo"; imageUrl?: string | null; localPreview?: string; provenance?: string; verificationStatus?: string; availabilityKnowledge?: string; contributorLabel?: string; isOwner?: boolean; restaurant?: { name: string } | null; caption?: string; tasteNotes?: string; dietaryNotes?: string; personalComments?: string; locationTag?: string };
 type GroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; explanation: string; conflicts: string[]; kind: "published_dish" | "provider_restaurant" | "seed_demo"; provenance?: string | null; verificationStatus?: string | null; currentAvailabilityConfirmed: boolean; dietaryCaveat: string };
 type GroupSnapshot = { id: string; name: string; eventTime: string; eventLocalDate: string | null; eventLocalTime: string | null; neighborhood: string; budgetMax: number; maxDistanceKm: number; distanceUnit: "metric" | "imperial"; vegetarianRequired: number; allergies: string[]; dietaryRequirements: string[]; cuisineTypes: string[]; inviteCode: string; inviteExpiresAt: string | null; inviteRevokedAt: string | null; status: "voting" | "finalized"; selectedCandidateId: string | null; candidates: GroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number>; memberCount: number; viewerRole: "owner" | "participant"; viewerVote: string | null; viewerRsvp: string | null; timeZone: string | null; currencyCode: string | null; locale: string | null; locality: string | null; countryCode: string | null };
 type Translator = (key: MessageKey, values?: Record<string, string | number>) => string;
@@ -91,6 +92,7 @@ export default function Home() {
   const [measurementSystem, setMeasurementSystem] = useState<MeasurementSystem>("metric");
   const [location, setLocation] = useState<NormalizedLocation | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [editDish, setEditDish] = useState<FeedDish | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const correctionTracked = useRef(false);
   const visible = useMemo(() => view === "saved" ? dishes.filter((d) => saved.has(d.id)) : dishes, [saved, view]);
@@ -304,6 +306,9 @@ export default function Home() {
     if (!response.ok) { flash(t("error.generic")); return; }
     setCommunityFeed((current) => imageOnly ? current.map((dish) => dish.id === id ? { ...dish, imageUrl: null, localPreview: undefined } : dish) : current.filter((dish) => dish.id !== id));
   }
+  function handleDishUpdated(id: string, fields: Record<string, string>) {
+    setCommunityFeed((current) => current.map((dish) => dish.id === id ? { ...dish, ...fields } : dish));
+  }
   function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]; if (!file) return;
     const reader = new FileReader();
@@ -367,8 +372,8 @@ export default function Home() {
             </div>
             {communityFeed.length ? <div className="feed-list">
               {communityFeed.map((dish) => {
-                const feedDish: FeedDish = { id: dish.id, name: dish.name, description: dish.description, cuisine: dish.cuisine, confidence: dish.confidence, imageUrl: dish.imageUrl, localPreview: dish.localPreview, provenance: dish.provenance, verificationStatus: dish.verificationStatus, availabilityKnowledge: dish.availabilityKnowledge, contributorLabel: dish.contributorLabel, authorLabel: dish.contributorLabel, authorInitials: dish.contributorLabel?.slice(0,2).toUpperCase(), isOwner: dish.isOwner, sourceMode: dish.sourceMode, restaurant: dish.restaurant };
-                return <FeedCard key={dish.id} dish={feedDish} t={t} onDelete={dish.isOwner ? (id, img) => deletePublishedDish(id, img) : undefined} />;
+                const feedDish: FeedDish = { id: dish.id, name: dish.name, description: dish.description, caption: dish.caption, cuisine: dish.cuisine, confidence: dish.confidence, imageUrl: dish.imageUrl, localPreview: dish.localPreview, provenance: dish.provenance, verificationStatus: dish.verificationStatus, availabilityKnowledge: dish.availabilityKnowledge, contributorLabel: dish.contributorLabel, authorLabel: dish.contributorLabel, authorInitials: dish.contributorLabel?.slice(0,2).toUpperCase(), isOwner: dish.isOwner, sourceMode: dish.sourceMode, restaurant: dish.restaurant, tasteNotes: dish.tasteNotes, dietaryNotes: dish.dietaryNotes, personalComments: dish.personalComments };
+                return <FeedCard key={dish.id} dish={feedDish} t={t} onDelete={dish.isOwner ? (id, img) => deletePublishedDish(id, img) : undefined} onEdit={dish.isOwner ? () => setEditDish(feedDish) : undefined} />;
               })}
             </div> : <div className="empty-state"><span>◉</span><h3>{t("home.emptyTitle")}</h3><p>{t("home.emptyBody")}</p><button className="primary" onClick={() => setView("discover")}>{t("home.explore")}</button></div>}
           </section>
@@ -421,8 +426,8 @@ export default function Home() {
           {communityFeed.length ? (
             <div className="feed-list">
               {communityFeed.map((dish) => {
-                const feedDish: FeedDish = { id: dish.id, name: dish.name, description: dish.description, cuisine: dish.cuisine, confidence: dish.confidence, imageUrl: dish.imageUrl, localPreview: dish.localPreview, provenance: dish.provenance, verificationStatus: dish.verificationStatus, availabilityKnowledge: dish.availabilityKnowledge, contributorLabel: dish.contributorLabel, authorLabel: dish.contributorLabel, authorInitials: dish.contributorLabel?.slice(0,2).toUpperCase(), isOwner: dish.isOwner, sourceMode: dish.sourceMode, restaurant: dish.restaurant };
-                return <FeedCard key={dish.id} dish={feedDish} t={t} onDelete={dish.isOwner ? (id, img) => deletePublishedDish(id, img) : undefined} />;
+                const feedDish: FeedDish = { id: dish.id, name: dish.name, description: dish.description, caption: dish.caption, cuisine: dish.cuisine, confidence: dish.confidence, imageUrl: dish.imageUrl, localPreview: dish.localPreview, provenance: dish.provenance, verificationStatus: dish.verificationStatus, availabilityKnowledge: dish.availabilityKnowledge, contributorLabel: dish.contributorLabel, authorLabel: dish.contributorLabel, authorInitials: dish.contributorLabel?.slice(0,2).toUpperCase(), isOwner: dish.isOwner, sourceMode: dish.sourceMode, restaurant: dish.restaurant, tasteNotes: dish.tasteNotes, dietaryNotes: dish.dietaryNotes, personalComments: dish.personalComments };
+                return <FeedCard key={dish.id} dish={feedDish} t={t} onDelete={dish.isOwner ? (id, img) => deletePublishedDish(id, img) : undefined} onEdit={dish.isOwner ? () => setEditDish(feedDish) : undefined} />;
               })}
             </div>
           ) : (
@@ -441,6 +446,7 @@ export default function Home() {
       </nav>
       {modal && <Analyzer key={`${pendingImage ?? "demo"}-${analysisMode ?? "pending"}`} guestToken={guestToken} preview={preview} phase={phase} analysis={analysis} analysisMode={analysisMode} warning={analysisWarning} error={analysisError} matches={nearbyMatches} matchProviderUnavailable={matchProviderUnavailable} matchRecordsUnavailable={matchRecordsUnavailable} publishing={publishing} close={() => setModal(false)} update={update} publish={publish} retry={() => void analyze(pendingImage, false)} demo={() => void analyze(undefined, true)} t={t} language={language} measurementSystem={measurementSystem} location={location} onMatchOpened={() => trackAnalytics("match_opened", { mode: analysisMode ?? undefined })} onFeedback={(reason, targetType, targetId) => void reportFeedback(reason, targetType, targetId ?? analysisRequestId)} />}
       {settingsOpen && <SettingsPanel guestToken={guestToken} t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} close={() => setSettingsOpen(false)} persist={persistPreferences} />}
+      {editDish && <DishEditDialog dish={editDish} t={t} guestToken={guestToken} onClose={() => setEditDish(null)} onUpdated={(fields) => { handleDishUpdated(editDish.id, fields); setEditDish(null); }} />}
       {toast && <div className="toast" role="status">✓ {toast}</div>}
     </div>
   );
@@ -475,6 +481,9 @@ function Analyzer({ guestToken, preview, phase, analysis, analysisMode, warning,
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [restaurantConfirmed, setRestaurantConfirmed] = useState(false);
   const [retainImage, setRetainImage] = useState(false);
+  const [tasteNotes, setTasteNotes] = useState("");
+  const [dietaryNotes, setDietaryNotes] = useState("");
+  const [personalComments, setPersonalComments] = useState("");
 
   async function findRestaurants() {
     if (!location) { setRestaurantStatus(t("publish.noLocation")); return; }
@@ -506,7 +515,7 @@ function Analyzer({ guestToken, preview, phase, analysis, analysisMode, warning,
   function submit(event: FormEvent) {
     if (!authenticated) { event.preventDefault(); window.location.assign("/auth/login?context=publish&next=%2F%23capture"); return; }
     if (!ready || !selectedRestaurant || !priceKnowledge || !availabilityKnowledge) { event.preventDefault(); setRestaurantStatus(t("publish.requirements")); return; }
-    publish(event, { restaurant: selectedRestaurant, knowledge: { priceKnowledge, priceAmount: priceKnowledge === "unknown" ? undefined : Number(priceAmount), availabilityKnowledge, lastConfirmedAt: availabilityKnowledge === "historical" ? lastConfirmedAt : undefined }, retainImage, reviewConfirmed: true, restaurantConfirmed: true });
+    publish(event, { restaurant: selectedRestaurant, knowledge: { priceKnowledge, priceAmount: priceKnowledge === "unknown" ? undefined : Number(priceAmount), availabilityKnowledge, lastConfirmedAt: availabilityKnowledge === "historical" ? lastConfirmedAt : undefined }, retainImage, reviewConfirmed: true, restaurantConfirmed: true, tasteNotes: tasteNotes.trim() || undefined, dietaryNotes: dietaryNotes.trim() || undefined, personalComments: personalComments.trim() || undefined });
   }
 
   return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="analyzer-title"><div className="analyzer">
@@ -526,6 +535,9 @@ function Analyzer({ guestToken, preview, phase, analysis, analysisMode, warning,
           <label>{t("analysis.field.dietary")}<input value={analysis.dietary} onChange={(e) => update("dietary", e.target.value)} /></label>
           <label className="wide">{t("analysis.field.ingredients")}<textarea value={analysis.ingredients} onChange={(e) => update("ingredients", e.target.value)} /></label>
           <label className="wide">{t("analysis.field.description")}<textarea value={analysis.description} onChange={(e) => update("description", e.target.value)} /></label>
+          <label className="wide">{t("analysis.field.tasteNotes")}<textarea value={tasteNotes} onChange={(e) => setTasteNotes(e.target.value)} /></label>
+          <label className="wide">{t("analysis.field.dietaryNotes")}<textarea value={dietaryNotes} onChange={(e) => setDietaryNotes(e.target.value)} /></label>
+          <label className="wide">{t("analysis.field.personalComments")}<textarea value={personalComments} onChange={(e) => setPersonalComments(e.target.value)} /></label>
         </div>
         <p className="canonical-note">{t("analysis.canonicalNotice")}</p>
         <section className="publication-section"><h3>{t("publish.restaurantTitle")}</h3><p>{t("publish.restaurantHelp")}</p>

@@ -451,6 +451,7 @@ function DiscoverScreen({ onAnalyze, t, location, feed, guestToken, onHide }: { 
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
       <View style={styles.discoverCompact}>
         <Pressable onPress={() => {}}><Text style={styles.compactLocation}>{location?.locality ?? t('location.change')}</Text></Pressable>
+        <MobileNotificationButton guestToken={guestToken} t={t} />
         <Pressable style={({ pressed }) => [styles.compactAnalyze, pressed && styles.pressed]} onPress={onAnalyze}>
           <Text style={styles.compactAnalyzeText}>＋ {t('home.analyze')}</Text>
         </Pressable>
@@ -458,6 +459,18 @@ function DiscoverScreen({ onAnalyze, t, location, feed, guestToken, onHide }: { 
       {feed.length ? <View style={styles.communityFeed}>{feed.map((dish) => <CommunityDishCard key={dish.id} dish={dish} t={t} guestToken={guestToken} onHide={onHide} />)}</View> : <View style={styles.emptyFeed}><Text style={styles.emptyFeedEmoji}>♡</Text><Text style={styles.emptyFeedTitle}>{t('home.emptyTitle')}</Text><Text style={styles.emptyFeedText}>{t('home.emptyBody')}</Text><Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]} onPress={onAnalyze}><Text style={styles.primaryButtonText}>{t('home.analyze')}</Text></Pressable></View>}
     </ScrollView>
   );
+}
+
+function MobileNotificationButton({ guestToken, t }: { guestToken: string | null; t: Translator }) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<Array<{ id: string; type: string; read: boolean; createdAt: string; actorDisplayName: string | null }>>([]);
+  async function openNotifications() {
+    if (!remoteApi || !guestToken) { Alert.alert(t('notifications.title'), t('comments.signIn')); return; }
+    const response = await fetch(`${remoteApi}/api/notifications?limit=50`, { headers: { Authorization: `Session ${guestToken}` } }).catch(() => null);
+    if (response?.ok) { const payload = await response.json() as { notifications?: typeof items }; setItems(payload.notifications ?? []); setOpen(true); }
+    else Alert.alert(t('notifications.title'), t('comments.unavailable'));
+  }
+  return <><Pressable accessibilityRole="button" accessibilityLabel={t('notifications.title')} onPress={() => void openNotifications()}><Text style={styles.demoLink}>♢</Text></Pressable><Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}><View style={styles.modalBackdrop}><View style={styles.notificationSheet}><Text style={styles.sectionTitle}>{t('notifications.title')}</Text>{items.length ? items.map((item) => <Text key={item.id} style={styles.privacyText}>{item.actorDisplayName ?? t('notifications.someone')} · {t(`notifications.${item.type}` as MessageKey)}</Text>) : <Text style={styles.privacyText}>{t('notifications.empty')}</Text>}<Pressable style={styles.secondaryButton} onPress={() => setOpen(false)}><Text style={styles.secondaryButtonText}>{t('safety.cancel')}</Text></Pressable></View></View></Modal></>;
 }
 
 function ExploreScreen({ t, feed, guestToken, onHide }: { t: Translator; feed: CommunityDish[]; guestToken: string | null; onHide: (id: string) => void }) {
@@ -1415,4 +1428,6 @@ const styles = StyleSheet.create({
   pickerOptionActive: { backgroundColor: palette.burgundy, borderColor: palette.burgundy },
   pickerOptionText: { color: palette.ink, fontSize: 11, fontWeight: '800' },
   pickerOptionTextActive: { color: palette.cream },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,.45)', justifyContent: 'flex-end' },
+  notificationSheet: { backgroundColor: palette.paper, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, gap: 12, maxHeight: '70%' },
 });

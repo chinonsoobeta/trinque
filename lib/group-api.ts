@@ -3,10 +3,6 @@ import { getDb } from "@/db";
 import { groupCandidates, groupMembers, groupRsvps, groupVotes, groups } from "@/db/schema";
 import { DIETARY_LABELS, type Tier } from "@/lib/group-planning";
 
-const HARD_REASON_CODES = new Set(["over_budget", "beyond_distance", "vegetarian_unsupported", "allergen_conflict", "cuisine_unknown_or_mismatch"]);
-
-const TIER_MAP: Record<string, Tier> = { fits: "fits", needs_checking: "needs_checking", does_not_fit: "does_not_fit", eligible: "fits", review_required: "needs_checking", ineligible: "does_not_fit" };
-
 export async function groupMembership(groupId: string, userId: string) {
   const db = await getDb();
   const [membership] = await db.select().from(groupMembers).where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId))).limit(1);
@@ -15,7 +11,7 @@ export async function groupMembership(groupId: string, userId: string) {
 
 function resolveReasons(conflicts: string[]): { tier: Tier; explanation: string; reasons: string[] } {
   if (!conflicts.length) return { tier: "fits", explanation: "Fits the plan", reasons: [] };
-  const hard = conflicts.filter((code) => HARD_REASON_CODES.has(code));
+  const hard = conflicts.filter((code) => code.split(":", 1)[0] !== "price_unknown");
   if (hard.length) return { tier: "does_not_fit", explanation: "Does not fit the plan", reasons: hard.map(humanReason) };
   return { tier: "needs_checking", explanation: "Needs checking", reasons: conflicts.map((code) => humanReason(code)) };
 }

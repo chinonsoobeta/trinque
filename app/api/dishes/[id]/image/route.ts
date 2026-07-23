@@ -17,10 +17,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   if (!dish) return Response.json({ error: "published_dish_not_found" }, { status: 404 });
   let imageKey: string | null = null;
   try { imageKey = retainImage === true ? await storeDishImage(imageDataUrl, identity.id) : null; } catch { return Response.json({ error: "invalid_image" }, { status: 422 }); }
-  if (imageKey) {
-    if (dish.imageKey) await deleteDishImage(dish.imageKey);
-    await db.update(publishedDishes).set({ imageKey }).where(and(eq(publishedDishes.id, id), eq(publishedDishes.ownerId, identity.id)));
-  }
+  if (dish.imageKey && imageKey !== dish.imageKey) await deleteDishImage(dish.imageKey);
+  await db.update(publishedDishes).set({ imageKey }).where(and(eq(publishedDishes.id, id), eq(publishedDishes.ownerId, identity.id)));
   return Response.json({ imageUrl: imageKey ? `/api/media/${imageKey}` : null });
 }
 

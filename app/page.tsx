@@ -30,15 +30,17 @@ type MatchResult = { kind: "dish" | "restaurant_alternative"; id: string; dishNa
 type MatchTiers = { confirmedNearbyDishes: MatchResult[]; communityOrInferredDishes: MatchResult[]; restaurantLevelAlternatives: MatchResult[] };
 type PublishRestaurant = { provider: "google" | "community"; providerPlaceId?: string | null; name: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: NormalizedLocation["countryCode"]; address: string; currencyCode: string };
 type PublicationMetadata = { restaurant: PublishRestaurant; knowledge: { priceKnowledge: "unknown" | "exact" | "approximate"; priceAmount?: number; availabilityKnowledge: "unknown" | "recently_confirmed" | "historical"; lastConfirmedAt?: string }; retainImage: boolean; reviewConfirmed: true; restaurantConfirmed: true };
-type PublishedDish = Analysis & { id: string; sourceMode: "live" | "demo"; imageUrl?: string | null; localPreview?: string; provenance?: string; verificationStatus?: string; availabilityKnowledge?: string; contributorLabel?: string; isOwner?: boolean; ownerId?: string; restaurant?: { name: string } | null; caption?: string; tasteNotes?: string; dietaryNotes?: string; personalComments?: string; locationTag?: string; moderationStatus?: string };
+type PublishedDish = Analysis & { id: string; sourceMode: "live" | "demo"; imageUrl?: string | null; localPreview?: string; provenance?: string; verificationStatus?: string; availabilityKnowledge?: string; contributorLabel?: string; isOwner?: boolean; ownerId?: string; isSaved?: boolean; restaurant?: { name: string } | null; caption?: string; tasteNotes?: string; dietaryNotes?: string; personalComments?: string; locationTag?: string; moderationStatus?: string };
 type GroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; tier: "fits" | "needs_checking" | "does_not_fit"; explanation: string; reasons: string[]; conflicts: string[]; kind: "published_dish" | "provider_restaurant" | "seed_demo"; provenance?: string | null; verificationStatus?: string | null; currentAvailabilityConfirmed: boolean; dietaryCaveat: string };
-type GroupSnapshot = { id: string; name: string; eventTime: string; eventLocalDate: string | null; eventLocalTime: string | null; neighborhood: string; budgetMax: number; maxDistanceKm: number; distanceUnit: "metric" | "imperial"; allergies: string[]; dietaryRequirements: string[]; cuisineTypes: string[]; inviteCode: string; inviteExpiresAt: string | null; inviteRevokedAt: string | null; status: "voting" | "finalized"; selectedCandidateId: string | null; candidates: GroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number>; memberCount: number; viewerRole: "owner" | "participant"; viewerVote: string | null; viewerRsvp: string | null; timeZone: string | null; currencyCode: string | null; locale: string | null; locality: string | null; countryCode: string | null };
+type GroupSnapshot = { id: string; name: string; eventTime: string; eventLocalDate: string | null; eventLocalTime: string | null; neighborhood: string; budgetMax: number; maxDistanceKm: number; distanceUnit: "metric" | "imperial"; allergies: string[]; dietaryRequirements: string[]; cuisineTypes: string[]; inviteCode: string; inviteExpiresAt: string | null; inviteRevokedAt: string | null; status: "voting" | "finalized"; selectedCandidateId: string | null; candidates: GroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number>; memberCount: number; viewerRole: "owner" | "participant"; viewerVote: string | null; viewerRsvp: string | null; timeZone: string | null; currencyCode: string | null; locale: string | null; locality: string | null; administrativeRegion?: string | null; countryCode: string | null; latitude?: number | null; longitude?: number | null };
 type Translator = (key: MessageKey, values?: Record<string, string | number>) => string;
 type AnalyticsEvent = "analysis_started" | "analysis_completed" | "analysis_failed" | "analysis_corrected" | "dish_published" | "match_opened" | "group_created" | "invite_joined" | "vote_cast" | "plan_finalized" | "rsvp_submitted";
 type FeedbackReason = "wrong_identification" | "stale_dish" | "closed_restaurant";
 
 function groupConflictLabel(t: Translator, reason: string): string {
-  return reason;
+  const [code, detail = ""] = reason.split(":", 2);
+  const keys: Record<string, MessageKey> = { price_unknown: "group.conflict.priceUnknown", over_budget: "group.conflict.overBudget", beyond_distance: "group.conflict.beyondDistance", vegetarian_unknown: "group.conflict.vegetarianUnknown", vegetarian_unsupported: "group.conflict.vegetarianUnsupported", allergen_unknown: "group.conflict.allergenUnknown", allergen_conflict: "group.conflict.allergenConflict", cuisine_unknown_or_mismatch: "group.conflict.cuisineUnknownOrMismatch" };
+  return keys[code] ? t(keys[code], { allergen: detail }) : reason;
 }
 
 function groupCandidateCopy(t: Translator, candidate: GroupCandidate) {
@@ -271,6 +273,19 @@ export default function Home() {
         .catch(() => flash(t("save.offline")));
     }
   }
+  function togglePublishedSaved(id: string) {
+    if (!authenticated) { window.location.assign("/auth/login?context=save"); return; }
+    const numericId = Number(id);
+    if (Number.isFinite(numericId)) { toggleSaved(numericId); return; }
+    if (!guestToken) return;
+    const current = communityFeed.find((dish) => dish.id === id)?.isSaved ?? false;
+    setCommunityFeed((items) => items.map((dish) => dish.id === id ? { ...dish, isSaved: !current } : dish));
+    void fetch("/api/saves", { method: "POST", headers: { Authorization: `Guest ${guestToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ dishId: id, saved: !current }) }).then((response) => { if (!response.ok) { setCommunityFeed((items) => items.map((dish) => dish.id === id ? { ...dish, isSaved: current } : dish)); flash(t("save.offline")); } });
+  }
+  function togglePublishedLike(id: string) {
+    if (!authenticated || !guestToken) { window.location.assign(`/auth/login?next=${encodeURIComponent(window.location.pathname)}`); return; }
+    void fetch(`/api/dishes/${encodeURIComponent(id)}/like`, { method: "POST", headers: { Authorization: `Guest ${guestToken}` } }).then((response) => { if (!response.ok) flash(t("error.generic")); });
+  }
   async function analyze(imageDataUrl?: string, demo = false) {
     const startedAt = performance.now();
     trackAnalytics("analysis_started", { mode: demo ? "demo" : "live" });
@@ -373,8 +388,8 @@ export default function Home() {
             ) : communityFeed.length ? (
               <div className="feed-list">
                 {communityFeed.map((dish) => {
-                  const feedDish: FeedDish = { id: dish.id, name: dish.name, description: dish.description, caption: dish.caption, cuisine: dish.cuisine, confidence: dish.confidence, imageUrl: dish.imageUrl, localPreview: dish.localPreview, provenance: dish.provenance, verificationStatus: dish.verificationStatus, availabilityKnowledge: dish.availabilityKnowledge, contributorLabel: dish.contributorLabel, authorLabel: dish.contributorLabel, authorInitials: dish.contributorLabel?.slice(0,2).toUpperCase(), isOwner: dish.isOwner, sourceMode: dish.sourceMode, restaurant: dish.restaurant, tasteNotes: dish.tasteNotes, dietaryNotes: dish.dietaryNotes, personalComments: dish.personalComments, contributorId: dish.ownerId };
-                  return <FeedCard key={dish.id} dish={feedDish} t={t} onDelete={dish.isOwner ? (id, img) => deletePublishedDish(id, img) : undefined} onEdit={dish.isOwner ? () => setEditDish(feedDish) : undefined} />;
+                  const feedDish: FeedDish = { id: dish.id, name: dish.name, description: dish.description, caption: dish.caption, cuisine: dish.cuisine, confidence: dish.confidence, imageUrl: dish.imageUrl, localPreview: dish.localPreview, provenance: dish.provenance, verificationStatus: dish.verificationStatus, availabilityKnowledge: dish.availabilityKnowledge, contributorLabel: dish.contributorLabel, authorLabel: dish.contributorLabel, authorInitials: dish.contributorLabel?.slice(0,2).toUpperCase(), isOwner: dish.isOwner, isSaved: dish.isSaved, sourceMode: dish.sourceMode, restaurant: dish.restaurant, tasteNotes: dish.tasteNotes, dietaryNotes: dish.dietaryNotes, personalComments: dish.personalComments, contributorId: dish.ownerId };
+                  return <FeedCard key={dish.id} dish={feedDish} t={t} onLike={togglePublishedLike} onSave={togglePublishedSaved} onDelete={dish.isOwner ? (id, img) => deletePublishedDish(id, img) : undefined} onEdit={dish.isOwner ? () => setEditDish(feedDish) : undefined} />;
                 })}
               </div>
             ) : (
@@ -429,8 +444,8 @@ export default function Home() {
           {communityFeed.length ? (
             <div className="feed-list">
               {communityFeed.map((dish) => {
-                const feedDish: FeedDish = { id: dish.id, name: dish.name, description: dish.description, caption: dish.caption, cuisine: dish.cuisine, confidence: dish.confidence, imageUrl: dish.imageUrl, localPreview: dish.localPreview, provenance: dish.provenance, verificationStatus: dish.verificationStatus, availabilityKnowledge: dish.availabilityKnowledge, contributorLabel: dish.contributorLabel, authorLabel: dish.contributorLabel, authorInitials: dish.contributorLabel?.slice(0,2).toUpperCase(), isOwner: dish.isOwner, sourceMode: dish.sourceMode, restaurant: dish.restaurant, tasteNotes: dish.tasteNotes, dietaryNotes: dish.dietaryNotes, personalComments: dish.personalComments, contributorId: dish.ownerId };
-                return <FeedCard key={dish.id} dish={feedDish} t={t} onDelete={dish.isOwner ? (id, img) => deletePublishedDish(id, img) : undefined} onEdit={dish.isOwner ? () => setEditDish(feedDish) : undefined} />;
+                const feedDish: FeedDish = { id: dish.id, name: dish.name, description: dish.description, caption: dish.caption, cuisine: dish.cuisine, confidence: dish.confidence, imageUrl: dish.imageUrl, localPreview: dish.localPreview, provenance: dish.provenance, verificationStatus: dish.verificationStatus, availabilityKnowledge: dish.availabilityKnowledge, contributorLabel: dish.contributorLabel, authorLabel: dish.contributorLabel, authorInitials: dish.contributorLabel?.slice(0,2).toUpperCase(), isOwner: dish.isOwner, isSaved: dish.isSaved, sourceMode: dish.sourceMode, restaurant: dish.restaurant, tasteNotes: dish.tasteNotes, dietaryNotes: dish.dietaryNotes, personalComments: dish.personalComments, contributorId: dish.ownerId };
+                return <FeedCard key={dish.id} dish={feedDish} t={t} onLike={togglePublishedLike} onSave={togglePublishedSaved} onDelete={dish.isOwner ? (id, img) => deletePublishedDish(id, img) : undefined} onEdit={dish.isOwner ? () => setEditDish(feedDish) : undefined} />;
               })}
             </div>
           ) : (
@@ -682,7 +697,7 @@ function GroupPlanner({ flash, t, language, track }: { flash: (text: string) => 
     setCuisineTypes(group.cuisineTypes.join(", "));
     if (group.eventLocalDate) setEventLocalDate(group.eventLocalDate);
     if (group.eventLocalTime) setEventLocalTime(group.eventLocalTime);
-    setGroupLocation(group.locality && group.countryCode ? { latitude: 0, longitude: 0, locality: group.locality, countryCode: group.countryCode, administrativeRegion: "", language, measurementSystem: "metric", timeZone: group.timeZone ?? "", locale: group.locale ?? language, currencyCode: group.currencyCode ?? "", source: "manual" } : null);
+    setGroupLocation(group.locality && group.countryCode && typeof group.latitude === "number" && typeof group.longitude === "number" ? { latitude: group.latitude, longitude: group.longitude, locality: group.locality, countryCode: group.countryCode, administrativeRegion: group.administrativeRegion ?? "", language, measurementSystem: "metric", timeZone: group.timeZone ?? "", locale: group.locale ?? language, currencyCode: group.currencyCode ?? "", source: "manual" } : null);
     setGroup(null);
   }
 
@@ -702,7 +717,7 @@ function GroupPlanner({ flash, t, language, track }: { flash: (text: string) => 
     const canVote = candidate.tier !== "does_not_fit" && group.status === "voting";
     const tierLabel = candidate.tier === "fits" ? t("group.fitEligible") : candidate.tier === "needs_checking" ? t("group.needsCheck") : t("group.hardConflict");
     const isWinner = candidate.candidateId === group.selectedCandidateId;
-    return <article className={`vote-card${isWinner ? " winner" : ""}${candidate.tier === "does_not_fit" ? " ineligible" : ""}`} key={candidate.candidateId}><div className="vote-image" style={candidate.image ? { backgroundImage: `url(${candidate.image})` } : undefined}><span>{candidate.tier === "fits" ? `#${index + 1}` : "!"}</span></div><div className="vote-copy"><div><span>{tierLabel}</span><h3>{candidate.restaurant}</h3><p>{candidate.name} · {candidate.price} · {distance}</p>{candidate.reasons.map((reason, i) => <small key={i}>{reason}</small>)}{candidate.kind === "provider_restaurant" ? <small>{t("match.restaurantReason")}</small> : <small>{`${t(`provenance.${candidate.provenance ?? "community_submitted"}` as MessageKey)} · ${t(`verification.${candidate.verificationStatus ?? "unverified"}` as MessageKey)}`} · {candidate.currentAvailabilityConfirmed ? t("availability.confirmed") : t("availability.unknown")}</small>}<small>{candidate.dietaryCaveat === "provider_information_unconfirmed" ? t("group.providerCaveat") : t("analysis.warning")}</small></div>{canVote && <button disabled={busy || group.status === "finalized"} onClick={() => void groupAction("vote", { candidateId: candidate.candidateId })}>▲ <b>{group.votes[candidate.candidateId] ?? 0}</b></button>}</div></article>;
+    return <article className={`vote-card${isWinner ? " winner" : ""}${candidate.tier === "does_not_fit" ? " ineligible" : ""}`} key={candidate.candidateId}><div className="vote-image" style={candidate.image ? { backgroundImage: `url(${candidate.image})` } : undefined}><span>{candidate.tier === "fits" ? `#${index + 1}` : "!"}</span></div><div className="vote-copy"><div><span>{tierLabel}</span><h3>{candidate.restaurant}</h3><p>{candidate.name} · {candidate.price} · {distance}</p>{candidate.reasons.map((reason, i) => <small key={i}>{groupConflictLabel(t, reason)}</small>)}{candidate.kind === "provider_restaurant" ? <small>{t("match.restaurantReason")}</small> : <small>{`${t(`provenance.${candidate.provenance ?? "community_submitted"}` as MessageKey)} · ${t(`verification.${candidate.verificationStatus ?? "unverified"}` as MessageKey)}`} · {candidate.currentAvailabilityConfirmed ? t("availability.confirmed") : t("availability.unknown")}</small>}<small>{candidate.dietaryCaveat === "provider_information_unconfirmed" ? t("group.providerCaveat") : t("analysis.warning")}</small></div>{canVote && <button disabled={busy || group.status === "finalized"} onClick={() => void groupAction("vote", { candidateId: candidate.candidateId })}>▲ <b>{group.votes[candidate.candidateId] ?? 0}</b></button>}</div></article>;
   }
   return <section className="group-page">
     <div className="group-intro"><div className="eyebrow"><span>♢</span> {t("group.eyebrow")}</div><h1>{group.status === "finalized" ? t("group.finalTitle") : t("group.voteTitle")}</h1><p>{t("group.constraints")}</p>{placesUnavailable && <p className="location-status warning">{t("match.providerUnavailable")}</p>}<div className="members"><span style={{ background: colors[0] }}>{t("group.memberCount", { count: group.memberCount })}</span></div></div>

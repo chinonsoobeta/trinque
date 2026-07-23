@@ -16,7 +16,7 @@ export const runtime = "edge";
 
 export async function GET(request: Request) {
   const identity = await requireIdentity(request);
-  if (!identity) return Response.json({ error: "Guest session required." }, { status: 401 });
+  if (!identity) return Response.json({ error: "authentication_required", code: "authentication_required" }, { status: 401 });
   const db = await getDb();
   const [latest] = await db.select({ id: groups.id }).from(groupMembers).innerJoin(groups, eq(groupMembers.groupId, groups.id)).where(eq(groupMembers.userId, identity.id)).orderBy(desc(groupMembers.joinedAt)).limit(1);
   return Response.json({ group: latest ? await groupSnapshot(latest.id, identity.id) : null });
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     const code = authenticationError?.status === 403 && authenticationError.message === "Complete your profile first."
       ? "profile_incomplete"
       : "authentication_required";
-    return Response.json({ error: authenticationError?.message ?? "authentication_required", code }, { status: authenticationError?.status ?? 503 });
+    return Response.json({ error: code, code }, { status: authenticationError?.status ?? 503 });
   }
   const body = await request.json() as { name?: string; eventTime?: string; eventLocalDate?: string; eventLocalTime?: string; budgetMax?: number; maxDistanceKm?: number; maxDistance?: number; distanceUnit?: "metric" | "imperial"; allergies?: string[]; dietaryRequirements?: string[]; cuisineTypes?: string[]; location?: NormalizedLocation; language?: SupportedLanguage };
   if (!body.location || !body.language || !SUPPORTED_LANGUAGES.includes(body.language)) return Response.json({ error: "normalized_group_location_required" }, { status: 400 });
@@ -42,8 +42,8 @@ export async function POST(request: Request) {
   const constraints = { budgetMax: clamp(Math.round(Number(body.budgetMax) || 35), 10, 500), maxDistanceKm: clamp(Math.round(requestedDistance * (distanceUnit === "imperial" ? 1.609344 : 1)), 1, 80), allergies: (body.allergies ?? []).map((item) => item.trim()).filter(Boolean).slice(0, 10), dietaryRequirements: (body.dietaryRequirements ?? []).filter((item): item is DietaryRequirement => DIETARY_REQUIREMENTS.includes(item as DietaryRequirement)).slice(0, DIETARY_REQUIREMENTS.length), cuisineTypes: (body.cuisineTypes ?? []).map((item) => item.trim().toLocaleLowerCase()).filter(Boolean).slice(0, 10) };
   let eventTime: Date;
   try { eventTime = body.eventLocalDate && body.eventLocalTime ? instantForLocalTime(body.eventLocalDate, body.eventLocalTime, location.timeZone) : new Date(body.eventTime ?? Date.now() + 86400000); }
-  catch { return Response.json({ error: "Valid event time required." }, { status: 400 }); }
-  if (Number.isNaN(eventTime.getTime())) return Response.json({ error: "Valid event time required." }, { status: 400 });
+  catch { return Response.json({ error: "invalid_event_time", code: "invalid_event_time" }, { status: 400 }); }
+  if (Number.isNaN(eventTime.getTime())) return Response.json({ error: "invalid_event_time", code: "invalid_event_time" }, { status: 400 });
   const db = await getDb();
   const dishRows = await db.select({ dish: publishedDishes, restaurant: restaurants }).from(publishedDishes).innerJoin(restaurants, eq(publishedDishes.restaurantId, restaurants.id)).where(eq(publishedDishes.countryCode, location.countryCode)).orderBy(desc(publishedDishes.createdAt)).limit(200);
   const sources: GroupCandidateSource[] = dishRows.flatMap(({ dish, restaurant }) => {

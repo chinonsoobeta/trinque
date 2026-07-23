@@ -27,7 +27,7 @@ import {
   useColorScheme,
 } from 'react-native';
 
-type Tab = 'Discover' | 'Groups' | 'Saved' | 'Profile';
+type Tab = 'Discover' | 'Explore' | 'Groups' | 'Saved' | 'Profile';
 type AnalyzerPhase = 'choose' | 'analyzing' | 'review' | 'error' | 'published';
 type ThemePreference = 'system' | 'light' | 'dark';
 type MeasurementSystem = 'metric' | 'imperial';
@@ -105,8 +105,8 @@ const dishes: Dish[] = [];
 
 const navItems: Array<{ tab: Tab; icon: string }> = [
   { tab: 'Discover', icon: '⌂' },
-  { tab: 'Groups', icon: '◌' },
-  { tab: 'Saved', icon: '♡' },
+  { tab: 'Explore', icon: '◉' },
+  { tab: 'Groups', icon: '♢' },
   { tab: 'Profile', icon: '◎' },
 ];
 
@@ -401,9 +401,10 @@ export default function App() {
         <StatusBar style={effectiveTheme === 'dark' ? 'light' : 'dark'} />
         <View style={styles.appShell}>
           {tab === 'Discover' && <DiscoverScreen onAnalyze={openAnalyzer} t={t} location={location} feed={communityFeed} guestToken={canWrite ? guestToken : null} onHide={(id) => setCommunityFeed((current) => current.filter((dish) => dish.id !== id))} />}
+          {tab === 'Explore' && <ExploreScreen t={t} feed={communityFeed} guestToken={canWrite ? guestToken : null} onHide={(id) => setCommunityFeed((current) => current.filter((dish) => dish.id !== id))} />}
           {tab === 'Groups' && <GroupsScreen guestToken={canWrite ? guestToken : null} canWrite={canWrite} onSignIn={() => setTab('Profile')} t={t} location={location} language={language} inviteCode={pendingInvite} inviteHandled={inviteHandled} track={trackAnalytics} />}
           {tab === 'Saved' && <SavedScreen dishes={savedDishes} onSave={toggleSaved} onDiscover={() => setTab('Discover')} t={t} />}
-          {tab === 'Profile' && <ProfileScreen guestToken={guestToken} identity={identity} onboardingComplete={onboardingComplete} onAuthenticated={(token, nextIdentity, complete) => { setGuestToken(token); setIdentity(nextIdentity); setOnboardingComplete(complete); }} onSignedOut={() => { setIdentity(null); setOnboardingComplete(false); setGuestToken(null); }} onOnboardingComplete={() => setOnboardingComplete(true)} t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} persist={persistPreferences} />}
+          {tab === 'Profile' && <ProfileScreen guestToken={guestToken} identity={identity} onboardingComplete={onboardingComplete} onAuthenticated={(token, nextIdentity, complete) => { setGuestToken(token); setIdentity(nextIdentity); setOnboardingComplete(complete); }} onSignedOut={() => { setIdentity(null); setOnboardingComplete(false); setGuestToken(null); }} onOnboardingComplete={() => setOnboardingComplete(true)} t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} persist={persistPreferences} savedCount={savedDishes.length} onSaved={() => setTab('Saved')} />}
           <TabBar active={tab} onSelect={setTab} onAnalyze={openAnalyzer} t={t} />
         </View>
         <AnalyzerModal
@@ -448,25 +449,33 @@ export default function App() {
 function DiscoverScreen({ onAnalyze, t, location, feed, guestToken, onHide }: { onAnalyze: () => void; t: Translator; location: MobileLocation | null; feed: CommunityDish[]; guestToken: string | null; onHide: (id: string) => void }) {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
-      <Header eyebrow={location ? `${location.locality} · ${location.countryCode}` : t('location.change')} />
-      <View style={styles.hero}>
-        <Text style={styles.heroKicker}>{t('home.eyebrow').toUpperCase()}</Text>
-        <Text style={styles.heroTitle}>{t('home.title')}</Text>
-        <Text style={styles.heroBody}>{t('home.body')}</Text>
-        <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]} onPress={onAnalyze}>
-          <Text style={styles.primaryButtonIcon}>⌁</Text>
-          <View>
-            <Text style={styles.primaryButtonText}>{t('home.analyze')}</Text>
-            <Text style={styles.primaryButtonSubtext}>{t('analysis.review')}</Text>
-          </View>
-          <Text style={styles.primaryArrow}>→</Text>
+      <View style={styles.discoverCompact}>
+        <Pressable onPress={() => {}}><Text style={styles.compactLocation}>{location?.locality ?? t('location.change')}</Text></Pressable>
+        <Pressable style={({ pressed }) => [styles.compactAnalyze, pressed && styles.pressed]} onPress={onAnalyze}>
+          <Text style={styles.compactAnalyzeText}>＋ {t('home.analyze')}</Text>
         </Pressable>
       </View>
+      {feed.length ? <View style={styles.communityFeed}>{feed.map((dish) => <CommunityDishCard key={dish.id} dish={dish} t={t} guestToken={guestToken} onHide={onHide} />)}</View> : <View style={styles.emptyFeed}><Text style={styles.emptyFeedEmoji}>♡</Text><Text style={styles.emptyFeedTitle}>{t('home.emptyTitle')}</Text><Text style={styles.emptyFeedText}>{t('home.emptyBody')}</Text><Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]} onPress={onAnalyze}><Text style={styles.primaryButtonText}>{t('home.analyze')}</Text></Pressable></View>}
+    </ScrollView>
+  );
+}
 
-      <SectionHeading kicker={t('home.curated', { location: location?.locality ?? '—' }).toUpperCase()} title={t('home.gather')} action="" />
-      <View style={styles.seededNotice}><Text style={styles.seededNoticeText}>{t('home.communityFeedNotice')}</Text></View>
-      {feed.length ? <View style={styles.communityFeed}>{feed.map((dish) => <CommunityDishCard key={dish.id} dish={dish} t={t} guestToken={guestToken} onHide={onHide} />)}</View> : <View style={styles.emptyFeed}><Text style={styles.emptyFeedText}>{t('match.noResults')}</Text></View>}
-
+function ExploreScreen({ t, feed, guestToken, onHide }: { t: Translator; feed: CommunityDish[]; guestToken: string | null; onHide: (id: string) => void }) {
+  const [exploreTab, setExploreTab] = useState<'public' | 'following' | 'people'>('public');
+  return (
+    <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
+      <View style={styles.sectionHeading}>
+        <Text style={styles.sectionKicker}>{t('nav.explore').toUpperCase()}</Text>
+        <Text style={styles.sectionTitle}>{t('home.title')}</Text>
+      </View>
+      <View style={styles.exploreTabs}>
+        {(['public', 'following', 'people'] as const).map((item) => (
+          <Pressable key={item} style={[styles.exploreTab, exploreTab === item && styles.exploreTabActive]} onPress={() => setExploreTab(item)}>
+            <Text style={[styles.exploreTabText, exploreTab === item && styles.exploreTabTextActive]}>{t(`nav.${item}` as MessageKey)}</Text>
+          </Pressable>
+        ))}
+      </View>
+      {feed.length ? <View style={styles.communityFeed}>{feed.map((dish) => <CommunityDishCard key={dish.id} dish={dish} t={t} guestToken={guestToken} onHide={onHide} />)}</View> : <View style={styles.emptyFeed}><Text style={styles.emptyFeedEmoji}>◉</Text><Text style={styles.emptyFeedTitle}>{t('home.emptyTitle')}</Text><Text style={styles.emptyFeedText}>{t('home.emptyBody')}</Text></View>}
     </ScrollView>
   );
 }
@@ -730,7 +739,7 @@ function MobileSafetyCenter({ token, t, language }: { token: string; t: Translat
   return <View style={styles.preferenceCard}><Text style={styles.preferenceKicker}>{t('safety.manage').toUpperCase()}</Text>{lists.map((list) => <View key={list.key}><Text style={styles.preferenceTitle}>{t(list.title)}</Text>{choices[list.key].length ? choices[list.key].map((item) => <View key={item.id} style={styles.safetyChoiceRow}><View><Text style={styles.safetyTitle}>{item.label}</Text>{item.handle ? <Text style={styles.safetyBody}>@{item.handle}</Text> : null}</View><Pressable onPress={() => void undo(list.action, item.id)}><Text style={styles.demoLink}>{t(list.undo)}</Text></Pressable></View>) : <Text style={styles.privacyText}>{t('safety.none')}</Text>}</View>)}<Text style={styles.preferenceTitle}>{t('safety.reports')}</Text>{reports.length ? reports.map((report) => <View key={report.id} style={styles.safetyChoiceRow}><View><Text style={styles.safetyTitle}>{t(`safety.reason.${report.reason}`)}</Text><Text style={styles.safetyBody}>{new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(report.createdAt))}</Text></View><Text style={styles.safetyBody}>{t(report.status === 'open' ? 'safety.open' : 'safety.resolved')}</Text></View>) : <Text style={styles.privacyText}>{t('safety.none')}</Text>}</View>;
 }
 
-function ProfileScreen({ guestToken, identity, onboardingComplete, onAuthenticated, onSignedOut, onOnboardingComplete, t, language, theme, measurementSystem, location, persist }: { guestToken: string | null; identity: MobileIdentity | null; onboardingComplete: boolean; onAuthenticated: (token: string, identity: MobileIdentity, onboardingComplete: boolean) => void; onSignedOut: () => void; onOnboardingComplete: () => void; t: Translator; language: UiLanguage; theme: ThemePreference; measurementSystem: MeasurementSystem; location: MobileLocation | null; persist: (next: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: MobileLocation | null }) => Promise<void> }) {
+function ProfileScreen({ guestToken, identity, onboardingComplete, onAuthenticated, onSignedOut, onOnboardingComplete, t, language, theme, measurementSystem, location, persist, savedCount, onSaved }: { guestToken: string | null; identity: MobileIdentity | null; onboardingComplete: boolean; onAuthenticated: (token: string, identity: MobileIdentity, onboardingComplete: boolean) => void; onSignedOut: () => void; onOnboardingComplete: () => void; t: Translator; language: UiLanguage; theme: ThemePreference; measurementSystem: MeasurementSystem; location: MobileLocation | null; persist: (next: { language?: UiLanguage; theme?: ThemePreference; measurementSystem?: MeasurementSystem; location?: MobileLocation | null }) => Promise<void>; savedCount: number; onSaved: () => void }) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<MobileLocationSuggestion[]>([]);
   const [busy, setBusy] = useState(false);
@@ -805,6 +814,11 @@ function ProfileScreen({ guestToken, identity, onboardingComplete, onAuthenticat
         <View style={styles.profileAvatar}><Text style={styles.profileInitials}>{initials}</Text></View>
         <Text style={styles.profileName}>{authenticated ? identity?.displayName : t('auth.guest')}</Text><Text style={styles.profileHandle}>{location ? `${location.locality} · ${location.countryCode}` : t('location.change')}</Text>
       </View>
+      <Pressable style={styles.savedSection} onPress={onSaved}>
+        <Text style={styles.savedIcon}>♡</Text>
+        <View><Text style={styles.savedTitle}>{t('nav.saved')}</Text><Text style={styles.savedCount}>{savedCount} {t('nav.saved')}</Text></View>
+        <Text style={styles.savedArrow}>→</Text>
+      </Pressable>
       {!authenticated ? <MobileAuthPanel t={t} onAuthenticated={onAuthenticated} /> : !onboardingComplete && guestToken ? <MobileOnboarding token={guestToken} t={t} language={language} location={location} onComplete={onOnboardingComplete} /> : null}
       {authenticated ? <Pressable style={styles.secondaryButtonStandalone} onPress={() => void signOut()}><Text style={styles.secondaryButtonText}>{t('auth.signOut')}</Text></Pressable> : null}
       <View style={styles.preferenceCard}>
@@ -862,7 +876,7 @@ function TabBar({ active, onSelect, onAnalyze, t }: { active: Tab; onSelect: (ta
   return (
     <View style={styles.tabBar}>
       {navItems.slice(0, 2).map((item) => <TabButton key={item.tab} {...item} active={active === item.tab} onPress={() => onSelect(item.tab)} t={t} />)}
-      <Pressable accessibilityLabel={t('home.analyze')} style={({ pressed }) => [styles.cameraButton, pressed && styles.pressed]} onPress={onAnalyze}><Text style={styles.cameraButtonIcon}>⌁</Text></Pressable>
+      <Pressable accessibilityLabel={t('nav.postDish')} style={({ pressed }) => [styles.cameraButton, pressed && styles.pressed]} onPress={onAnalyze}><Text style={styles.cameraButtonIcon}>⌁</Text></Pressable>
       {navItems.slice(2).map((item) => <TabButton key={item.tab} {...item} active={active === item.tab} onPress={() => onSelect(item.tab)} t={t} />)}
     </View>
   );
@@ -1283,4 +1297,21 @@ const styles = StyleSheet.create({
   communityDishDescription: { color: palette.muted, fontSize: 11, lineHeight: 16 },
   communityDishMeta: { color: palette.terracotta, fontSize: 9, lineHeight: 13 },
   communityDishImage: { width: 82, height: 82, borderRadius: 12, backgroundColor: palette.blush },
+
+  discoverCompact: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 4 },
+  compactLocation: { color: palette.burgundy, fontWeight: '700', fontSize: 13 },
+  compactAnalyze: { backgroundColor: palette.burgundy, borderRadius: 20, paddingVertical: 8, paddingHorizontal: 16 },
+  compactAnalyzeText: { color: palette.cream, fontWeight: '700', fontSize: 12 },
+  emptyFeedEmoji: { fontSize: 28, textAlign: 'center', marginBottom: 8 },
+  emptyFeedTitle: { color: palette.ink, fontFamily: Platform.select({ ios: 'Georgia-Bold', default: 'serif' }), fontSize: 17, textAlign: 'center', marginBottom: 4 },
+  exploreTabs: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  exploreTab: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: palette.line },
+  exploreTabActive: { backgroundColor: palette.burgundy, borderColor: palette.burgundy },
+  exploreTabText: { color: palette.ink, fontSize: 12, fontWeight: '600' },
+  exploreTabTextActive: { color: palette.cream },
+  savedSection: { flexDirection: 'row', alignItems: 'center', backgroundColor: palette.paper, borderWidth: 1, borderColor: palette.line, borderRadius: 15, padding: 14, marginBottom: 12 },
+  savedIcon: { fontSize: 20, marginRight: 10 },
+  savedTitle: { color: palette.ink, fontWeight: '700', fontSize: 14 },
+  savedCount: { color: palette.muted, fontSize: 11, marginTop: 2 },
+  savedArrow: { marginLeft: 'auto', color: palette.muted, fontSize: 16 },
 });

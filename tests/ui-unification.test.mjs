@@ -23,8 +23,8 @@ test("discover removes fabricated social proof and invalid location fallback", a
   assert.doesNotMatch(home, /18 locals agree/);
   assert.doesNotMatch(home, /location\?\.locality \?\? "—"/);
   assert.doesNotMatch(home, /new Set\(\[2\]\)/);
-  assert.match(home, /t\("home\.gather"\)/);
-  assert.match(home, /t\("provenance\.seed_demo"\)/);
+  assert.match(home, /t\("location\.change"\)/);
+  assert.match(home, /FeedCard/);
 });
 
 test("social feeds use the shared image-first dish card and preserve pagination contracts", async () => {

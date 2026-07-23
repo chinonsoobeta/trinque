@@ -10,6 +10,7 @@ import { LANGUAGE_LABEL_KEYS, resolveUiLanguage, translate, UI_LANGUAGES, type M
 import { AuthControls } from "@/components/AuthControls";
 import { NotificationBell } from "@/components/NotificationBell";
 import { useAuth } from "@/components/AuthProvider";
+import { FeedCard, type FeedDish } from "@/components/FeedCard";
 
 type Dish = {
   id: number; name: string; restaurant: string; area: string; distance: string;
@@ -64,7 +65,8 @@ const emptyMatchTiers: MatchTiers = { confirmedNearbyDishes: [], communityOrInfe
 
 export default function Home() {
   const { authenticated } = useAuth();
-  const [view, setView] = useState<"discover" | "groups" | "saved">("discover");
+  const [view, setView] = useState<"discover" | "explore" | "groups" | "saved">("discover");
+  const [exploreTab, setExploreTab] = useState<"public" | "following" | "people">("public");
   const [filter, setFilter] = useState("all");
   const [saved, setSaved] = useState<Set<number>>(new Set());
   const [modal, setModal] = useState(false);
@@ -343,7 +345,7 @@ export default function Home() {
       <header className="topbar">
         <button className="brand" onClick={() => setView("discover")} aria-label={t("home.title")}><span>T</span>Trinque</button>
         <nav className="desktop-nav" aria-label={t("nav.discover")}>
-          {(["discover", "groups", "saved"] as const).map((item) => (
+          {(["discover", "explore", "groups", "saved"] as const).map((item) => (
             <button key={item} className={view === item ? "nav active" : "nav"} onClick={() => setView(item)}>
               {t(`nav.${item}`)}{item === "saved" && <i>{saved.size}</i>}
             </button>
@@ -353,57 +355,89 @@ export default function Home() {
       </header>
 
       <main>
-        {view === "groups" ? (
+        {view === "explore" ? (
+          <section className="discover-section" style={{ paddingTop: 0 }}>
+            <div className="section-heading">
+              <div><span className="kicker">{t("nav.explore")}</span><h2>{t("home.title")}</h2></div>
+              <div className="filters" role="group" aria-label={t("nav.explore")}>
+                <button className={exploreTab === "public" ? "active" : ""} onClick={() => setExploreTab("public")}>{t("nav.public")}</button>
+                <button className={exploreTab === "following" ? "active" : ""} onClick={() => setExploreTab("following")}>{t("nav.following")}</button>
+                <button className={exploreTab === "people" ? "active" : ""} onClick={() => setExploreTab("people")}>{t("nav.people")}</button>
+              </div>
+            </div>
+            {communityFeed.length ? <div className="feed-list">
+              {communityFeed.map((dish) => {
+                const feedDish: FeedDish = { id: dish.id, name: dish.name, description: dish.description, cuisine: dish.cuisine, confidence: dish.confidence, imageUrl: dish.imageUrl, localPreview: dish.localPreview, provenance: dish.provenance, verificationStatus: dish.verificationStatus, availabilityKnowledge: dish.availabilityKnowledge, contributorLabel: dish.contributorLabel, authorLabel: dish.contributorLabel, authorInitials: dish.contributorLabel?.slice(0,2).toUpperCase(), isOwner: dish.isOwner, sourceMode: dish.sourceMode, restaurant: dish.restaurant };
+                return <FeedCard key={dish.id} dish={feedDish} t={t} onDelete={dish.isOwner ? (id, img) => deletePublishedDish(id, img) : undefined} />;
+              })}
+            </div> : <div className="empty-state"><span>◉</span><h3>{t("home.emptyTitle")}</h3><p>{t("home.emptyBody")}</p><button className="primary" onClick={() => setView("discover")}>{t("home.explore")}</button></div>}
+          </section>
+        ) : view === "groups" ? (
           <GroupPlanner flash={flash} t={t} location={location} language={language} track={trackAnalytics} onRequestLocation={() => setSettingsOpen(true)} />
-        ) : (
+        ) : view === "saved" ? (
           <>
-            <section className="hero" id="capture">
+            <section className="hero">
               <div className="hero-copy">
-                <div className="eyebrow"><span>✦</span> {t("home.eyebrow")}</div>
-                <h1>{view === "saved" ? t("home.savedTitle") : t("home.title")}</h1>
-                <p>{view === "saved" ? t("home.savedBody") : t("home.body")}</p>
-                {view === "discover" && <div className="hero-actions">
-                  <button className="primary" onClick={() => fileRef.current?.click()}>＋ {t("home.analyze")}</button>
-                  <button className="text-button" onClick={() => { setPreview(dishes[0].image); void analyze(undefined, true); }}>{t("home.demo")} →</button>
-                  <input ref={fileRef} className="sr-only" type="file" accept="image/*" onChange={handleFile} />
-                </div>}
+                <div className="eyebrow"><span>✦</span> {t("nav.profile")}</div>
+                <h1>{t("home.savedTitle")}</h1>
+                <p>{t("home.savedBody")}</p>
               </div>
               <div className="taste-card">
-                <b>{t("home.tasteprint")}</b><div className="taste-orbit"><span>T</span><i /><i /><i /></div>
-                <div className="taste-tags"><span>{t("nav.saved")}</span><span>{t("nav.postDish")}</span><span>{t("nav.following")}</span></div>
-                <small>{t("home.tasteBody")}</small>
+                <b>{identityLabel}</b>
+                <div className="taste-orbit"><span>T</span><i /><i /><i /></div>
+                {saved.size > 0 && <small>{saved.size} {t("nav.saved")}</small>}
               </div>
             </section>
-
             <section className="discover-section">
               <div className="section-heading">
-                <div><span className="kicker">{location ? t("home.curated", { location: location.locality }) : t("home.gather")}</span><h2>{view === "saved" ? t("home.savedHeading") : t("home.gather")}</h2>{!location && view === "discover" && <button className="location-inline" onClick={() => setSettingsOpen(true)}>{t("location.change")}</button>}</div>
-                {view === "discover" && <div className="filters" role="group" aria-label={t("home.gather")}>
-                  {(["all", "near", "lessKnown"] as const).map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{t(`feed.${item}`)}</button>)}
-                </div>}
+                <div><span className="kicker">{t("nav.saved")}</span><h2>{t("home.savedHeading")}</h2></div>
               </div>
-              {view === "discover" && <p className="seeded-notice">{t("home.communityFeedNotice")}</p>}
-              {(view === "discover" ? communityFeed.length : visible.length) ? <div className="dish-grid">
-                {view === "discover" && communityFeed.map((dish) => <PublishedDishCard key={dish.id} dish={dish} t={t} onDelete={dish.isOwner ? deletePublishedDish : undefined} />)}
-                {view === "saved" && visible.map((dish, index) => <DishCard key={dish.id} dish={dish} featured={index === 0} isSaved={saved.has(dish.id)} onSave={toggleSaved} t={t} />)}
-              </div> : view === "saved" ? <div className="empty-state"><span>♡</span><h3>{t("home.emptyTitle")}</h3><p>{t("home.emptyBody")}</p><button className="primary" onClick={() => setView("discover")}>{t("home.eyebrow")}</button></div> : <div className="empty-state editorial-fallback"><span>✦</span><h3>{t("feed.publicEmpty")}</h3><p>{t("feed.publicEmptyHelp")}</p><div className="hero-actions"><a className="primary button-link" href="/explore">{t("feed.top")}</a><button className="secondary" onClick={() => { setPreview(dishes[0].image); void analyze(undefined, true); }}>{t("home.demo")}</button></div></div>}
+              {visible.length ? <div className="dish-grid">
+                {visible.map((dish, index) => <DishCard key={dish.id} dish={dish} featured={index === 0} isSaved={saved.has(dish.id)} onSave={toggleSaved} t={t} />)}
+              </div> : <div className="empty-state"><span>♡</span><h3>{t("home.emptyTitle")}</h3><p>{t("home.emptyBody")}</p><button className="primary" onClick={() => setView("discover")}>{t("home.explore")}</button></div>}
             </section>
+            <button className="text-button full" onClick={() => setSettingsOpen(true)}>{t("settings.title")}</button>
+          </>
+        ) : (
+          <>
+          <section className="discover-header">
+            <div className="discover-header-left">
+              <button className="compact-location" onClick={() => setSettingsOpen(true)} aria-label={t("location.change")}>
+                {location?.locality ?? t("location.change")}
+              </button>
+              <div className="feed-filters" role="group" aria-label={t("home.gather")}>
+                {["all", "near", "lessKnown"].map((item) => (
+                  <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{t(`feed.${item}` as MessageKey)}</button>
+                ))}
+              </div>
+            </div>
+            <div className="discover-header-right">
+              <button className="primary" onClick={() => fileRef.current?.click()}>＋ {t("home.analyze")}</button>
+              <button className="text-button" onClick={() => { setPreview(dishes[0].image); void analyze(undefined, true); }}>{t("home.demo")} →</button>
+              <input ref={fileRef} className="sr-only" type="file" accept="image/*" onChange={handleFile} />
+            </div>
+          </section>
 
-            {view === "discover" && <section className="insider-strip">
-              <div className="insider-number">03</div>
-              <div><span className="kicker">{t("home.localNote")}</span><h2>{t("home.localTip")}</h2></div>
-              <div className="people"><small>{t("provenance.seed_demo")}</small></div>
-            </section>}
+          {communityFeed.length ? (
+            <div className="feed-list">
+              {communityFeed.map((dish) => {
+                const feedDish: FeedDish = { id: dish.id, name: dish.name, description: dish.description, cuisine: dish.cuisine, confidence: dish.confidence, imageUrl: dish.imageUrl, localPreview: dish.localPreview, provenance: dish.provenance, verificationStatus: dish.verificationStatus, availabilityKnowledge: dish.availabilityKnowledge, contributorLabel: dish.contributorLabel, authorLabel: dish.contributorLabel, authorInitials: dish.contributorLabel?.slice(0,2).toUpperCase(), isOwner: dish.isOwner, sourceMode: dish.sourceMode, restaurant: dish.restaurant };
+                return <FeedCard key={dish.id} dish={feedDish} t={t} onDelete={dish.isOwner ? (id, img) => deletePublishedDish(id, img) : undefined} />;
+              })}
+            </div>
+          ) : (
+            <div className="empty-state"><span>♡</span><h3>{t("home.emptyTitle")}</h3><p>{t("home.emptyBody")}</p><button className="primary" onClick={() => fileRef.current?.click()}>{t("home.analyze")}</button></div>
+          )}
           </>
         )}
       </main>
 
       <nav className="mobile-nav" aria-label={t("nav.discover")}>
         <button className={view === "discover" ? "active" : ""} onClick={() => setView("discover")}><span>⌂</span>{t("nav.discover")}</button>
+        <button className={view === "explore" ? "active" : ""} onClick={() => setView("explore")}><span>◉</span>{t("nav.explore")}</button>
+        <button className="mobile-add" onClick={() => fileRef.current?.click()} aria-label={t("nav.post")}>＋</button>
         <button className={view === "groups" ? "active" : ""} onClick={() => setView("groups")}><span>♢</span>{t("nav.groups")}</button>
-        <button className="mobile-add" onClick={() => fileRef.current?.click()} aria-label={t("home.analyze")}>＋</button>
-        <button className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}><span>♡</span>{t("nav.saved")}</button>
-        <button onClick={() => setSettingsOpen(true)}><span>○</span>{t("nav.profile")}</button>
+        <button className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}><span>○</span>{t("nav.profile")}</button>
       </nav>
       {modal && <Analyzer key={`${pendingImage ?? "demo"}-${analysisMode ?? "pending"}`} guestToken={guestToken} preview={preview} phase={phase} analysis={analysis} analysisMode={analysisMode} warning={analysisWarning} error={analysisError} matches={nearbyMatches} matchProviderUnavailable={matchProviderUnavailable} matchRecordsUnavailable={matchRecordsUnavailable} publishing={publishing} close={() => setModal(false)} update={update} publish={publish} retry={() => void analyze(pendingImage, false)} demo={() => void analyze(undefined, true)} t={t} language={language} measurementSystem={measurementSystem} location={location} onMatchOpened={() => trackAnalytics("match_opened", { mode: analysisMode ?? undefined })} onFeedback={(reason, targetType, targetId) => void reportFeedback(reason, targetType, targetId ?? analysisRequestId)} />}
       {settingsOpen && <SettingsPanel guestToken={guestToken} t={t} language={language} theme={theme} measurementSystem={measurementSystem} location={location} close={() => setSettingsOpen(false)} persist={persistPreferences} />}
@@ -424,13 +458,6 @@ function DishCard({ dish, featured, isSaved, onSave, t }: { dish: Dish; featured
       <div className="dish-meta"><div>{dish.tags.map((tag) => <span key={tag}>{tag}</span>)}</div><small>{dish.distance} · ♥ {dish.likes}</small></div>
       {featured && <button className="find-button">{t("analysis.explore")} <span>→</span></button>}
     </div>
-  </article>;
-}
-
-function PublishedDishCard({ dish, t, onDelete }: { dish: PublishedDish; t: Translator; onDelete?: (id: string, imageOnly?: boolean) => void }) {
-  return <article className="dish-card published-card">
-    <div className="dish-image" style={{ backgroundImage: `linear-gradient(180deg,transparent 55%,rgba(22,13,10,.68)),url(${dish.localPreview ?? dish.imageUrl ?? dishes[0].image})` }}><span className="match"><b>{t("analysis.publishedTitle")}</b></span><div className="photo-caption"><b>{dish.sourceMode === "live" ? t("analysis.live") : t("analysis.demo")}</b><small>{t("analysis.review")}</small></div></div>
-    <div className="dish-body"><div className="dish-title"><div><h3>{dish.name}</h3><p>{dish.description}</p></div><strong>{dish.confidence}%</strong></div><div className="dish-meta"><div><span>{dish.cuisine}</span></div><small>{dish.restaurant?.name ?? t("analysis.review")}{dish.contributorLabel ? ` · ${dish.contributorLabel}` : ""}</small></div>{dish.provenance && <p className="record-honesty">{t(`provenance.${dish.provenance}` as MessageKey)} · {t(`verification.${dish.verificationStatus ?? "unverified"}` as MessageKey)} · {t(dish.availabilityKnowledge === "recently_confirmed" ? "availability.confirmed" : "availability.unknown")}</p>}<a className="find-button" href={`/dishes/${dish.id}`}>{t("dish.view")} <span>→</span></a>{onDelete && <div className="modal-actions">{dish.imageUrl && <button className="text-button" onClick={() => onDelete(dish.id, true)}>{t("privacy.deleteImage")}</button>}<button className="text-button" onClick={() => onDelete(dish.id)}>{t("privacy.deleteDish")}</button></div>}</div>
   </article>;
 }
 

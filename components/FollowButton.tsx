@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import { useUiText } from "@/components/useUiText";
 
 export function FollowButton({ handle, initialFollowing, initialCount, onChange }: { handle: string; initialFollowing: boolean; initialCount: number; onChange?: (state: { following: boolean; count: number }) => void }) {
   const { authenticated, authHeaders } = useAuth();
+  const t = useUiText();
   const [following, setFollowing] = useState(initialFollowing);
   const [count, setCount] = useState(initialCount);
   const [busy, setBusy] = useState(false);
@@ -25,5 +27,5 @@ export function FollowButton({ handle, initialFollowing, initialCount, onChange 
     } finally { setBusy(false); }
   }
 
-  return <button className={following ? "secondary" : "primary"} disabled={busy} onClick={() => void toggle()}>{following ? "Following" : "Follow"} · {count}</button>;
+  return <button className={following ? "secondary" : "primary"} disabled={busy} onClick={() => void toggle()}>{following ? t("social.following") : t("social.follow")} · {count}</button>;
 }

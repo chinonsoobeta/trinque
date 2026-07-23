@@ -434,6 +434,15 @@ const enUS = {
   "owner.edit": "Edit",
   "owner.replacePhoto": "Replace photo",
   "error.generic": "Something went wrong. Try again.",
+  "general.loading": "Loading…",
+  "social.follow": "Follow",
+  "social.following": "Following",
+  "time.now": "now",
+  "time.minutes": "{count}m",
+  "time.hours": "{count}h",
+  "time.days": "{count}d",
+  "dish.likeCount": "{count} likes",
+  "dish.commentCount": "{count} comments",
 } as const;
 
 export type MessageKey = keyof typeof enUS;
@@ -701,6 +710,11 @@ Object.assign(es, { "group.changePlan": "Cambiar plan" });
 Object.assign(de, { "group.changePlan": "Plan ändern" });
 Object.assign(it, { "group.changePlan": "Modifica piano" });
 Object.assign(pt, { "group.changePlan": "Alterar plano" });
+Object.assign(fr, { "general.loading": "Chargement…", "social.follow": "Suivre", "social.following": "Abonné", "time.now": "maintenant", "time.minutes": "{count} min", "time.hours": "{count} h", "time.days": "{count} j", "dish.likeCount": "{count} mentions J'aime", "dish.commentCount": "{count} commentaires" });
+Object.assign(es, { "general.loading": "Cargando…", "social.follow": "Seguir", "social.following": "Siguiendo", "time.now": "ahora", "time.minutes": "{count} min", "time.hours": "{count} h", "time.days": "{count} d", "dish.likeCount": "{count} me gusta", "dish.commentCount": "{count} comentarios" });
+Object.assign(de, { "general.loading": "Wird geladen…", "social.follow": "Folgen", "social.following": "Gefolgt", "time.now": "jetzt", "time.minutes": "{count} Min", "time.hours": "{count} Std", "time.days": "{count} Tg", "dish.likeCount": "{count} Gefällt mir", "dish.commentCount": "{count} Kommentare" });
+Object.assign(it, { "general.loading": "Caricamento…", "social.follow": "Segui", "social.following": "Seguito", "time.now": "ora", "time.minutes": "{count} min", "time.hours": "{count} h", "time.days": "{count} g", "dish.likeCount": "{count} mi piace", "dish.commentCount": "{count} commenti" });
+Object.assign(pt, { "general.loading": "A carregar…", "social.follow": "Seguir", "social.following": "A seguir", "time.now": "agora", "time.minutes": "{count} min", "time.hours": "{count} h", "time.days": "{count} d", "dish.likeCount": "{count} gostos", "dish.commentCount": "{count} comentários" });
 
 export const translations: Record<UiLanguage, Messages> = { "en-CA": enCA, "en-US": enUS, "en-GB": enGB, fr, es, de, it, pt };
 

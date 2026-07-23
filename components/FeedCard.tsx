@@ -37,15 +37,15 @@ export type FeedDish = {
 
 type Translator = (key: MessageKey, values?: Record<string, string | number>) => string;
 
-function timeAgo(dateString: string): string {
+function timeAgo(dateString: string, t: Translator): string {
   const diff = Date.now() - new Date(dateString).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "now";
-  if (mins < 60) return `${mins}m`;
+  if (mins < 1) return t("time.now");
+  if (mins < 60) return t("time.minutes", { count: mins });
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
+  if (hours < 24) return t("time.hours", { count: hours });
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d`;
+  if (days < 7) return t("time.days", { count: days });
   return new Date(dateString).toLocaleDateString();
 }
 
@@ -60,7 +60,7 @@ export function FeedCard({ dish, t, onSave, onDelete, onLike, onEdit }: {
   const [safetyOpen, setSafetyOpen] = useState(false);
   const initials = dish.authorInitials ?? dish.contributorLabel?.slice(0, 2).toUpperCase() ?? "?";
   const authorName = dish.authorLabel ?? dish.contributorLabel ?? t("auth.guest");
-  const timeLabel = dish.createdAt ? timeAgo(dish.createdAt) : "";
+  const timeLabel = dish.createdAt ? timeAgo(dish.createdAt, t) : "";
   const provenance = dish.provenance && t(`provenance.${dish.provenance}` as MessageKey);
   const verification = dish.verificationStatus && t(`verification.${dish.verificationStatus}` as MessageKey);
   const availability = dish.availabilityKnowledge === "recently_confirmed" ? t("availability.confirmed") : dish.availabilityKnowledge ? t("availability.unknown") : "";
@@ -121,10 +121,10 @@ export function FeedCard({ dish, t, onSave, onDelete, onLike, onEdit }: {
 
       <div className="feed-card-actions">
         <button className="feed-card-action" onClick={() => onLike?.(dish.id)} aria-label={t("dish.like")}>
-          ♡ {(dish.likes ?? 0) > 0 ? dish.likes : ""}
+          ♡ {(dish.likes ?? 0) > 0 ? t("dish.likeCount", { count: dish.likes }) : ""}
         </button>
         <button className="feed-card-action" onClick={() => window.location.assign(`/dishes/${dish.id}`)} aria-label={t("comments.add")}>
-          ◷ {(dish.commentCount ?? 0) > 0 ? dish.commentCount : ""}
+          ◷ {(dish.commentCount ?? 0) > 0 ? t("dish.commentCount", { count: dish.commentCount }) : ""}
         </button>
         <button className="feed-card-action" onClick={() => onSave?.(dish.id)} aria-label={dish.isSaved ? t("save.removed") : t("save.added")}>
           {dish.isSaved ? "♥" : "♡"}

@@ -14,6 +14,6 @@ export function EmptyState({ eyebrow, title, body, action }: { eyebrow?: string;
   return <section className="app-empty-state">{eyebrow && <span className="kicker">{eyebrow}</span>}<span className="empty-mark" aria-hidden="true">✦</span><h2>{title}</h2><p>{body}</p>{action && <div className="empty-actions">{action}</div>}</section>;
 }
 
-export function LoadingState({ label = "Loading…" }: { label?: string }) {
+export function LoadingState({ label }: { label: string }) {
   return <div className="app-loading-state" role="status" aria-live="polite"><span className="loading-dot" aria-hidden="true" /><span>{label}</span></div>;
 }

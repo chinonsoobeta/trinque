@@ -65,6 +65,12 @@ test("group planner uses the signed-in session and has one dietary control", asy
   assert.match(mobile, /canWrite=\{canWrite\} onSignIn=\{\(\) => setTab\('Profile'\)\}/);
   assert.match(mobile, /!canWrite\) \{ onSignIn\(\); return; \}/);
   assert.doesNotMatch(mobile, /group\.vegetarianCount/);
+  for (const requirement of ["gluten_free", "dairy_free", "nut_free", "shellfish_free"]) {
+    assert.match(home, new RegExp(`\\"${requirement}\\"`));
+    assert.match(mobile, new RegExp(`'${requirement}'`));
+  }
+  assert.doesNotMatch(home, /"gluten-free"/);
+  assert.doesNotMatch(mobile, /'gluten-free'/);
 });
 
 test("English group search uses the requested short label", async () => {

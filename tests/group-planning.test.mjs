@@ -9,28 +9,26 @@ const sources = [
 ];
 
 test("group ranking excludes hard conflicts and provider-only unknowns", () => {
-  const candidates = rankGroupCandidates(sources, { budgetMax: 25, maxDistanceKm: 4, vegetarianRequired: 1, allergies: ["sesame"], dietaryRequirements: [], cuisineTypes: [] }, "en-GB");
+  const candidates = rankGroupCandidates(sources, { budgetMax: 25, maxDistanceKm: 4, allergies: ["sesame"], dietaryRequirements: ["vegetarian"], cuisineTypes: [] }, "en-GB");
   assert.equal(candidates[0].candidateId, "pasta");
-  assert.equal(candidates.find((candidate) => candidate.candidateId === "sesame").eligible, false);
-  assert.deepEqual(candidates.find((candidate) => candidate.candidateId === "restaurant").conflicts, ["price_unknown", "vegetarian_unknown", "allergen_unknown:sesame"]);
+  assert.equal(candidates.find((candidate) => candidate.candidateId === "sesame").tier, "does_not_fit");
 });
 
 test("an unknown price needs review but does not invent a budget conflict", () => {
-  const [candidate] = rankGroupCandidates([sources[2]], { budgetMax: 25, maxDistanceKm: 4, vegetarianRequired: 0, allergies: [], dietaryRequirements: [], cuisineTypes: [] }, "en-GB");
-  assert.equal(candidate.eligible, true);
-  assert.equal(candidate.explanation, "review_required");
-  assert.deepEqual(candidate.conflicts, ["price_unknown"]);
+  const [candidate] = rankGroupCandidates([sources[2]], { budgetMax: 25, maxDistanceKm: 4, allergies: [], dietaryRequirements: [], cuisineTypes: [] }, "en-GB");
+  assert.equal(candidate.tier, "needs_checking");
+  assert.equal(candidate.explanation, "Needs checking");
 });
 
 test("an unknown allergy still blocks a restaurant-level result", () => {
-  const [candidate] = rankGroupCandidates([sources[2]], { budgetMax: 25, maxDistanceKm: 4, vegetarianRequired: 0, allergies: ["sesame"], dietaryRequirements: [], cuisineTypes: [] }, "en-GB");
-  assert.equal(candidate.eligible, false);
-  assert.ok(candidate.conflicts.includes("allergen_unknown:sesame"));
+  const [candidate] = rankGroupCandidates([sources[2]], { budgetMax: 25, maxDistanceKm: 4, allergies: ["sesame"], dietaryRequirements: [], cuisineTypes: [] }, "en-GB");
+  assert.equal(candidate.tier, "does_not_fit");
+  assert.ok(candidate.reasons.some((reason) => reason.includes("Cannot confirm")));
 });
 
 test("votes win among eligible candidates and score breaks ties", () => {
   const second = { ...sources[0], candidateId: "pasta-2", distanceKm: 2 };
-  const candidates = rankGroupCandidates([sources[0], second], { budgetMax: 35, maxDistanceKm: 4, vegetarianRequired: 1, allergies: [], dietaryRequirements: [], cuisineTypes: [] });
+  const candidates = rankGroupCandidates([sources[0], second], { budgetMax: 35, maxDistanceKm: 4, allergies: [], dietaryRequirements: [], cuisineTypes: [] });
   assert.equal(selectGroupWinner(candidates, { "pasta-2": 3, pasta: 1 }).candidateId, "pasta-2");
   assert.equal(selectGroupWinner(candidates, {}).candidateId, "pasta");
 });
@@ -39,11 +37,10 @@ test("group ranking does not claim dietary or cuisine fit without evidence", () 
   const candidates = rankGroupCandidates([
     { ...sources[0], candidateId: "vegan-thai", cuisine: "Thai", dietaryCaveat: "Vegan and gluten-free" },
     { ...sources[0], candidateId: "unknown", cuisine: null, dietaryCaveat: "Dietary details are unknown" },
-  ], { budgetMax: 35, maxDistanceKm: 4, vegetarianRequired: 0, allergies: [], dietaryRequirements: ["vegan", "gluten_free", "halal"], cuisineTypes: ["thai"] });
-  assert.equal(candidates.find((candidate) => candidate.candidateId === "vegan-thai").eligible, false);
-  assert.ok(candidates.find((candidate) => candidate.candidateId === "vegan-thai").conflicts.includes("halal_unknown"));
-  assert.ok(candidates.find((candidate) => candidate.candidateId === "unknown").conflicts.includes("cuisine_unknown_or_mismatch"));
-  assert.ok(candidates.find((candidate) => candidate.candidateId === "unknown").conflicts.includes("vegan_unknown"));
+  ], { budgetMax: 35, maxDistanceKm: 4, allergies: [], dietaryRequirements: ["vegan", "gluten_free", "halal"], cuisineTypes: ["thai"] });
+  assert.equal(candidates.find((candidate) => candidate.candidateId === "vegan-thai").tier, "does_not_fit");
+  assert.ok(candidates.find((candidate) => candidate.candidateId === "unknown").reasons.some((reason) => reason.includes("Cuisine type")));
+  assert.ok(candidates.find((candidate) => candidate.candidateId === "unknown").reasons.some((reason) => reason.includes("Cannot confirm")));
 });
 
 test("calendar export uses the group location time zone", () => {

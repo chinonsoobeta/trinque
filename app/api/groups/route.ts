@@ -32,14 +32,14 @@ export async function POST(request: Request) {
       : "authentication_required";
     return Response.json({ error: authenticationError?.message ?? "authentication_required", code }, { status: authenticationError?.status ?? 503 });
   }
-  const body = await request.json() as { name?: string; eventTime?: string; eventLocalDate?: string; eventLocalTime?: string; budgetMax?: number; maxDistanceKm?: number; maxDistance?: number; distanceUnit?: "metric" | "imperial"; vegetarianRequired?: number; allergies?: string[]; dietaryRequirements?: string[]; cuisineTypes?: string[]; location?: NormalizedLocation; language?: SupportedLanguage };
+  const body = await request.json() as { name?: string; eventTime?: string; eventLocalDate?: string; eventLocalTime?: string; budgetMax?: number; maxDistanceKm?: number; maxDistance?: number; distanceUnit?: "metric" | "imperial"; allergies?: string[]; dietaryRequirements?: string[]; cuisineTypes?: string[]; location?: NormalizedLocation; language?: SupportedLanguage };
   if (!body.location || !body.language || !SUPPORTED_LANGUAGES.includes(body.language)) return Response.json({ error: "normalized_group_location_required" }, { status: 400 });
   let location: NormalizedLocation;
   try { location = normalizeLocation({ ...body.location, source: body.location.source ?? "manual" }, body.language); }
   catch (error) { return Response.json({ error: error instanceof Error ? error.message : "invalid_location" }, { status: 400 }); }
   const distanceUnit = body.distanceUnit === "imperial" ? "imperial" : "metric";
   const requestedDistance = Number(body.maxDistance ?? body.maxDistanceKm) || 4;
-  const constraints = { budgetMax: clamp(Math.round(Number(body.budgetMax) || 35), 10, 500), maxDistanceKm: clamp(Math.round(requestedDistance * (distanceUnit === "imperial" ? 1.609344 : 1)), 1, 80), vegetarianRequired: clamp(Math.round(Number(body.vegetarianRequired) || 0), 0, 20), allergies: (body.allergies ?? []).map((item) => item.trim()).filter(Boolean).slice(0, 10), dietaryRequirements: (body.dietaryRequirements ?? []).filter((item): item is DietaryRequirement => DIETARY_REQUIREMENTS.includes(item as DietaryRequirement)).slice(0, DIETARY_REQUIREMENTS.length), cuisineTypes: (body.cuisineTypes ?? []).map((item) => item.trim().toLocaleLowerCase()).filter(Boolean).slice(0, 10) };
+  const constraints = { budgetMax: clamp(Math.round(Number(body.budgetMax) || 35), 10, 500), maxDistanceKm: clamp(Math.round(requestedDistance * (distanceUnit === "imperial" ? 1.609344 : 1)), 1, 80), allergies: (body.allergies ?? []).map((item) => item.trim()).filter(Boolean).slice(0, 10), dietaryRequirements: (body.dietaryRequirements ?? []).filter((item): item is DietaryRequirement => DIETARY_REQUIREMENTS.includes(item as DietaryRequirement)).slice(0, DIETARY_REQUIREMENTS.length), cuisineTypes: (body.cuisineTypes ?? []).map((item) => item.trim().toLocaleLowerCase()).filter(Boolean).slice(0, 10) };
   let eventTime: Date;
   try { eventTime = body.eventLocalDate && body.eventLocalTime ? instantForLocalTime(body.eventLocalDate, body.eventLocalTime, location.timeZone) : new Date(body.eventTime ?? Date.now() + 86400000); }
   catch { return Response.json({ error: "Valid event time required." }, { status: 400 }); }

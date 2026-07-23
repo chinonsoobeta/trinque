@@ -31,22 +31,19 @@ type MatchTiers = { confirmedNearbyDishes: MatchResult[]; communityOrInferredDis
 type PublishRestaurant = { provider: "google" | "community"; providerPlaceId?: string | null; name: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: NormalizedLocation["countryCode"]; address: string; currencyCode: string };
 type PublicationMetadata = { restaurant: PublishRestaurant; knowledge: { priceKnowledge: "unknown" | "exact" | "approximate"; priceAmount?: number; availabilityKnowledge: "unknown" | "recently_confirmed" | "historical"; lastConfirmedAt?: string }; retainImage: boolean; reviewConfirmed: true; restaurantConfirmed: true };
 type PublishedDish = Analysis & { id: string; sourceMode: "live" | "demo"; imageUrl?: string | null; localPreview?: string; provenance?: string; verificationStatus?: string; availabilityKnowledge?: string; contributorLabel?: string; isOwner?: boolean; ownerId?: string; restaurant?: { name: string } | null; caption?: string; tasteNotes?: string; dietaryNotes?: string; personalComments?: string; locationTag?: string; moderationStatus?: string };
-type GroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; explanation: string; conflicts: string[]; kind: "published_dish" | "provider_restaurant" | "seed_demo"; provenance?: string | null; verificationStatus?: string | null; currentAvailabilityConfirmed: boolean; dietaryCaveat: string };
-type GroupSnapshot = { id: string; name: string; eventTime: string; eventLocalDate: string | null; eventLocalTime: string | null; neighborhood: string; budgetMax: number; maxDistanceKm: number; distanceUnit: "metric" | "imperial"; vegetarianRequired: number; allergies: string[]; dietaryRequirements: string[]; cuisineTypes: string[]; inviteCode: string; inviteExpiresAt: string | null; inviteRevokedAt: string | null; status: "voting" | "finalized"; selectedCandidateId: string | null; candidates: GroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number>; memberCount: number; viewerRole: "owner" | "participant"; viewerVote: string | null; viewerRsvp: string | null; timeZone: string | null; currencyCode: string | null; locale: string | null; locality: string | null; countryCode: string | null };
+type GroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; tier: "fits" | "needs_checking" | "does_not_fit"; explanation: string; reasons: string[]; conflicts: string[]; kind: "published_dish" | "provider_restaurant" | "seed_demo"; provenance?: string | null; verificationStatus?: string | null; currentAvailabilityConfirmed: boolean; dietaryCaveat: string };
+type GroupSnapshot = { id: string; name: string; eventTime: string; eventLocalDate: string | null; eventLocalTime: string | null; neighborhood: string; budgetMax: number; maxDistanceKm: number; distanceUnit: "metric" | "imperial"; allergies: string[]; dietaryRequirements: string[]; cuisineTypes: string[]; inviteCode: string; inviteExpiresAt: string | null; inviteRevokedAt: string | null; status: "voting" | "finalized"; selectedCandidateId: string | null; candidates: GroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number>; memberCount: number; viewerRole: "owner" | "participant"; viewerVote: string | null; viewerRsvp: string | null; timeZone: string | null; currencyCode: string | null; locale: string | null; locality: string | null; countryCode: string | null };
 type Translator = (key: MessageKey, values?: Record<string, string | number>) => string;
 type AnalyticsEvent = "analysis_started" | "analysis_completed" | "analysis_failed" | "analysis_corrected" | "dish_published" | "match_opened" | "group_created" | "invite_joined" | "vote_cast" | "plan_finalized" | "rsvp_submitted";
 type FeedbackReason = "wrong_identification" | "stale_dish" | "closed_restaurant";
 
-function groupConflictLabel(t: Translator, conflict: string): string {
-  const [code, detail = ""] = conflict.split(":", 2);
-  const keys: Record<string, MessageKey> = { price_unknown: "group.conflict.priceUnknown", over_budget: "group.conflict.overBudget", beyond_distance: "group.conflict.beyondDistance", vegetarian_unknown: "group.conflict.vegetarianUnknown", vegetarian_unsupported: "group.conflict.vegetarianUnsupported", allergen_unknown: "group.conflict.allergenUnknown", allergen_conflict: "group.conflict.allergenConflict", cuisine_unknown_or_mismatch: "group.conflict.cuisineUnknownOrMismatch" };
-  return keys[code] ? t(keys[code], { allergen: detail }) : conflict;
+function groupConflictLabel(t: Translator, reason: string): string {
+  return reason;
 }
 
 function groupCandidateCopy(t: Translator, candidate: GroupCandidate) {
-  const explanation = candidate.explanation === "eligible" ? t("group.fitEligible") : candidate.explanation === "review_required" ? t("group.fitReview") : `${t("group.fitIneligible")} ${candidate.conflicts.map((conflict) => groupConflictLabel(t, conflict)).join("; ")}`.trim();
   const dietaryCaveat = candidate.dietaryCaveat === "provider_information_unconfirmed" ? t("group.providerCaveat") : t("analysis.warning");
-  return { explanation, dietaryCaveat };
+  return { dietaryCaveat };
 }
 
 const dishes: Dish[] = [
@@ -575,21 +572,25 @@ function MatchTier({ title, results, t, language, measurementSystem, onFeedback 
   })}</div>}</section>;
 }
 
-function GroupPlanner({ flash, t, location, language, track, onRequestLocation }: { flash: (text: string) => void; t: Translator; location: NormalizedLocation | null; language: UiLanguage; track: (event: AnalyticsEvent, details?: { mode?: "live" | "demo"; outcome?: string; durationMs?: number }) => void; onRequestLocation: () => void }) {
+function GroupPlanner({ flash, t, language, track }: { flash: (text: string) => void; t: Translator; language: UiLanguage; track: (event: AnalyticsEvent, details?: { mode?: "live" | "demo"; outcome?: string; durationMs?: number }) => void }) {
   const { authenticated, authHeaders, sessionToken } = useAuth();
   const sessionHeaders = useMemo(() => authHeaders(), [authHeaders]);
   const [group, setGroup] = useState<GroupSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [placesUnavailable, setPlacesUnavailable] = useState(false);
-  const [budgetMax, setBudgetMax] = useState("35");
-  const [maxDistanceKm, setMaxDistanceKm] = useState("4");
+  const [budgetMax, setBudgetMax] = useState("");
+  const [maxDistanceKm, setMaxDistanceKm] = useState("");
   const [distanceUnit, setDistanceUnit] = useState<"metric" | "imperial">("metric");
   const [allergies, setAllergies] = useState("");
   const [dietaryRequirements, setDietaryRequirements] = useState<string[]>([]);
   const [cuisineTypes, setCuisineTypes] = useState("");
-  const [eventLocalDate, setEventLocalDate] = useState(() => new Date(Date.now() + 86400000).toISOString().slice(0, 10));
-  const [eventLocalTime, setEventLocalTime] = useState("19:30");
-  const joinAttempted = useRef(false);
+  const [eventLocalDate, setEventLocalDate] = useState("");
+  const [eventLocalTime, setEventLocalTime] = useState("");
+  const [groupLocation, setGroupLocation] = useState<NormalizedLocation | null>(null);
+  const [locationQuery, setLocationQuery] = useState("");
+  const [locationSuggestions, setLocationSuggestions] = useState<LocationSuggestion[]>([]);
+  const [locationBusy, setLocationBusy] = useState(false);
+  const [locationStatus, setLocationStatus] = useState("");
 
   useEffect(() => {
     void fetch("/api/health").then(async (response) => {
@@ -609,13 +610,38 @@ function GroupPlanner({ flash, t, location, language, track, onRequestLocation }
     void fetch("/api/groups", { headers: sessionHeaders }).then(async (response) => { if (response.ok) setGroup(((await response.json()) as { group: GroupSnapshot | null }).group); });
   }, [flash, language, sessionHeaders, sessionToken, t, track]);
 
+  async function searchLocation(payload: { input?: string; latitude?: number; longitude?: number; providerPlaceId?: string }) {
+    setLocationBusy(true); setLocationStatus(""); setLocationSuggestions([]);
+    try {
+      const response = await fetch("/api/locations/autocomplete", { method: "POST", headers: { "Content-Type": "application/json", ...sessionHeaders }, body: JSON.stringify({ ...payload, language, location: groupLocation ?? null }) });
+      const body = await response.json() as { suggestions?: LocationSuggestion[]; location?: NormalizedLocation; error?: { code?: string } };
+      if (!response.ok) { setLocationStatus(body.error?.code === "unsupported_country" ? t("location.unsupported") : body.error?.code === "credentials" ? t("location.unavailable") : t("location.providerError")); setLocationBusy(false); return; }
+      if (body.location) { const selected = { ...body.location, language, measurementSystem: body.location.measurementSystem ?? "metric" }; setGroupLocation(selected); setLocationSuggestions([]); setLocationQuery(`${selected.locality}, ${selected.countryCode}`); setLocationBusy(false); return; }
+      setLocationSuggestions(body.suggestions ?? []); setLocationBusy(false);
+    } catch { setLocationStatus(t("location.unavailable")); setLocationBusy(false); }
+  }
+
+  function useDeviceLocation() {
+    if (!navigator.geolocation) { setLocationStatus(t("location.permissionDenied")); return; }
+    setLocationBusy(true); setLocationStatus("");
+    navigator.geolocation.getCurrentPosition(
+      (position) => void searchLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude }),
+      () => { setLocationBusy(false); setLocationStatus(t("location.permissionDenied")); },
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 15 * 60 * 1000 },
+    );
+  }
+
+  function useSavedArea() {
+    if (groupLocation) { setGroupLocation(null); setLocationQuery(""); } else { setLocationSuggestions([]); }
+  }
+
   async function createGroup() {
     if (!authenticated) { window.location.assign("/auth/login?context=group&next=%2F%3Fview%3Dgroups"); return; }
     if (!sessionToken) { flash(t("auth.connecting")); return; }
-    if (!location) { onRequestLocation(); return; }
+    if (!groupLocation) { setLocationStatus(t("location.choose")); return; }
     setBusy(true);
     try {
-      const response = await fetch("/api/groups", { method: "POST", headers: { ...sessionHeaders, "Content-Type": "application/json" }, body: JSON.stringify({ name: t("group.name"), eventLocalDate, eventLocalTime, location, language, budgetMax: Number(budgetMax), maxDistance: Number(maxDistanceKm), distanceUnit, vegetarianRequired: dietaryRequirements.includes("vegetarian") ? 1 : 0, allergies: allergies.split(","), dietaryRequirements, cuisineTypes: cuisineTypes.split(",") }) });
+      const response = await fetch("/api/groups", { method: "POST", headers: { ...sessionHeaders, "Content-Type": "application/json" }, body: JSON.stringify({ name: t("group.name"), eventLocalDate: eventLocalDate || undefined, eventLocalTime: eventLocalTime || undefined, location: groupLocation, language, budgetMax: Number(budgetMax) || undefined, maxDistance: Number(maxDistanceKm) || undefined, distanceUnit, allergies: allergies.split(","), dietaryRequirements, cuisineTypes: cuisineTypes.split(",") }) });
       if (!response.ok) {
         const failure = await response.json().catch(() => null) as { code?: string } | null;
         if (failure?.code === "profile_incomplete") { window.location.assign("/onboarding"); return; }
@@ -656,25 +682,38 @@ function GroupPlanner({ flash, t, location, language, track, onRequestLocation }
     setCuisineTypes(group.cuisineTypes.join(", "));
     if (group.eventLocalDate) setEventLocalDate(group.eventLocalDate);
     if (group.eventLocalTime) setEventLocalTime(group.eventLocalTime);
+    setGroupLocation(group.locality && group.countryCode ? { latitude: 0, longitude: 0, locality: group.locality, countryCode: group.countryCode, administrativeRegion: "", language, measurementSystem: "metric", timeZone: group.timeZone ?? "", locale: group.locale ?? language, currencyCode: group.currencyCode ?? "", source: "manual" } : null);
     setGroup(null);
   }
 
-  if (!group) return <section className="group-page"><div className="group-intro"><div className="eyebrow"><span>♢</span> {t("group.eyebrow")}</div><h1>{t("group.createTitle")}</h1><p>{t("group.createBody")}</p></div><div className="group-starter"><span className="kicker">{t("group.start")}</span><h2>{t("group.name")}</h2><div className="group-location-row"><div><span>{t("settings.location")}</span><b>{location ? t("location.current", { location: `${location.locality}, ${location.countryCode}` }) : t("location.change")}</b></div><button className="group-location-button" type="button" onClick={onRequestLocation}><span aria-hidden="true">⌖</span>{t("location.change")}</button></div><div className="planner-form"><label>{t("group.date")}<input type="date" value={eventLocalDate} onChange={(event) => setEventLocalDate(event.target.value)} /></label><label>{t("group.time")}<input type="time" value={eventLocalTime} onChange={(event) => setEventLocalTime(event.target.value)} /></label><label>{t("group.budget")}<input value={budgetMax} onChange={(event) => setBudgetMax(event.target.value)} inputMode="numeric" /></label><label>{t("group.radius")}<div className="distance-input"><input value={maxDistanceKm} onChange={(event) => setMaxDistanceKm(event.target.value)} inputMode="numeric" /><select aria-label={t("group.distanceUnit")} value={distanceUnit} onChange={(event) => setDistanceUnit(event.target.value as "metric" | "imperial")}><option value="metric">{t("location.metric")}</option><option value="imperial">{t("location.imperial")}</option></select></div></label><fieldset><legend>{t("group.dietary")}</legend>{["vegan", "vegetarian", "celiac", "gluten-free", "dairy-free", "nut-free", "shellfish-free", "halal", "kosher"].map((item) => <label key={item}><input type="checkbox" checked={dietaryRequirements.includes(item)} onChange={(event) => setDietaryRequirements((current) => event.target.checked ? [...current, item] : current.filter((value) => value !== item))} />{t(`diet.${item}` as MessageKey)}</label>)}</fieldset><label>{t("group.allergies")}<input value={allergies} onChange={(event) => setAllergies(event.target.value)} placeholder={t("group.allergyExample")} /></label><label>{t("group.cuisines")}<input value={cuisineTypes} onChange={(event) => setCuisineTypes(event.target.value)} placeholder={t("group.cuisineExample")} /></label></div>{!location && <p className="location-status warning">{t("location.change")}</p>}<button className="primary full" disabled={busy || (authenticated && (!sessionToken || !location || !eventLocalDate || !eventLocalTime))} onClick={createGroup}>{busy ? t("group.building") : authenticated ? t("group.rank") : t("auth.signIn")}</button></div></section>;
+  if (!group) return <section className="group-page"><div className="group-intro"><div className="eyebrow"><span>♢</span> {t("group.eyebrow")}</div><h1>{t("group.createTitle")}</h1><p>{t("group.createBody")}</p></div><div className="group-starter"><span className="kicker">{t("group.start")}</span><h2>{t("group.name")}</h2><div className="group-location-row"><div><span>{t("settings.location")}</span><b>{groupLocation ? t("location.current", { location: `${groupLocation.locality}, ${groupLocation.countryCode}` }) : t("location.choose")}</b></div><button className="group-location-button" type="button" onClick={useDeviceLocation}><span aria-hidden="true">⌖</span>{t("location.useDevice")}</button></div><div className="location-search"><form onSubmit={(event: FormEvent) => { event.preventDefault(); if (locationQuery.trim()) void searchLocation({ input: locationQuery.trim() }); }}><input value={locationQuery} onChange={(event) => setLocationQuery(event.target.value)} placeholder={t("location.search")} /><button disabled={locationBusy || !locationQuery.trim()}>{t("location.searchAction")}</button></form><button className="text-button" onClick={useSavedArea}>{groupLocation ? t("location.clear") : t("location.useSaved")}</button>{locationBusy && <p className="location-status">{t("location.searching")}</p>}{locationStatus && <p className="location-status warning">{locationStatus}</p>}<div className="location-suggestions">{locationSuggestions.map((suggestion) => <button key={suggestion.id} onClick={() => void searchLocation({ providerPlaceId: suggestion.providerPlaceId })}><b>{suggestion.label}</b><br /><small>{suggestion.secondaryLabel}</small></button>)}{locationSuggestions.length > 0 && <small className="google-attribution" translate="no">Google Maps</small>}</div></div><div className="planner-form"><label>{t("group.date")}<input type="date" value={eventLocalDate} onChange={(event) => setEventLocalDate(event.target.value)} /></label><label>{t("group.time")}<input type="time" value={eventLocalTime} onChange={(event) => setEventLocalTime(event.target.value)} /></label><label>{t("group.budget")}<input value={budgetMax} onChange={(event) => setBudgetMax(event.target.value)} inputMode="numeric" placeholder={t("group.budgetPlaceholder")} /></label><label>{t("group.radius")}<div className="distance-input"><input value={maxDistanceKm} onChange={(event) => setMaxDistanceKm(event.target.value)} inputMode="numeric" placeholder={t("group.radiusPlaceholder")} /><select aria-label={t("group.distanceUnit")} value={distanceUnit} onChange={(event) => setDistanceUnit(event.target.value as "metric" | "imperial")}><option value="metric">{t("location.metric")}</option><option value="imperial">{t("location.imperial")}</option></select></div></label><fieldset><legend>{t("group.dietary")}</legend>{["vegan", "vegetarian", "celiac", "gluten-free", "dairy-free", "nut-free", "shellfish-free", "halal", "kosher"].map((item) => <label key={item}><input type="checkbox" checked={dietaryRequirements.includes(item)} onChange={(event) => setDietaryRequirements((current) => event.target.checked ? [...current, item] : current.filter((value) => value !== item))} />{t(`diet.${item}` as MessageKey)}</label>)}</fieldset><label>{t("group.allergies")}<input value={allergies} onChange={(event) => setAllergies(event.target.value)} placeholder={t("group.allergyExample")} /></label><label>{t("group.cuisines")}<input value={cuisineTypes} onChange={(event) => setCuisineTypes(event.target.value)} placeholder={t("group.cuisineExample")} /></label></div>{!groupLocation && <p className="location-status warning">{t("location.choose")}</p>}<button className="primary full" disabled={busy || (authenticated && (!sessionToken || !groupLocation || !eventLocalDate || !eventLocalTime))} onClick={createGroup}>{busy ? t("group.building") : authenticated ? t("group.rank") : t("auth.signIn")}</button></div></section>;
+
+  const tierOrder = { fits: 0, needs_checking: 1, does_not_fit: 2 };
+  const sortedCandidates = [...group.candidates].sort((a, b) => tierOrder[a.tier] - tierOrder[b.tier] || b.score - a.score || a.distanceKm - b.distanceKm);
+  const fitCandidates = sortedCandidates.filter((c) => c.tier === "fits").slice(0, 5);
+  const checkCandidates = sortedCandidates.filter((c) => c.tier === "needs_checking").slice(0, 5);
+  const noFitCandidates = sortedCandidates.filter((c) => c.tier === "does_not_fit").slice(0, 5);
 
   const winner = group.candidates.find((candidate) => candidate.candidateId === group.selectedCandidateId);
   const winnerCopy = winner ? groupCandidateCopy(t, winner) : null;
-  const eligibleCandidates = group.candidates.filter((candidate) => candidate.eligible).slice(0, 5);
-  const placesToCheck = group.candidates.filter((candidate) => !candidate.eligible).slice(0, 5);
-  const renderCandidate = (candidate: GroupCandidate, index: number) => { const copy = groupCandidateCopy(t, candidate); const distance = new Intl.NumberFormat(language, { style: "unit", unit: group.distanceUnit === "imperial" ? "mile" : "kilometer", unitDisplay: "short", maximumFractionDigits: 1 }).format(group.distanceUnit === "imperial" ? candidate.distanceKm * .621371 : candidate.distanceKm); return <article className={`${candidate.eligible && index === 0 ? "vote-card winner" : "vote-card"} ${candidate.eligible ? "" : "ineligible"}`} key={candidate.candidateId}><div className="vote-image" style={candidate.image ? { backgroundImage: `url(${candidate.image})` } : undefined}><span>{candidate.eligible ? `#${index + 1}` : "!"}</span></div><div className="vote-copy"><div><span>{candidate.explanation === "eligible" ? t("group.groupFit", { score: candidate.score }) : candidate.eligible ? t("group.needsCheck") : t("group.hardConflict")}</span><h3>{candidate.restaurant}</h3><p>{candidate.name} · {candidate.price} · {distance}</p><small>{copy.explanation}</small><small>{candidate.kind === "provider_restaurant" ? t("match.restaurantReason") : `${t(`provenance.${candidate.provenance ?? "community_submitted"}` as MessageKey)} · ${t(`verification.${candidate.verificationStatus ?? "unverified"}` as MessageKey)}`} · {candidate.currentAvailabilityConfirmed ? t("availability.confirmed") : t("availability.unknown")}</small><small>{copy.dietaryCaveat}</small></div><button disabled={busy || !candidate.eligible || group.status === "finalized"} onClick={() => void groupAction("vote", { candidateId: candidate.candidateId })}>▲ <b>{group.votes[candidate.candidateId] ?? 0}</b></button></div></article>; };
+
+  function renderCandidate(candidate: GroupCandidate, index: number) {
+    const distance = new Intl.NumberFormat(language, { style: "unit", unit: group.distanceUnit === "imperial" ? "mile" : "kilometer", unitDisplay: "short", maximumFractionDigits: 1 }).format(group.distanceUnit === "imperial" ? candidate.distanceKm * .621371 : candidate.distanceKm);
+    const canVote = candidate.tier !== "does_not_fit" && group.status === "voting";
+    const tierLabel = candidate.tier === "fits" ? t("group.fitEligible") : candidate.tier === "needs_checking" ? t("group.needsCheck") : t("group.hardConflict");
+    const isWinner = candidate.candidateId === group.selectedCandidateId;
+    return <article className={`vote-card${isWinner ? " winner" : ""}${candidate.tier === "does_not_fit" ? " ineligible" : ""}`} key={candidate.candidateId}><div className="vote-image" style={candidate.image ? { backgroundImage: `url(${candidate.image})` } : undefined}><span>{candidate.tier === "fits" ? `#${index + 1}` : "!"}</span></div><div className="vote-copy"><div><span>{tierLabel}</span><h3>{candidate.restaurant}</h3><p>{candidate.name} · {candidate.price} · {distance}</p>{candidate.reasons.map((reason, i) => <small key={i}>{reason}</small>)}{candidate.kind === "provider_restaurant" ? <small>{t("match.restaurantReason")}</small> : <small>{`${t(`provenance.${candidate.provenance ?? "community_submitted"}` as MessageKey)} · ${t(`verification.${candidate.verificationStatus ?? "unverified"}` as MessageKey)}`} · {candidate.currentAvailabilityConfirmed ? t("availability.confirmed") : t("availability.unknown")}</small>}<small>{candidate.dietaryCaveat === "provider_information_unconfirmed" ? t("group.providerCaveat") : t("analysis.warning")}</small></div>{canVote && <button disabled={busy || group.status === "finalized"} onClick={() => void groupAction("vote", { candidateId: candidate.candidateId })}>▲ <b>{group.votes[candidate.candidateId] ?? 0}</b></button>}</div></article>;
+  }
   return <section className="group-page">
     <div className="group-intro"><div className="eyebrow"><span>♢</span> {t("group.eyebrow")}</div><h1>{group.status === "finalized" ? t("group.finalTitle") : t("group.voteTitle")}</h1><p>{t("group.constraints")}</p>{placesUnavailable && <p className="location-status warning">{t("match.providerUnavailable")}</p>}<div className="members"><span style={{ background: colors[0] }}>{t("group.memberCount", { count: group.memberCount })}</span></div></div>
     <div className="planner"><aside className="constraints"><span className="kicker">{new Intl.DateTimeFormat(language, { weekday: "short", hour: "numeric", minute: "2-digit", timeZone: group.timeZone ?? "UTC" }).format(new Date(group.eventTime))}</span><h2>{group.name}</h2>{[["◎", group.locality ?? group.neighborhood, new Intl.NumberFormat(language, { style: "unit", unit: group.distanceUnit === "imperial" ? "mile" : "kilometer", unitDisplay: "short", maximumFractionDigits: 1 }).format(group.distanceUnit === "imperial" ? group.maxDistanceKm * .621371 : group.maxDistanceKm)], ["$", new Intl.NumberFormat(group.locale ?? language, { style: "currency", currency: group.currencyCode ?? "CAD", maximumFractionDigits: 0 }).format(group.budgetMax), t("group.budget")], ["!", group.allergies.join(", ") || "—", t("group.allergies")]].map(([icon, title, note], index) => <div className={index === 2 && group.allergies.length ? "constraint warning" : "constraint"} key={`${icon}-${title}`}><span>{icon}</span><div><b>{title}</b><small>{note}</small></div></div>)}{group.viewerRole === "owner" && <><button className="secondary full" onClick={changePlan}>{t("group.changePlan")}</button>{!group.inviteRevokedAt && <><button className="secondary full" onClick={() => { void navigator.clipboard?.writeText(`${window.location.origin}/?join=${group.inviteCode}`); flash(t("group.inviteCopied")); }}>{t("group.copyInvite")}</button><button className="text-button full" onClick={() => void groupAction("invite/revoke")}>{t("group.revokeInvite")}</button></>}</>}</aside>
       <div className="shortlist"><div className="section-heading"><div><span className="kicker">{t("group.ranking")}</span><h2>{group.status === "voting" ? t("group.bestFits") : t("group.finalPlan")}</h2></div></div>
-        {group.candidates.length === 0 && <p className="empty-tier">{t("group.noLiveCandidates")}</p>}
-        {group.candidates.length > 0 && eligibleCandidates.length === 0 && <p className="empty-tier">{t("group.noEligibleCandidates")}</p>}
-        {eligibleCandidates.map(renderCandidate)}
-        {placesToCheck.length > 0 && <><div className="section-heading shortlist-secondary"><div><span className="kicker">{t("group.ranking")}</span><h2>{t("group.placesToCheck")}</h2></div></div>{placesToCheck.map(renderCandidate)}</>}
-        {group.status === "voting" && group.viewerRole === "owner" ? <button className="primary plan-button" disabled={busy} onClick={() => void groupAction("finalize")}>{t("group.lock")} →</button> : group.status === "voting" ? <p className="privacy-note">{t("group.ownerFinalizes")}</p> : winner && winnerCopy ? <div className="final-plan"><span>✦ {t("group.bestTable")}</span><h3>{winner.restaurant}</h3><p>{winner.name} · {new Intl.DateTimeFormat(language, { hour: "numeric", minute: "2-digit", timeZone: group.timeZone ?? "UTC" }).format(new Date(group.eventTime))}. {winnerCopy.explanation}</p><div><button className="primary" onClick={() => void groupAction("rsvp", { status: "yes" })}>{t("group.rsvpYes")} · {group.rsvps.yes ?? 0}</button><button className="secondary" onClick={() => void downloadCalendar()}>{t("group.calendar")}</button></div></div> : null}
+        {sortedCandidates.length === 0 && <p className="empty-tier">{t("group.noLiveCandidates")}</p>}
+        {sortedCandidates.length > 0 && fitCandidates.length === 0 && checkCandidates.length === 0 && <p className="empty-tier">{t("group.noEligibleCandidates")}</p>}
+        {fitCandidates.map((c, i) => renderCandidate(c, i))}
+        {checkCandidates.length > 0 && <><div className="section-heading shortlist-secondary"><div><span className="kicker">{t("group.ranking")}</span><h2>{t("group.placesToCheck")}</h2></div></div>{checkCandidates.map((c, i) => renderCandidate(c, i))}</>}
+        {noFitCandidates.length > 0 && <><div className="section-heading shortlist-secondary"><div><span className="kicker">{t("group.ranking")}</span><h2>{t("group.noFit")}</h2></div></div>{noFitCandidates.map((c, i) => renderCandidate(c, i))}</>}
+        {group.status === "voting" && group.viewerRole === "owner" ? <button className="primary plan-button" disabled={busy} onClick={() => void groupAction("finalize")}>{t("group.lock")} →</button> : group.status === "voting" ? <p className="privacy-note">{t("group.ownerFinalizes")}</p> : winner && winnerCopy ? <div className="final-plan"><span>✦ {t("group.bestTable")}</span><h3>{winner.restaurant}</h3><p>{winner.name} · {new Intl.DateTimeFormat(language, { hour: "numeric", minute: "2-digit", timeZone: group.timeZone ?? "UTC" }).format(new Date(group.eventTime))}.</p><div><button className="primary" onClick={() => void groupAction("rsvp", { status: "yes" })}>{t("group.rsvpYes")} · {group.rsvps.yes ?? 0}</button><button className="secondary" onClick={() => void downloadCalendar()}>{t("group.calendar")}</button></div></div> : null}
       </div>
     </div>
   </section>;

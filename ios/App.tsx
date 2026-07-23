@@ -59,8 +59,8 @@ type MatchResult = { kind: 'dish' | 'restaurant_alternative'; id: string; dishNa
 type MatchTiers = { confirmedNearbyDishes: MatchResult[]; communityOrInferredDishes: MatchResult[]; restaurantLevelAlternatives: MatchResult[] };
 type CommunityDish = { id: string; ownerId: string; name: string; cuisine: string; description: string; confidence: number; imageUrl?: string | null; contributorLabel: string; restaurant?: { name: string } | null; provenance?: string; verificationStatus?: string; availabilityKnowledge?: string };
 type Dish = { id: number; name: string; restaurant: string; neighborhood: string; price: string; note: string; match: number; image: string; tags: string[] };
-type MobileGroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; explanation: string; conflicts: string[]; kind: 'published_dish' | 'provider_restaurant' | 'seed_demo'; provenance?: string | null; verificationStatus?: string | null; currentAvailabilityConfirmed: boolean; dietaryCaveat: string };
-type MobileGroup = { id: string; name: string; eventTime: string; eventLocalDate: string | null; eventLocalTime: string | null; neighborhood: string; budgetMax: number; maxDistanceKm: number; distanceUnit: MeasurementSystem; vegetarianRequired: number; allergies: string[]; dietaryRequirements: string[]; cuisineTypes: string[]; inviteCode: string; inviteExpiresAt: string | null; inviteRevokedAt: string | null; status: 'voting' | 'finalized'; selectedCandidateId: string | null; candidates: MobileGroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number>; memberCount: number; viewerRole: 'owner' | 'participant'; viewerVote: string | null; viewerRsvp: string | null; timeZone: string | null; currencyCode: string | null; locale: string | null; locality: string | null; countryCode: string | null };
+type MobileGroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; explanation: string; conflicts: string[]; kind: 'published_dish' | 'provider_restaurant' | 'seed_demo'; provenance?: string | null; verificationStatus?: string | null; currentAvailabilityConfirmed: boolean; dietaryCaveat: string; tier: 'fits' | 'needs_checking' | 'does_not_fit'; reasons: string[] };
+type MobileGroup = { id: string; name: string; eventTime: string; eventLocalDate: string | null; eventLocalTime: string | null; neighborhood: string; budgetMax: number; maxDistanceKm: number; distanceUnit: MeasurementSystem; allergies: string[]; dietaryRequirements: string[]; cuisineTypes: string[]; inviteCode: string; inviteExpiresAt: string | null; inviteRevokedAt: string | null; status: 'voting' | 'finalized'; selectedCandidateId: string | null; candidates: MobileGroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number>; memberCount: number; viewerRole: 'owner' | 'participant'; viewerVote: string | null; viewerRsvp: string | null; timeZone: string | null; currencyCode: string | null; locale: string | null; locality: string | null; countryCode: string | null };
 
 function mobileGroupConflictLabel(t: Translator, conflict: string): string {
   const [code, detail = ''] = conflict.split(':', 2);
@@ -69,7 +69,7 @@ function mobileGroupConflictLabel(t: Translator, conflict: string): string {
 }
 
 function mobileGroupCandidateCopy(t: Translator, candidate: MobileGroupCandidate) {
-  const explanation = candidate.explanation === 'eligible' ? t('group.fitEligible') : candidate.explanation === 'review_required' ? t('group.fitReview') : `${t('group.fitIneligible')} ${candidate.conflicts.map((conflict) => mobileGroupConflictLabel(t, conflict)).join('; ')}`.trim();
+  const explanation = candidate.tier === 'fits' ? t('group.fitEligible') : candidate.tier === 'needs_checking' ? t('group.fitReview') : `${t('group.fitIneligible')} ${candidate.conflicts.map((conflict) => mobileGroupConflictLabel(t, conflict)).join('; ')}`.trim();
   const dietaryCaveat = candidate.dietaryCaveat === 'provider_information_unconfirmed' ? t('group.providerCaveat') : t('analysis.warning');
   return { explanation, dietaryCaveat };
 }
@@ -530,14 +530,19 @@ function GroupsScreen({ guestToken, canWrite, onSignIn, t, location, language, i
   const [group, setGroup] = useState<MobileGroup | null>(null);
   const [busy, setBusy] = useState(false);
   const [placesUnavailable, setPlacesUnavailable] = useState(!remoteApi);
-  const [budgetMax, setBudgetMax] = useState('35');
-  const [maxDistance, setMaxDistance] = useState('4');
+  const [budgetMax, setBudgetMax] = useState('');
+  const [maxDistance, setMaxDistance] = useState('');
   const [distanceUnit, setDistanceUnit] = useState<MeasurementSystem>('metric');
   const [allergies, setAllergies] = useState('');
   const [cuisineTypes, setCuisineTypes] = useState('');
   const [dietaryRequirements, setDietaryRequirements] = useState<string[]>([]);
-  const [eventLocalDate, setEventLocalDate] = useState(() => new Date(Date.now() + 86400000).toISOString().slice(0, 10));
-  const [eventLocalTime, setEventLocalTime] = useState('19:30');
+  const [eventLocalDate, setEventLocalDate] = useState('');
+  const [eventLocalTime, setEventLocalTime] = useState('');
+  const [groupLocation, setGroupLocation] = useState<MobileLocation | null>(null);
+  const [locationQuery, setLocationQuery] = useState('');
+  const [locationSuggestions, setLocationSuggestions] = useState<MobileLocationSuggestion[]>([]);
+  const [locationBusy, setLocationBusy] = useState(false);
+  const joinAttempted = useRef(false);
 
   useEffect(() => {
     if (!remoteApi) return;
@@ -548,8 +553,9 @@ function GroupsScreen({ guestToken, canWrite, onSignIn, t, location, language, i
   }, []);
 
   useEffect(() => {
-    if (!remoteApi || !guestToken) return;
+    if (!remoteApi || !guestToken || joinAttempted.current) return;
     if (inviteCode) {
+      joinAttempted.current = true;
       void fetch(`${remoteApi}/api/groups/join`, { method: 'POST', headers: { Authorization: `Session ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ inviteCode, language }) }).then(async (response) => {
         if (!response.ok) { Alert.alert(t('group.inviteInvalid')); return; }
         setGroup(((await response.json()) as { group: MobileGroup }).group);
@@ -563,14 +569,51 @@ function GroupsScreen({ guestToken, canWrite, onSignIn, t, location, language, i
     });
   }, [guestToken, inviteCode, inviteHandled, language, t, track]);
 
+  const searchLocation = async (payload: { input?: string; latitude?: number; longitude?: number; providerPlaceId?: string }) => {
+    if (!remoteApi || !guestToken) { Alert.alert(t('auth.signInNeeded')); return; }
+    setLocationBusy(true);
+    try {
+      const response = await fetch(`${remoteApi}/api/locations/autocomplete`, { method: 'POST', headers: { Authorization: `Session ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, language, location: groupLocation ?? undefined }) });
+      const body = await response.json() as { suggestions?: MobileLocationSuggestion[]; location?: MobileLocation; error?: { code?: string } };
+      if (!response.ok) {
+        const message = body.error?.code === 'unsupported_country' ? t('location.unsupported') : body.error?.code === 'credentials' ? t('location.unavailable') : t('location.providerError');
+        Alert.alert(t('health.placesUnavailable'), message);
+        return;
+      }
+      if (body.location) {
+        setGroupLocation(body.location);
+        setLocationSuggestions([]);
+        setLocationQuery(body.location.locality);
+        return;
+      }
+      setLocationSuggestions(body.suggestions ?? []);
+    } catch { Alert.alert(t('health.placesUnavailable'), t('location.unavailable')); }
+    finally { setLocationBusy(false); }
+  };
+
+  const useDeviceLocation = async () => {
+    const permission = await ExpoLocation.requestForegroundPermissionsAsync();
+    if (!permission.granted) { Alert.alert(t('location.permissionDenied'), t('location.search')); return; }
+    const position = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.Balanced });
+    await searchLocation({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+  };
+
+  const useSavedArea = () => {
+    if (location) setGroupLocation(location);
+  };
+
   const createGroup = async () => {
     if (!canWrite) { onSignIn(); return; }
     if (!remoteApi || !guestToken) { Alert.alert(t('auth.signInNeeded')); return; }
-    if (!location) { Alert.alert(t('location.change'), t('location.privacy')); return; }
+    if (!groupLocation) { Alert.alert(t('location.change'), t('location.privacy')); return; }
     setBusy(true);
     try {
-      const response = await fetch(`${remoteApi}/api/groups`, { method: 'POST', headers: { Authorization: `Session ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: t('group.name'), eventLocalDate, eventLocalTime, location, language, budgetMax: Number(budgetMax), maxDistance: Number(maxDistance), distanceUnit, vegetarianRequired: dietaryRequirements.includes('vegetarian') ? 1 : 0, allergies: allergies.split(','), dietaryRequirements, cuisineTypes: cuisineTypes.split(',') }) });
-      if (!response.ok) throw new Error();
+      const response = await fetch(`${remoteApi}/api/groups`, { method: 'POST', headers: { Authorization: `Session ${guestToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: t('group.name'), eventLocalDate: eventLocalDate || undefined, eventLocalTime: eventLocalTime || undefined, location: groupLocation, language, budgetMax: Number(budgetMax) || undefined, maxDistance: Number(maxDistance) || undefined, distanceUnit, allergies: allergies.split(','), dietaryRequirements, cuisineTypes: cuisineTypes.split(',') }) });
+      if (!response.ok) {
+        const error = ((await response.json()) as { error?: string; failure?: { code?: string } }).failure?.code;
+        if (error === 'profile_incomplete') { Alert.alert(t('onboarding.required')); return; }
+        throw new Error();
+      }
       const payload = await response.json() as { group: MobileGroup; providerStatus?: { status: 'live' | 'unavailable' } };
       setGroup(payload.group); setPlacesUnavailable(payload.providerStatus?.status === 'unavailable');
       track('group_created', { outcome: 'success' });
@@ -613,17 +656,18 @@ function GroupsScreen({ guestToken, canWrite, onSignIn, t, location, language, i
     setGroup(null);
   };
 
-  const eligibleCandidates = group?.candidates.filter((candidate) => candidate.eligible).slice(0, 5) ?? [];
-  const placesToCheck = group?.candidates.filter((candidate) => !candidate.eligible).slice(0, 5) ?? [];
+  const fitCandidates = group?.candidates.filter((candidate) => candidate.tier === 'fits').slice(0, 5) ?? [];
+  const checkCandidates = group?.candidates.filter((candidate) => candidate.tier === 'needs_checking').slice(0, 5) ?? [];
+  const noFitCandidates = group?.candidates.filter((candidate) => candidate.tier === 'does_not_fit').slice(0, 5) ?? [];
   const winner = group?.candidates.find((candidate) => candidate.candidateId === group.selectedCandidateId);
   const renderCandidate = (candidate: MobileGroupCandidate) => (
-    <View key={candidate.candidateId} style={[styles.voteCard, !candidate.eligible && styles.ineligibleCard]}>
+    <View key={candidate.candidateId} style={[styles.voteCard, candidate.tier !== 'fits' && styles.ineligibleCard]}>
       {candidate.image ? <NativeImage source={{ uri: candidate.image }} style={styles.voteImage} /> : <View style={styles.voteImage} />}
       <View style={styles.voteInfo}>
-        <View style={styles.voteMeta}><Text style={styles.fitBadge}>{candidate.explanation === 'eligible' ? t('group.groupFit', { score: candidate.score }) : candidate.eligible ? t('group.needsCheck') : t('group.hardConflict')}</Text><Text style={styles.votePrice}>{candidate.price}</Text></View>
+        <View style={styles.voteMeta}><Text style={styles.fitBadge}>{candidate.tier === 'fits' ? t('group.groupFit', { score: candidate.score }) : candidate.tier === 'needs_checking' ? t('group.needsCheck') : t('group.hardConflict')}</Text><Text style={styles.votePrice}>{candidate.price}</Text></View>
         <Text style={styles.voteName}>{candidate.name}</Text>
-        <Text style={styles.voteReason}>{candidate.restaurant} · {new Intl.NumberFormat(language, { style: 'unit', unit: group?.distanceUnit === 'imperial' ? 'mile' : 'kilometer', unitDisplay: 'short', maximumFractionDigits: 1 }).format(group?.distanceUnit === 'imperial' ? candidate.distanceKm * .621371 : candidate.distanceKm)}{`\n`}{mobileGroupCandidateCopy(t, candidate).explanation}{`\n`}{mobileGroupCandidateCopy(t, candidate).dietaryCaveat}{candidate.kind === 'provider_restaurant' ? `\n${t('match.restaurantReason')}` : ''}</Text>
-        <Pressable disabled={busy || !candidate.eligible || group?.status === 'finalized'} style={({ pressed }) => [styles.voteButton, pressed && styles.pressed, (busy || !candidate.eligible || group?.status === 'finalized') && styles.disabledButton]} onPress={() => groupAction('vote', { candidateId: candidate.candidateId })}>
+        <Text style={styles.voteReason}>{candidate.restaurant} · {new Intl.NumberFormat(language, { style: 'unit', unit: group?.distanceUnit === 'imperial' ? 'mile' : 'kilometer', unitDisplay: 'short', maximumFractionDigits: 1 }).format(group?.distanceUnit === 'imperial' ? candidate.distanceKm * .621371 : candidate.distanceKm)}{candidate.reasons?.length ? `\n${candidate.reasons.join('\n')}` : `\n${mobileGroupCandidateCopy(t, candidate).explanation}`}{`\n`}{mobileGroupCandidateCopy(t, candidate).dietaryCaveat}{candidate.kind === 'provider_restaurant' ? `\n${t('match.restaurantReason')}` : ''}</Text>
+        <Pressable disabled={busy || candidate.tier === 'does_not_fit' || group?.status === 'finalized'} style={({ pressed }) => [styles.voteButton, pressed && styles.pressed, (busy || candidate.tier === 'does_not_fit' || group?.status === 'finalized') && styles.disabledButton]} onPress={() => groupAction('vote', { candidateId: candidate.candidateId })}>
           <Text style={styles.voteButtonText}>{group?.status === 'finalized' ? t('group.votingClosed') : `${group?.viewerVote === candidate.candidateId ? '♥' : '♡'}  ${t('group.vote')} · ${group?.votes[candidate.candidateId] ?? 0}`}</Text>
         </Pressable>
       </View>
@@ -654,7 +698,7 @@ function GroupsScreen({ guestToken, canWrite, onSignIn, t, location, language, i
       </View>
 
       <SectionHeading kicker={t('group.ranking').toUpperCase()} title={group ? t('group.bestFits') : t('group.start')} action="" />
-      {!group ? <View style={styles.emptyCard}><Text style={styles.emptyIcon}>♢</Text><Text style={styles.emptyTitle}>{t('group.start')}</Text><Text style={styles.emptyBody}>{t('group.createBody')}</Text><Text style={styles.fieldLabel}>{t('group.date')}</Text><TextInput style={styles.fieldInput} value={eventLocalDate} onChangeText={setEventLocalDate} placeholder="YYYY-MM-DD" placeholderTextColor={palette.muted} /><Text style={styles.fieldLabel}>{t('group.time')}</Text><TextInput style={styles.fieldInput} value={eventLocalTime} onChangeText={setEventLocalTime} placeholder="19:30" placeholderTextColor={palette.muted} /><Text style={styles.fieldLabel}>{t('group.budget')}</Text><TextInput style={styles.fieldInput} value={budgetMax} onChangeText={setBudgetMax} keyboardType="decimal-pad" /><Text style={styles.fieldLabel}>{t('group.radius')}</Text><TextInput style={styles.fieldInput} value={maxDistance} onChangeText={setMaxDistance} keyboardType="decimal-pad" /><View style={styles.choiceRow}>{(['metric', 'imperial'] as const).map((value) => <Choice key={value} selected={distanceUnit === value} label={t(value === 'metric' ? 'location.metric' : 'location.imperial')} onPress={() => setDistanceUnit(value)} />)}</View><Text style={styles.fieldLabel}>{t('group.dietary')}</Text>{['vegan', 'vegetarian', 'celiac', 'gluten-free', 'dairy-free', 'nut-free', 'shellfish-free', 'halal', 'kosher'].map((item) => <Toggle key={item} selected={dietaryRequirements.includes(item)} label={t(`diet.${item}` as MessageKey)} onPress={() => setDietaryRequirements((current) => current.includes(item) ? current.filter((value) => value !== item) : [...current, item])} />)}<Text style={styles.fieldLabel}>{t('group.allergies')}</Text><TextInput style={styles.fieldInput} value={allergies} onChangeText={setAllergies} placeholder={t('group.allergyExample')} placeholderTextColor={palette.muted} /><Text style={styles.fieldLabel}>{t('group.cuisines')}</Text><TextInput style={styles.fieldInput} value={cuisineTypes} onChangeText={setCuisineTypes} placeholder={t('group.cuisineExample')} placeholderTextColor={palette.muted} /><Pressable disabled={busy || (canWrite && (!location || !eventLocalDate || !eventLocalTime))} style={styles.primaryButton} onPress={createGroup}><Text style={styles.primaryButtonText}>{busy ? t('group.building') : canWrite ? t('group.rank') : t('auth.signIn')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable></View> : group.candidates.length === 0 ? <View style={styles.emptyCard}><Text style={styles.emptyTitle}>{t('group.noLiveCandidates')}</Text></View> : <><>{eligibleCandidates.length === 0 ? <View style={styles.emptyCard}><Text style={styles.emptyTitle}>{t('group.noEligibleCandidates')}</Text></View> : eligibleCandidates.map(renderCandidate)}</>{placesToCheck.length ? <><SectionHeading kicker={t('group.ranking').toUpperCase()} title={t('group.placesToCheck')} action="" />{placesToCheck.map(renderCandidate)}</> : null}</>}
+      {!group ? <View style={styles.emptyCard}><Text style={styles.emptyIcon}>♢</Text><Text style={styles.emptyTitle}>{t('group.start')}</Text><Text style={styles.emptyBody}>{t('group.createBody')}</Text><View style={styles.groupLocationRow}><View><Text style={styles.fieldLabel}>{t('settings.location')}</Text><Text style={styles.locationValue}>{groupLocation ? `${groupLocation.locality}, ${groupLocation.countryCode}` : t('location.choose')}</Text></View><Pressable style={styles.groupLocationButton} onPress={useDeviceLocation}><Text><Text style={styles.locationIcon}>⌖</Text> {t('location.useDevice')}</Text></Pressable></View><TextInput style={styles.locationInput} value={locationQuery} onChangeText={setLocationQuery} placeholder={t('location.search')} placeholderTextColor={palette.muted} /><Pressable disabled={locationBusy || !locationQuery.trim()} style={styles.secondaryButton} onPress={() => searchLocation({ input: locationQuery.trim() })}><Text style={styles.secondaryButtonText}>{t('location.searchAction')}</Text></Pressable><Pressable style={styles.textButton} onPress={groupLocation ? () => setGroupLocation(null) : useSavedArea}><Text style={styles.demoLink}>{groupLocation ? t('location.clear') : t('location.useSaved')}</Text></Pressable>{locationBusy ? <Text style={styles.locationStatus}>{t('location.searching')}</Text> : null}{locationSuggestions.map((suggestion) => <Pressable key={suggestion.id} style={styles.locationSuggestion} onPress={() => searchLocation({ providerPlaceId: suggestion.providerPlaceId })}><Text style={styles.safetyTitle}>{suggestion.label}</Text><Text style={styles.safetyBody}>{suggestion.secondaryLabel}</Text></Pressable>)}{locationSuggestions.length > 0 ? <Text accessibilityLabel="Google Maps" style={styles.googleAttribution}>Google Maps</Text> : null}<Text style={styles.fieldLabel}>{t('group.date')}</Text><TextInput style={styles.fieldInput} value={eventLocalDate} onChangeText={setEventLocalDate} placeholder={t('group.date')} placeholderTextColor={palette.muted} /><Text style={styles.fieldLabel}>{t('group.time')}</Text><TextInput style={styles.fieldInput} value={eventLocalTime} onChangeText={setEventLocalTime} placeholder={t('group.time')} placeholderTextColor={palette.muted} /><Text style={styles.fieldLabel}>{t('group.budget')}</Text><TextInput style={styles.fieldInput} value={budgetMax} onChangeText={setBudgetMax} keyboardType="decimal-pad" /><Text style={styles.fieldLabel}>{t('group.radius')}</Text><TextInput style={styles.fieldInput} value={maxDistance} onChangeText={setMaxDistance} keyboardType="decimal-pad" /><View style={styles.choiceRow}>{(['metric', 'imperial'] as const).map((value) => <Choice key={value} selected={distanceUnit === value} label={t(value === 'metric' ? 'location.metric' : 'location.imperial')} onPress={() => setDistanceUnit(value)} />)}</View><Text style={styles.fieldLabel}>{t('group.dietary')}</Text>{['vegan', 'vegetarian', 'celiac', 'gluten-free', 'dairy-free', 'nut-free', 'shellfish-free', 'halal', 'kosher'].map((item) => <Toggle key={item} selected={dietaryRequirements.includes(item)} label={t(`diet.${item}` as MessageKey)} onPress={() => setDietaryRequirements((current) => current.includes(item) ? current.filter((value) => value !== item) : [...current, item])} />)}<Text style={styles.fieldLabel}>{t('group.allergies')}</Text><TextInput style={styles.fieldInput} value={allergies} onChangeText={setAllergies} placeholder={t('group.allergyExample')} placeholderTextColor={palette.muted} /><Text style={styles.fieldLabel}>{t('group.cuisines')}</Text><TextInput style={styles.fieldInput} value={cuisineTypes} onChangeText={setCuisineTypes} placeholder={t('group.cuisineExample')} placeholderTextColor={palette.muted} /><Pressable disabled={busy || (canWrite && (!groupLocation))} style={styles.primaryButton} onPress={createGroup}><Text style={styles.primaryButtonText}>{busy ? t('group.building') : canWrite ? t('group.rank') : t('auth.signIn')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable></View> : group.candidates.length === 0 ? <View style={styles.emptyCard}><Text style={styles.emptyTitle}>{t('group.noLiveCandidates')}</Text></View> : <><>{fitCandidates.length === 0 ? <View style={styles.emptyCard}><Text style={styles.emptyTitle}>{t('group.noEligibleCandidates')}</Text></View> : fitCandidates.map(renderCandidate)}</>{checkCandidates.length ? <><SectionHeading kicker={t('group.ranking').toUpperCase()} title={t('group.placesToCheck')} action="" />{checkCandidates.map(renderCandidate)}</> : null}{noFitCandidates.length ? <><SectionHeading kicker={t('group.ranking').toUpperCase()} title={t('group.noFit')} action="" />{noFitCandidates.map(renderCandidate)}</> : null}</>}
       {group?.status === 'voting' && group.viewerRole === 'owner' ? <Pressable disabled={busy} style={({ pressed }) => [styles.primaryButton, styles.lockButton, pressed && styles.pressed, busy && styles.disabledButton]} onPress={() => groupAction('finalize')}><Text style={styles.primaryButtonText}>{t('group.lock')}</Text><Text style={styles.primaryArrow}>→</Text></Pressable> : group?.status === 'voting' ? <Text style={styles.editorialNote}>{t('group.ownerFinalizes')}</Text> : winner ? <View style={styles.mobileFinalPlan}><Text style={styles.planEyebrow}>{t('group.bestTable').toUpperCase()}</Text><Text style={styles.mobileFinalTitle}>{winner.restaurant}</Text><Text style={styles.mobileFinalBody}>{winner.name}. {mobileGroupCandidateCopy(t, winner).explanation}</Text><View style={styles.mobileFinalActions}><Pressable style={styles.finalAction} onPress={() => groupAction('rsvp', { status: 'yes' })}><Text style={styles.finalActionText}>{t('group.rsvpYes')} · {group?.rsvps.yes ?? 0}</Text></Pressable><Pressable style={styles.finalAction} onPress={shareCalendar}><Text style={styles.finalActionText}>{t('group.calendar')}</Text></Pressable></View></View> : null}
     </ScrollView>
   );
@@ -1225,6 +1269,12 @@ const styles = StyleSheet.create({
   locationInput: { minHeight: 50, marginTop: 14, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.cream, color: palette.ink, borderRadius: 14, paddingHorizontal: 13 },
   locationSuggestion: { marginTop: 9, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.cream, borderRadius: 14, padding: 12 },
   googleAttribution: { color: palette.muted, fontFamily: 'AvenirNext-Regular', fontSize: 12, fontWeight: '400', paddingTop: 6 },
+  groupLocationRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16, minHeight: 44, marginBottom: 18, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: palette.line, borderRadius: 15, backgroundColor: palette.cream },
+  locationValue: { color: palette.ink, fontSize: 13, fontWeight: '700' },
+  locationIcon: { fontSize: 17, lineHeight: 22 },
+  groupLocationButton: { minHeight: 42, paddingHorizontal: 13, borderRadius: 12, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7 },
+  textButton: { minHeight: 36, justifyContent: 'center', alignItems: 'center' },
+  locationStatus: { color: palette.muted, fontSize: 12, marginTop: 8 },
   privacyText: { color: palette.muted, fontSize: 11, lineHeight: 16, marginTop: 16 },
   safetyCard: { marginHorizontal: 18, backgroundColor: palette.sage, borderRadius: 19, padding: 16, flexDirection: 'row', gap: 12 },
   safetyIcon: { width: 24, height: 24, textAlign: 'center', paddingTop: 3, borderRadius: 12, overflow: 'hidden', backgroundColor: palette.olive, color: '#FFFFFF', fontWeight: '900' },

@@ -1,40 +1,36 @@
 export const DIETARY_REQUIREMENTS = ["vegan", "vegetarian", "celiac", "gluten_free", "dairy_free", "nut_free", "shellfish_free", "halal", "kosher"] as const;
 export type DietaryRequirement = (typeof DIETARY_REQUIREMENTS)[number];
-export type GroupConstraints = { budgetMax: number; maxDistanceKm: number; vegetarianRequired: number; allergies: string[]; dietaryRequirements: DietaryRequirement[]; cuisineTypes: string[] };
-export type GroupCandidateSource = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; priceAmount: number | null; currencyCode: string; image?: string | null; dietaryCaveat: string; cuisine?: string | null; kind: "published_dish" | "provider_restaurant"; restaurantId?: string | null; providerPlaceId?: string | null; provenance: string; verificationStatus: string; currentAvailabilityConfirmed: boolean };
-export type RankedGroupCandidate = GroupCandidateSource & { price: string; image: string; score: number; eligible: boolean; explanation: string; conflicts: string[] };
 
-export function rankGroupCandidates(candidates: GroupCandidateSource[], constraints: GroupConstraints, locale = "en-CA"): RankedGroupCandidate[] {
-  return candidates.map((candidate) => {
-    const searchable = `${candidate.name} ${candidate.dietaryCaveat}`.toLowerCase();
-    const conflicts: string[] = [];
-    if (candidate.priceAmount == null) conflicts.push("price_unknown");
-    else if (candidate.priceAmount > constraints.budgetMax) conflicts.push("over_budget");
-    if (candidate.distanceKm > constraints.maxDistanceKm) conflicts.push("beyond_distance");
-    const supportsVegetarian = supportsRequirement(candidate.dietaryCaveat, "vegetarian");
-    if (constraints.vegetarianRequired > 0 && !supportsVegetarian) conflicts.push(candidate.kind === "provider_restaurant" ? "vegetarian_unknown" : "vegetarian_unsupported");
-    for (const requirement of constraints.dietaryRequirements) {
-      if (!supportsRequirement(candidate.dietaryCaveat, requirement)) conflicts.push(`${requirement}_unknown`);
-    }
-    for (const allergy of constraints.allergies.map((item) => item.trim().toLowerCase()).filter(Boolean)) {
-      if (candidate.kind === "provider_restaurant") conflicts.push(`allergen_unknown:${allergy}`);
-      else if (searchable.includes(allergy)) conflicts.push(`allergen_conflict:${allergy}`);
-    }
-    if (constraints.cuisineTypes.length > 0 && (!candidate.cuisine || !constraints.cuisineTypes.some((cuisine) => candidate.cuisine?.toLocaleLowerCase().includes(cuisine.toLocaleLowerCase())))) conflicts.push("cuisine_unknown_or_mismatch");
-    // A missing price needs a clear warning, but it is not proof that a place
-    // exceeds the group's limit. Dietary, allergy, distance, and known price
-    // conflicts remain hard blocks.
-    const hardConflicts = conflicts.filter((conflict) => conflict !== "price_unknown");
-    const eligible = hardConflicts.length === 0;
-    const budgetFit = candidate.priceAmount == null ? 0 : Math.max(0, 1 - candidate.priceAmount / Math.max(1, constraints.budgetMax * 1.5));
-    const distanceFit = Math.max(0, 1 - candidate.distanceKm / Math.max(1, constraints.maxDistanceKm * 1.5));
-    const recordQuality = candidate.verificationStatus === "restaurant_verified" ? 1 : candidate.verificationStatus === "community_confirmed" ? 0.75 : 0.3;
-    const score = Math.round(Math.max(20, Math.min(98, 48 + budgetFit * 15 + distanceFit * 18 + recordQuality * 12 + Number(candidate.currentAvailabilityConfirmed) * 5 - conflicts.length * 16)));
-    const explanation = !eligible ? "ineligible" : conflicts.includes("price_unknown") ? "review_required" : "eligible";
-    const price = candidate.priceAmount == null ? "—" : new Intl.NumberFormat(locale, { style: "currency", currency: candidate.currencyCode }).format(candidate.priceAmount);
-    return { ...candidate, price, image: candidate.image ?? "", score, eligible, explanation, conflicts };
-  }).sort((a, b) => Number(b.eligible) - Number(a.eligible) || b.score - a.score || a.distanceKm - b.distanceKm);
-}
+export const DIETARY_LABELS: Record<DietaryRequirement, string> = {
+  vegan: "Vegan",
+  vegetarian: "Vegetarian",
+  celiac: "Celiac",
+  gluten_free: "Gluten-free",
+  dairy_free: "Dairy-free",
+  nut_free: "Nut-free",
+  shellfish_free: "Shellfish-free",
+  halal: "Halal",
+  kosher: "Kosher",
+};
+
+export type Tier = "fits" | "needs_checking" | "does_not_fit";
+
+export type GroupConstraints = { budgetMax: number; maxDistanceKm: number; allergies: string[]; dietaryRequirements: DietaryRequirement[]; cuisineTypes: string[] };
+
+export type GroupCandidateSource = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; priceAmount: number | null; currencyCode: string; image?: string | null; dietaryCaveat: string; cuisine?: string | null; kind: "published_dish" | "provider_restaurant"; restaurantId?: string | null; providerPlaceId?: string | null; provenance: string; verificationStatus: string; currentAvailabilityConfirmed: boolean };
+
+export type RankedGroupCandidate = GroupCandidateSource & { price: string; image: string; score: number; eligible: boolean; tier: Tier; explanation: string; reasons: string[] };
+
+const REASON_TRANSLATIONS: Record<string, (locale?: string) => string> = {
+  over_budget: () => "Over budget",
+  beyond_distance: () => "Too far",
+  price_unknown: () => "Price not known",
+  vegetarian_unknown: () => "Cannot confirm vegetarian",
+  vegetarian_unsupported: () => "Does not support vegetarian",
+  allergen_unknown: (_, detail) => `Cannot confirm ${detail ?? "allergen"}`,
+  allergen_conflict: (_, detail) => `Contains ${detail ?? "allergen"}`,
+  cuisine_unknown_or_mismatch: () => "Cuisine type does not match",
+};
 
 function supportsRequirement(note: string, requirement: DietaryRequirement): boolean {
   const normalized = note.toLocaleLowerCase();
@@ -52,8 +48,55 @@ function supportsRequirement(note: string, requirement: DietaryRequirement): boo
   return terms[requirement].test(normalized);
 }
 
+function humanReason(code: string, locale?: string): string {
+  const colonIndex = code.indexOf(":");
+  const key = colonIndex >= 0 ? code.slice(0, colonIndex) : code;
+  const detail = colonIndex >= 0 ? code.slice(colonIndex + 1) : undefined;
+  const translate = REASON_TRANSLATIONS[key];
+  if (translate) return translate(locale, detail);
+  const reqMatch = key.match(/^(.+)_unknown$/);
+  if (reqMatch) {
+    const label = DIETARY_LABELS[reqMatch[1] as keyof typeof DIETARY_LABELS];
+    return label ? `Cannot confirm ${label}` : "Cannot confirm dietary";
+  }
+  return "Does not fit the plan";
+}
+
+export function rankGroupCandidates(candidates: GroupCandidateSource[], constraints: GroupConstraints, locale = "en-CA"): RankedGroupCandidate[] {
+  return candidates.map((candidate) => {
+    const searchable = `${candidate.name} ${candidate.dietaryCaveat}`.toLowerCase();
+    const codes: string[] = [];
+    if (candidate.priceAmount == null) codes.push("price_unknown");
+    else if (candidate.priceAmount > constraints.budgetMax) codes.push("over_budget");
+    if (candidate.distanceKm > constraints.maxDistanceKm) codes.push("beyond_distance");
+    for (const requirement of constraints.dietaryRequirements) {
+      if (!supportsRequirement(candidate.dietaryCaveat, requirement)) codes.push(`${requirement}_unknown`);
+    }
+    for (const allergy of constraints.allergies.map((item) => item.trim().toLowerCase()).filter(Boolean)) {
+      if (candidate.kind === "provider_restaurant") codes.push(`allergen_unknown:${allergy}`);
+      else if (searchable.includes(allergy)) codes.push(`allergen_conflict:${allergy}`);
+    }
+    if (constraints.cuisineTypes.length > 0 && (!candidate.cuisine || !constraints.cuisineTypes.some((cuisine) => candidate.cuisine?.toLocaleLowerCase().includes(cuisine.toLocaleLowerCase())))) codes.push("cuisine_unknown_or_mismatch");
+    const hard = codes.filter((code) => !code.startsWith("price_unknown"));
+    const eligible = hard.length === 0;
+    const price = candidate.priceAmount == null ? "—" : new Intl.NumberFormat(locale, { style: "currency", currency: candidate.currencyCode }).format(candidate.priceAmount);
+    if (!eligible) return { ...candidate, price, image: candidate.image ?? "", score: 0, eligible: false, tier: "does_not_fit" as const, explanation: "Does not fit the plan", reasons: hard.map((code) => humanReason(code, locale)) };
+    const needsCheck = codes.some((code) => code === "price_unknown" || code.endsWith("_unknown"));
+    const explanation = needsCheck ? "Needs checking" : "Fits the plan";
+    const tier = needsCheck ? "needs_checking" as const : "fits" as const;
+    const budgetFit = candidate.priceAmount == null ? 0 : Math.max(0, 1 - candidate.priceAmount / Math.max(1, constraints.budgetMax * 1.5));
+    const distanceFit = Math.max(0, 1 - candidate.distanceKm / Math.max(1, constraints.maxDistanceKm * 1.5));
+    const recordQuality = candidate.verificationStatus === "restaurant_verified" ? 1 : candidate.verificationStatus === "community_confirmed" ? 0.75 : 0.3;
+    const score = Math.round(Math.max(20, Math.min(98, 48 + budgetFit * 15 + distanceFit * 18 + recordQuality * 12 + Number(candidate.currentAvailabilityConfirmed) * 5 - codes.length * 16)));
+    return { ...candidate, price, image: candidate.image ?? "", score, eligible: true, tier, explanation, reasons: codes.map((code) => humanReason(code, locale)) };
+  }).sort((a, b) => {
+    const tierOrder = { fits: 0, needs_checking: 1, does_not_fit: 2 };
+    return tierOrder[a.tier] - tierOrder[b.tier] || b.score - a.score || a.distanceKm - b.distanceKm;
+  });
+}
+
 export function selectGroupWinner(candidates: RankedGroupCandidate[], votes: Record<string, number>): RankedGroupCandidate | null {
-  return [...candidates].filter((candidate) => candidate.eligible).sort((a, b) => (votes[b.candidateId] ?? 0) - (votes[a.candidateId] ?? 0) || b.score - a.score || a.distanceKm - b.distanceKm)[0] ?? null;
+  return [...candidates].filter((candidate) => candidate.tier !== "does_not_fit").sort((a, b) => (votes[b.candidateId] ?? 0) - (votes[a.candidateId] ?? 0) || b.score - a.score || a.distanceKm - b.distanceKm)[0] ?? null;
 }
 
 export function instantForLocalTime(localDate: string, localTime: string, timeZone: string): Date {

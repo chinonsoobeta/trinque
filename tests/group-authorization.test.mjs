@@ -42,5 +42,5 @@ test("Group creation tells the client when profile setup is required", async () 
   ]);
   assert.match(route, /"profile_incomplete"/);
   assert.match(page, /failure\?\.code === "profile_incomplete"/);
-  assert.match(page, /window\.location\.assign\("\/onboarding"\)/);
+  assert.match(page, /assign\("\/onboarding"\)/);
 });

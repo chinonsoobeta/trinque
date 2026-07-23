@@ -52,7 +52,7 @@ test("group planner uses the signed-in session and has one dietary control", asy
   ]);
   assert.match(home, /const \{ authenticated, authHeaders, sessionToken \} = useAuth\(\)/);
   assert.match(home, /headers: \{ \.\.\.sessionHeaders, "Content-Type": "application\/json" \}/);
-  assert.match(home, /vegetarianRequired: dietaryRequirements\.includes\("vegetarian"\) \? 1 : 0/);
+  assert.match(home, /dietaryRequirements, cuisineTypes/);
   assert.doesNotMatch(home, /setVegetarianRequired/);
   assert.doesNotMatch(home, /t\("group\.vegetarian"\).*inputMode="numeric"/);
   assert.match(home, /group-location-button/);

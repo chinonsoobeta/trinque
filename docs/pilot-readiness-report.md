@@ -24,7 +24,7 @@ Report date: 2026-07-23. Validated source: commit `757d14c`. Recommendation: **N
 
 ## Current production check
 
-Current Worker preview: `https://trinque2.chinonsoobeta.workers.dev`. Health endpoint reports D1, R2, Places, and OpenAI status independently.
+Current Worker preview: `https://trinque2.chinonsoobeta.workers.dev`. Health endpoint reports D1, R2, Places, and OpenAI status independently. `GOOGLE_PLACES_API_KEY` is supported as a legacy fallback; `GCP_API_KEY` is the current server-side Places secret.
 
 ## Safety and data controls
 
@@ -34,14 +34,15 @@ The web UI has a reason-based report form, report status, block, mute, hide, unb
 
 ## Group planning
 
-Group ranking rejects unknown required dietary data and allergens. The server stores distance unit, dietary needs, and cuisine types. Group candidates are organized into three tiers: fits, needs checking, does not fit. Web and iOS show the same dietary choices and location search. Owner-only finalization is enforced.
+Group ranking rejects unknown required dietary data and allergens. The server stores distance unit, dietary needs, and cuisine types. Group candidates are organized into three tiers: fits, needs checking, does not fit. The automated three-session authorization, vote, finalization, RSVP, and calendar tests pass. Web and iOS show the same dietary choices and location search. owner-only finalization is enforced.
 
 ## Remaining limits
 
 - Live multi-account group plan with an eligible provider candidate not yet measured
 - Live moderation, account deletion, and privacy export not yet measured
 - Human native-language review not yet recorded (automated parity checks pass)
-- Physical iOS Safari and Android Chrome not yet tested
+- Physical iOS Safari and Android Chrome not yet tested. These are unmeasured.
+- Real-time vote and RSVP state updates across multiple sessions are unmeasured.
 
 ## Required evidence before a controlled pilot
 

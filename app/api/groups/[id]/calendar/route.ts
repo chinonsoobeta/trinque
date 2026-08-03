@@ -6,8 +6,6 @@ import { calendarDocument } from "@/lib/group-planning";
 import { requireIdentity } from "@/lib/identity";
 import { translate } from "@/ios/i18n";
 
-export const runtime = "edge";
-
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const identity = await requireIdentity(request);
   if (!identity) return new Response("Guest session required.", { status: 401 });

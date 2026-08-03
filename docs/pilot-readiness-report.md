@@ -11,7 +11,7 @@ Runtime support is dynamic for every locality in US, CA, MX, GB and FR. The 15 a
 - `npm run verify`: 74 tests passed; production web build passed; iOS TypeScript check and Expo export passed.
 - `npm run lint`: 0 errors; seven pre-existing accessibility/performance warnings remain (image alt text and the existing web `<img>` path).
 - Secret scan: no API-key/token/private-key signatures found.
-- D1 migrations `0001` through `0008` apply in sequence; the latest migration adds consent-aware analytics, feedback, and client diagnostics.
+- Turso migrations `0001` through `0008` apply in sequence; the latest migration adds consent-aware analytics, feedback, and client diagnostics.
 - `npm run evaluate:identifier`: 50 planned cases across all five countries and all five UI languages; **unmeasured** because no approved image fixtures are present. No score is inferred.
 
 ## Provider and production checks

@@ -34,11 +34,25 @@ The app includes a deterministic photo-analysis demo. To connect it to the web a
 
 Use your Mac's local network address instead of `localhost` when testing on a physical iPhone. The OpenAI API key stays only in the web/server environment and is never shipped in the mobile bundle.
 
-Guest sessions are created server-side and stored as an opaque token on the device. Profiles, preferences, and saved dishes are persisted in the platform D1 database; authenticated ChatGPT browser users are recognized from trusted hosting headers.
+Guest sessions are created server-side and stored as an opaque token on the device. Profiles, preferences, and saved dishes are persisted in the Turso (libSQL) database; authenticated ChatGPT browser users are recognized from trusted hosting headers.
 
 To enable live photo analysis, copy .env.example to .env.local and add an OpenAI API key. Never commit the key.
 
-For production, add `OPENAI_API_KEY` and `GOOGLE_PLACES_API_KEY` as secrets in the Sites environment. The public client never receives them. `GET /api/health` reports OpenAI, Places, D1, and R2 independently without exposing secret values.
+## Deployment
+
+The web app is deployed on Vercel from this repository's default branch. Configure these in the Vercel project environment:
+
+| Variable | Purpose |
+| --- | --- |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | Durable relational data (libSQL) |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Private dish-image bucket (server-only) |
+| `SUPABASE_UPLOADS_BUCKET` | Bucket name; defaults to `dish-images` |
+| `SUPABASE_PUBLISHABLE_KEY` | Supabase auth, safe for the client |
+| `OPENAI_API_KEY`, `GOOGLE_PLACES_API_KEY` | Live analysis and location search |
+| `APPLE_DEVELOPER_TEAM_ID` | Universal links (`/.well-known/apple-app-site-association`) |
+| `TRINQUE_ALLOWED_ORIGINS` | Extra browser origins allowed through CORS |
+
+The service-role key grants full access to the storage bucket and must never be exposed to the client. Schema changes are applied deliberately with `npm run db:migrate`, not by the build. `GET /api/health` reports OpenAI, Places, `database`, and `storage` independently without exposing secret values.
 
 Pilot operations also support `TRINQUE_ALLOWED_ORIGINS` plus per-action `TRINQUE_BUDGET_<ACTION>_USER_HOURLY` and `TRINQUE_BUDGET_<ACTION>_GLOBAL_HOURLY` settings for `ANALYSIS`, `PLACES`, `PUBLISH`, `INVITE_JOIN`, and `VOTE`. Defaults are safe and bounded; configure names only in source control and values only in server-side environment settings. See `docs/security-privacy-operations.md`.
 

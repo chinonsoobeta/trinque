@@ -12,8 +12,6 @@ import { PlacesProviderError } from "@/lib/places/types";
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/lib/regions";
 import { enforceUsageBudget, UsageBudgetError } from "@/lib/operations";
 
-export const runtime = "edge";
-
 export async function GET(request: Request) {
   const identity = await requireIdentity(request);
   if (!identity) return Response.json({ error: "Guest session required." }, { status: 401 });

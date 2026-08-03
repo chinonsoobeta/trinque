@@ -1,6 +1,6 @@
 # iOS release readiness
 
-The iOS app has committed EAS `preview` and `production` profiles in [ios/eas.json](/Users/chinonsoobeta/trinque/ios/eas.json). Both profiles inject only the public production API URL and universal-link host; OpenAI, Google Places, D1, R2, and any crash-reporting credentials remain server-side. EAS environments should be populated and reviewed with `eas env:list --environment preview` and `eas env:list --environment production`; do not commit `.env.local` or secret values.
+The iOS app has committed EAS `preview` and `production` profiles in [ios/eas.json](/Users/chinonsoobeta/trinque/ios/eas.json). Both profiles inject only the public production API URL and universal-link host; OpenAI, Google Places, Turso, Supabase Storage, and any crash-reporting credentials remain server-side. EAS environments should be populated and reviewed with `eas env:list --environment preview` and `eas env:list --environment production`; do not commit `.env.local` or secret values.
 
 ## Universal links and invites
 

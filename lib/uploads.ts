@@ -1,10 +1,35 @@
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+const DEFAULT_BUCKET = "dish-images";
+
+let cached: SupabaseClient | null = null;
+
+export function uploadsBucket(): string {
+  return process.env.SUPABASE_UPLOADS_BUCKET?.trim() || DEFAULT_BUCKET;
+}
+
+export function uploadsConfigured(): boolean {
+  return Boolean(process.env.SUPABASE_URL?.trim() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim());
+}
+
+// Writes and private reads use the service-role key, so this client must never
+// be constructed in code that reaches the browser.
+function storage() {
+  const url = process.env.SUPABASE_URL?.trim();
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !serviceRoleKey) return null;
+  cached ??= createClient(url, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  return cached.storage.from(uploadsBucket());
+}
+
 export async function storeDishImage(dataUrl: string, ownerId: string): Promise<string | null> {
   const decoded = decodeDishImage(dataUrl);
-  const { env } = await import("cloudflare:workers");
-  if (!env.UPLOADS) throw new Error("uploads_unavailable");
+  const bucket = storage();
+  if (!bucket) throw new Error("uploads_unavailable");
   const extension = decoded.contentType === "image/png" ? "png" : decoded.contentType === "image/webp" ? "webp" : "jpg";
   const key = `${ownerId}-${crypto.randomUUID()}.${extension}`;
-  await env.UPLOADS.put(key, decoded.bytes, { httpMetadata: { contentType: decoded.contentType } });
+  const { error } = await bucket.upload(key, decoded.bytes, { contentType: decoded.contentType, upsert: false });
+  if (error) throw new Error("uploads_unavailable");
   return key;
 }
 
@@ -24,14 +49,22 @@ function signatureMatches(contentType: string, bytes: Uint8Array): boolean {
   return bytes.length >= 12 && String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
 }
 
-export async function getDishImage(key: string) {
-  const { env } = await import("cloudflare:workers");
-  return env.UPLOADS?.get(key) ?? null;
+export type StoredDishImage = { body: ArrayBuffer; contentType: string; etag: string };
+
+export async function getDishImage(key: string): Promise<StoredDishImage | null> {
+  const bucket = storage();
+  if (!bucket) return null;
+  const { data, error } = await bucket.download(key);
+  if (error || !data) return null;
+  const body = await data.arrayBuffer();
+  // R2 supplied an ETag for free; Supabase Storage does not surface one through
+  // the SDK, so derive a stable validator from the immutable key and size.
+  return { body, contentType: data.type || "application/octet-stream", etag: `"${key}-${body.byteLength}"` };
 }
 
 export async function deleteDishImage(key: string): Promise<boolean> {
-  const { env } = await import("cloudflare:workers");
-  if (!env.UPLOADS) return false;
-  await env.UPLOADS.delete(key);
-  return true;
+  const bucket = storage();
+  if (!bucket) return false;
+  const { error } = await bucket.remove([key]);
+  return !error;
 }

@@ -1,13 +1,25 @@
-import { drizzle } from "drizzle-orm/d1";
+import { createClient } from "@libsql/client";
+import { drizzle } from "drizzle-orm/libsql";
 import * as schema from "./schema.ts";
 
+let cached: ReturnType<typeof drizzle<typeof schema>> | null = null;
+
+export function databaseConfigured(): boolean {
+  return Boolean(process.env.TURSO_DATABASE_URL?.trim());
+}
+
 export async function getDb() {
-  const { env } = await import("cloudflare:workers");
-  if (!env.DB) {
+  if (cached) return cached;
+
+  const url = process.env.TURSO_DATABASE_URL?.trim();
+  if (!url) {
     throw new Error(
-      "Cloudflare D1 binding `DB` is unavailable. Set the `d1` field in .openai/hosting.json to `DB` or let your control plane inject the real binding values before using the database."
+      "TURSO_DATABASE_URL is unavailable. Set it (and TURSO_AUTH_TOKEN for remote libSQL databases) in the Vercel project environment before using the database."
     );
   }
 
-  return drizzle(env.DB, { schema });
+  // Serverless instances are reused across invocations, so hold one client per
+  // instance instead of opening a connection on every request.
+  cached = drizzle(createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN?.trim() }), { schema });
+  return cached;
 }

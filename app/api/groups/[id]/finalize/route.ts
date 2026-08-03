@@ -5,8 +5,6 @@ import { groupSnapshot } from "@/lib/group-api";
 import { selectGroupWinner, type RankedGroupCandidate } from "@/lib/group-planning";
 import { requireIdentity } from "@/lib/identity";
 
-export const runtime = "edge";
-
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const identity = await requireIdentity(request);
   if (!identity) return Response.json({ error: "Guest session required." }, { status: 401 });

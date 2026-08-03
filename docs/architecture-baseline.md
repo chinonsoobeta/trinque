@@ -8,9 +8,9 @@ Upload a dish, understand what makes it special, discover similar dishes nearby,
 
 ## Present architecture
 
-- The web product is a Next.js/vinext application deployed as a Cloudflare-compatible Sites Worker. API route handlers and React UI live together under `app/`.
-- Durable relational data uses D1 through Drizzle. Schema is declared in `db/schema.ts`; ordered generated migrations are committed under `drizzle/`.
-- Uploaded image bytes use the server-only `UPLOADS` R2 binding while D1 stores ownership and dish metadata.
+- The web product is a stock Next.js application deployed on Vercel. API route handlers and React UI live together under `app/`; cross-cutting request handling (request id, CORS allow-list) lives in `proxy.ts`.
+- Durable relational data uses Turso (libSQL) through Drizzle. Schema is declared in `db/schema.ts`; ordered generated migrations are committed under `drizzle/` and applied with `npm run db:migrate`.
+- Uploaded image bytes use a private Supabase Storage bucket reached with the server-only service-role key, while Turso stores ownership and dish metadata.
 - Identity supports durable guest tokens plus trusted ChatGPT identity headers. Authorization decisions remain server-side.
 - Dish identification calls the OpenAI Responses API from the server with `gpt-5.6-sol`, an explicit `high` image-detail contract, structured output, and `store: false`.
 - The Expo React Native client under `ios/` calls the same server API and persists only opaque session/client preferences on device.
@@ -34,7 +34,7 @@ UI language is independent from location-derived formatting. Supported languages
 
 ## Safe capability health
 
-`GET /api/health` reports OpenAI, Google Places, D1, and R2 independently as `available` or `unavailable`, with only safe reasons (`configured`, `missing_credential`, or `missing_binding`). It never returns secret values. Overall readiness is `ready` only when all four live capabilities are available; deterministic demo analysis remains independently reported.
+`GET /api/health` reports OpenAI, Google Places, `database`, and `storage` independently as `available` or `unavailable`, with only safe reasons (`configured`, `missing_credential`, or `missing_configuration`). It never returns secret values. Overall readiness is `ready` only when all four live capabilities are available; deterministic demo analysis remains independently reported.
 
 When `GOOGLE_PLACES_API_KEY` is absent, live location search is unavailable. The product must explain that state and must not substitute Vancouver or seeded results.
 
@@ -42,7 +42,7 @@ When `GOOGLE_PLACES_API_KEY` is absent, live location search is unavailable. The
 
 The baseline `npm run verify` completed successfully:
 
-- production vinext web build: passed;
+- production Next.js web build: passed;
 - Node regression suite: 18 passed, 0 failed;
 - iOS TypeScript check: passed;
 - Expo iOS export: passed.

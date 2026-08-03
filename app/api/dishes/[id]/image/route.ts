@@ -4,8 +4,6 @@ import { publishedDishes } from "@/db/schema";
 import { requireIdentity } from "@/lib/identity";
 import { deleteDishImage } from "@/lib/uploads";
 
-export const runtime = "edge";
-
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const identity = await requireIdentity(request);
   if (!identity) return Response.json({ error: "guest_session_required" }, { status: 401 });

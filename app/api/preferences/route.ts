@@ -5,7 +5,6 @@ import { requireIdentity } from "@/lib/identity";
 import { coarseLocation, normalizeLocation, type LocationCandidate } from "@/lib/location";
 import { SUPPORTED_LANGUAGES, type SupportedLanguage, type ThemePreference } from "@/lib/regions";
 
-export const runtime = "edge";
 const headers = { "Access-Control-Allow-Headers": "Authorization, Content-Type", "Access-Control-Allow-Methods": "GET, PUT, OPTIONS" };
 
 export function OPTIONS() { return new Response(null, { status: 204, headers }); }

@@ -12,7 +12,6 @@ import { SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/lib/regions";
 import { storeDishImage } from "@/lib/uploads";
 import { budgetResponse, enforceUsageBudget, requestIdFor, UsageBudgetError } from "@/lib/operations";
 
-export const runtime = "edge";
 const cors = { "Access-Control-Allow-Headers": "Authorization, Content-Type", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" };
 export function OPTIONS() { return new Response(null, { status: 204, headers: cors }); }
 

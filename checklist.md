@@ -11,11 +11,11 @@
 
 - [x] Server-created opaque guest sessions persist across web and iOS launches.
 - [x] Trusted hosting identity headers are supported without client impersonation.
-- [x] Saves and preferences use D1 as the authoritative store.
+- [x] Saves and preferences use Turso as the authoritative store.
 
 ## Phase 2 — publish and nearby matching
 
-- [x] Reviewed dishes and uploaded images persist to D1 and R2.
+- [x] Reviewed dishes and uploaded images persist to Turso and Supabase Storage.
 - [x] Publishing inserts the real dish into the feed.
 - [x] Nearby matches are ranked from reviewed fields and include explanations, distance, price, and dietary caveats.
 

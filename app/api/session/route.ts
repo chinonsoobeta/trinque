@@ -1,7 +1,5 @@
 import { getOrCreateIdentity } from "@/lib/identity";
 
-export const runtime = "edge";
-
 const headers = { "Access-Control-Allow-Headers": "Authorization, Content-Type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 
 export function OPTIONS() { return new Response(null, { status: 204, headers }); }

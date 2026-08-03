@@ -1,7 +1,7 @@
+import { databaseConfigured } from "@/db";
 import { capabilityStatus } from "@/lib/readiness";
 import { getRuntimeEnv, selectGooglePlacesKey, selectOpenAIKey } from "@/lib/runtime-env";
-
-export const runtime = "edge";
+import { uploadsConfigured } from "@/lib/uploads";
 
 export async function GET() {
   try {
@@ -9,8 +9,8 @@ export async function GET() {
     const capabilities = capabilityStatus({
       openAIKey: selectOpenAIKey(env.OPENAI_API_KEY, process.env.OPENAI_API_KEY),
       googlePlacesKey: selectGooglePlacesKey(env.GOOGLE_PLACES_API_KEY, process.env.GOOGLE_PLACES_API_KEY),
-      hasDatabase: Boolean(env.DB),
-      hasUploads: Boolean(env.UPLOADS),
+      hasDatabase: databaseConfigured(),
+      hasUploads: uploadsConfigured(),
     });
     return Response.json({ ok: true, ...capabilities }, {
       headers: { "Cache-Control": "no-store" },

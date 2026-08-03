@@ -9,8 +9,8 @@ test("readiness is only complete when every live capability is configured", () =
     capabilities: {
       openai: { status: "available", reason: "configured" },
       places: { status: "available", reason: "configured" },
-      d1: { status: "available", reason: "configured" },
-      r2: { status: "available", reason: "configured" },
+      database: { status: "available", reason: "configured" },
+      storage: { status: "available", reason: "configured" },
     },
     liveAnalysis: true,
     locationSearch: true,
@@ -31,9 +31,9 @@ test("readiness exposes missing capabilities without exposing a key", () => {
   assert.equal(JSON.stringify(status).includes("secret"), false);
 });
 
-test("Sites Worker secrets take precedence while local Node env remains supported", () => {
-  assert.equal(selectOpenAIKey(" worker-secret ", "local-secret"), "worker-secret");
-  assert.equal(selectOpenAIKey(undefined, " local-secret "), "local-secret");
+test("configured secrets take precedence while a local fallback remains supported", () => {
+  assert.equal(selectOpenAIKey(" primary-secret ", "fallback-secret"), "primary-secret");
+  assert.equal(selectOpenAIKey(undefined, " fallback-secret "), "fallback-secret");
   assert.equal(selectOpenAIKey("", ""), undefined);
-  assert.equal(selectGooglePlacesKey(" places-worker ", "places-local"), "places-worker");
+  assert.equal(selectGooglePlacesKey(" places-primary ", "places-fallback"), "places-primary");
 });

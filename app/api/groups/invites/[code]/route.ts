@@ -3,8 +3,6 @@ import { getDb } from "@/db";
 import { groups } from "@/db/schema";
 import { requireIdentity } from "@/lib/identity";
 
-export const runtime = "edge";
-
 export async function GET(request: Request, { params }: { params: Promise<{ code: string }> }) {
   if (!await requireIdentity(request)) return Response.json({ error: "Guest session required." }, { status: 401 });
   const code = (await params).code;

@@ -8,7 +8,7 @@ The versioned corpus plan contains 50 cases: ten per pilot country, with coverag
 
 ## Consent-aware analytics
 
-The API accepts only the eleven versioned product events requested for the pilot. It validates language, country, mode, outcome, and duration against bounded fields. The server checks the user’s current D1 analytics consent before inserting anything; when consent is absent it returns an accepted-but-not-recorded response. Events contain no image, search text, restaurant name, exact coordinates, guest token, email, authorization header, or free-form properties. Events are included in user export and deleted with the identity.
+The API accepts only the eleven versioned product events requested for the pilot. It validates language, country, mode, outcome, and duration against bounded fields. The server checks the user’s stored analytics consent before inserting anything; when consent is absent it returns an accepted-but-not-recorded response. Events contain no image, search text, restaurant name, exact coordinates, guest token, email, authorization header, or free-form properties. Events are included in user export and deleted with the identity.
 
 ## Feedback
 

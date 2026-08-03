@@ -42,3 +42,8 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# local libSQL databases
+*.db
+*.db-shm
+*.db-wal

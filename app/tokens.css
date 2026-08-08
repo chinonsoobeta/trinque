@@ -69,6 +69,11 @@
   --radius-xl: 34px;
   --radius-pill: 999px;
 
+  /* Scrims sit on photography, not on the page, so they stay dark in both
+     themes — the text they carry is always white. */
+  --scrim: rgba(24, 17, 14, .7);
+  --scrim-light: rgba(36, 31, 28, .35);
+
   --shadow-soft: 0 14px 40px rgba(70, 38, 29, .08);
   --shadow-card: 0 22px 54px rgba(70, 38, 29, .11);
   --shadow-overlay: 0 24px 70px rgba(70, 38, 29, .12);
@@ -106,14 +111,4 @@
   --shadow-soft: 0 14px 40px rgba(0, 0, 0, .2);
   --shadow-card: 0 22px 54px rgba(0, 0, 0, .3);
   --shadow-overlay: 0 24px 70px rgba(0, 0, 0, .4);
-}
-
-/* Names the previous three stylesheets used. Kept as aliases so this change is
-   purely additive; they are removed as each component moves to the tokens. */
-:root {
-  --app-elevated: var(--elevated);
-  --app-card: var(--card);
-  --app-subtle: var(--subtle);
-  --app-border-strong: var(--border-strong);
-  --shadow: var(--shadow-overlay);
 }

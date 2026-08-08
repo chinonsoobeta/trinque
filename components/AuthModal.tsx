@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { requestPasswordReset, safeReturnPath, signInWithGoogle, signInWithPassword, signUpWithPassword, updatePassword } from "@/lib/auth-client";
+import { googleSignInAvailable, requestPasswordReset, safeReturnPath, signInWithGoogle, signInWithPassword, signUpWithPassword, updatePassword } from "@/lib/auth-client";
 import { useUiText } from "@/components/useUiText";
 
 export type AuthMode = "signin" | "signup" | "recovery";
@@ -15,6 +15,13 @@ export function AuthModal({ open, onClose, initialMode = "signin", embedded = fa
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
+  const [googleAvailable, setGoogleAvailable] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void googleSignInAvailable().then((available) => { if (active) setGoogleAvailable(available); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (!open || embedded) return;
@@ -74,8 +81,8 @@ export function AuthModal({ open, onClose, initialMode = "signin", embedded = fa
       {!embedded && <button type="button" className="auth-close" onClick={onClose} aria-label={t("auth.close")}>×</button>}
       <div className="auth-brand-mark" aria-hidden="true">T</div><span className="kicker">{t("auth.account")}</span><h2 id="auth-title">{title}</h2>
       <p>{contextMessage ?? t(mode === "signin" ? "auth.signInBody" : mode === "signup" ? "auth.createBody" : "auth.passwordBody")}</p>
-      {mode !== "recovery" && <button type="button" className="oauth-button" disabled={busy} onClick={() => void google()}><span aria-hidden="true">G</span>{t("auth.google")}</button>}
-      {mode !== "recovery" && <div className="auth-divider"><span>{t("auth.useEmail")}</span></div>}
+      {mode !== "recovery" && googleAvailable && <button type="button" className="oauth-button" disabled={busy} onClick={() => void google()}><span aria-hidden="true">G</span>{t("auth.google")}</button>}
+      {mode !== "recovery" && googleAvailable && <div className="auth-divider"><span>{t("auth.useEmail")}</span></div>}
       <form onSubmit={submit}>
         {mode !== "recovery" && <label><span>{t("auth.email")}</span><input type="email" autoComplete="email" inputMode="email" placeholder={t("auth.email")} value={email} onChange={(event) => setEmail(event.target.value)} required /></label>}
         <label><span>{mode === "recovery" ? t("auth.newPassword") : t("auth.password")}</span><input type="password" autoComplete={mode === "signin" ? "current-password" : "new-password"} minLength={8} placeholder={t("auth.passwordHint")} value={password} onChange={(event) => setPassword(event.target.value)} required /></label>

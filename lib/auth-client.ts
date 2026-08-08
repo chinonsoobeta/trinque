@@ -2,23 +2,35 @@
 
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 
-type Config = { configured: boolean; url?: string; publishableKey?: string };
+type Config = { configured: boolean; url?: string; publishableKey?: string; providers?: { google?: boolean } };
 
 let clientPromise: Promise<SupabaseClient | null> | null = null;
+let configPromise: Promise<Config | null> | null = null;
+
+function loadConfig(): Promise<Config | null> {
+  // The client and the provider list come from one response, so opening the
+  // sign-in modal does not fetch the same endpoint twice.
+  if (!configPromise) {
+    configPromise = fetch("/api/auth/config", { cache: "no-store" })
+      .then(async (response) => (response.ok ? await response.json() as Config : null))
+      .catch(() => null);
+  }
+  return configPromise;
+}
 
 export function getSupabaseClient(): Promise<SupabaseClient | null> {
   if (!clientPromise) {
-    clientPromise = fetch("/api/auth/config", { cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) return null;
-        const config = await response.json() as Config;
-        return config.configured && config.url && config.publishableKey
-          ? createClient(config.url, config.publishableKey)
-          : null;
-      })
-      .catch(() => null);
+    clientPromise = loadConfig().then((config) =>
+      config?.configured && config.url && config.publishableKey
+        ? createClient(config.url, config.publishableKey)
+        : null);
   }
   return clientPromise;
+}
+
+/** Whether the project has Google sign-in enabled, so the button can be hidden when it is not. */
+export async function googleSignInAvailable(): Promise<boolean> {
+  return (await loadConfig())?.providers?.google === true;
 }
 
 export async function signUpWithPassword(email: string, password: string) {

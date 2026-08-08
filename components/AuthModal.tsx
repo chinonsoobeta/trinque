@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { googleSignInAvailable, requestPasswordReset, safeReturnPath, signInWithGoogle, signInWithPassword, signUpWithPassword, updatePassword } from "@/lib/auth-client";
+import { GoogleMark, Icon } from "@/components/Icon";
 import { useUiText } from "@/components/useUiText";
 
 export type AuthMode = "signin" | "signup" | "recovery";
@@ -78,10 +79,10 @@ export function AuthModal({ open, onClose, initialMode = "signin", embedded = fa
   const title = mode === "signin" ? t("auth.signIn") : mode === "signup" ? t("auth.create") : t("auth.newPassword");
   return <div role="dialog" aria-modal={embedded ? undefined : true} aria-labelledby="auth-title" className={`auth-modal-backdrop${embedded ? " embedded" : ""}`} onMouseDown={(event) => { if (!embedded && event.target === event.currentTarget) onClose(); }}>
     <div className="auth-modal">
-      {!embedded && <button type="button" className="auth-close" onClick={onClose} aria-label={t("auth.close")}>×</button>}
+      {!embedded && <button type="button" className="auth-close" onClick={onClose} aria-label={t("auth.close")}><Icon name="close" size={18} /></button>}
       <div className="auth-brand-mark" aria-hidden="true">T</div><span className="kicker">{t("auth.account")}</span><h2 id="auth-title">{title}</h2>
       <p>{contextMessage ?? t(mode === "signin" ? "auth.signInBody" : mode === "signup" ? "auth.createBody" : "auth.passwordBody")}</p>
-      {mode !== "recovery" && googleAvailable && <button type="button" className="oauth-button" disabled={busy} onClick={() => void google()}><span aria-hidden="true">G</span>{t("auth.google")}</button>}
+      {mode !== "recovery" && googleAvailable && <button type="button" className="oauth-button" disabled={busy} onClick={() => void google()}><GoogleMark />{t("auth.google")}</button>}
       {mode !== "recovery" && googleAvailable && <div className="auth-divider"><span>{t("auth.useEmail")}</span></div>}
       <form onSubmit={submit}>
         {mode !== "recovery" && <label><span>{t("auth.email")}</span><input type="email" autoComplete="email" inputMode="email" placeholder={t("auth.email")} value={email} onChange={(event) => setEmail(event.target.value)} required /></label>}

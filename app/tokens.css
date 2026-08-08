@@ -1,0 +1,119 @@
+/**
+ * Design tokens. The single source of truth for colour, type, space, radius,
+ * elevation and motion. Nothing else in the app should declare a raw hex value,
+ * a font stack, or a duration.
+ *
+ * Loaded first, before base.css and components.css.
+ */
+:root {
+  /* Brand palette. The burgundy/terracotta pairing is the existing identity. */
+  --burgundy: #7a263a;
+  --terracotta: #c7654f;
+
+  /* Semantic colour. Components reference these, never the brand names above. */
+  --bg: #fff8ef;
+  --surface: #fffcf8;
+  --elevated: #fffdf9;
+  --card: #fffaf3;
+  --primary: var(--burgundy);
+  --hover: #5e1d2d;
+  --secondary: var(--terracotta);
+  --text: #241f1c;
+  --muted: #756a63;
+  --border: #e5d9cf;
+  --success: #667449;
+  --warning: #b9772d;
+  --danger: #a7343f;
+  --on-primary: #fff;
+
+  /* Derived surfaces, kept as tokens so the mix ratios stay consistent. */
+  --subtle: color-mix(in srgb, var(--primary) 7%, var(--bg));
+  --border-strong: color-mix(in srgb, var(--primary) 22%, var(--border));
+
+  /* Type. --font-display and --font-ui are set by next/font in layout.tsx and
+     fall back to system faces if the font files ever fail to load. */
+  --font-display: var(--font-display-face, Georgia, "Times New Roman", serif);
+  --font-ui: var(--font-ui-face, system-ui, -apple-system, "Segoe UI", sans-serif);
+
+  /* A fixed scale, so no component invents its own size. */
+  --text-2xs: .625rem;   /* 10px — overlines, counts */
+  --text-xs: .6875rem;   /* 11px */
+  --text-sm: .8125rem;   /* 13px */
+  --text-base: .9375rem; /* 15px — body */
+  --text-lg: 1.125rem;   /* 18px */
+  --text-xl: 1.375rem;   /* 22px */
+  --display-sm: clamp(1.75rem, 3vw, 2.375rem);
+  --display-md: clamp(2.25rem, 4vw, 3.5rem);
+  --display-lg: clamp(3rem, 6vw, 4.875rem);
+
+  --leading-tight: 1.05;
+  --leading-snug: 1.3;
+  --leading-normal: 1.6;
+
+  --tracking-display: -.04em;
+  --tracking-overline: .14em;
+
+  /* Space. A 4px base so vertical rhythm is predictable. */
+  --space-1: .25rem;
+  --space-2: .5rem;
+  --space-3: .75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4.5rem;
+
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 34px;
+  --radius-pill: 999px;
+
+  --shadow-soft: 0 14px 40px rgba(70, 38, 29, .08);
+  --shadow-card: 0 22px 54px rgba(70, 38, 29, .11);
+  --shadow-overlay: 0 24px 70px rgba(70, 38, 29, .12);
+
+  /* Motion. One curve, three durations — see base.css for the reduced-motion
+     override that neutralises all of them. */
+  --ease: cubic-bezier(.2, .7, .3, 1);
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 250ms;
+
+  /* Layout */
+  --content-max: 1320px;
+  --header-height: 76px;
+  --tap-target: 44px;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #181315;
+  --surface: #241c1f;
+  --elevated: #2a2023;
+  --card: #21191c;
+  --burgundy: #d8909f;
+  --terracotta: #df806a;
+  --hover: #efadba;
+  --text: #fff5ef;
+  --muted: #c9b8b1;
+  --border: #49383d;
+  --success: #aab77c;
+  --warning: #e4a65d;
+  --danger: #f07f8d;
+  --on-primary: #241f1c;
+  --subtle: color-mix(in srgb, var(--primary) 9%, var(--bg));
+  --shadow-soft: 0 14px 40px rgba(0, 0, 0, .2);
+  --shadow-card: 0 22px 54px rgba(0, 0, 0, .3);
+  --shadow-overlay: 0 24px 70px rgba(0, 0, 0, .4);
+}
+
+/* Names the previous three stylesheets used. Kept as aliases so this change is
+   purely additive; they are removed as each component moves to the tokens. */
+:root {
+  --app-elevated: var(--elevated);
+  --app-card: var(--card);
+  --app-subtle: var(--subtle);
+  --app-border-strong: var(--border-strong);
+  --shadow: var(--shadow-overlay);
+}

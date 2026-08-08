@@ -5,7 +5,7 @@ import test from "node:test";
 test("web applies system, light and dark themes before meaningful render", async () => {
   const [layout, css] = await Promise.all([
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/tokens.css", import.meta.url), "utf8"),
   ]);
   assert.match(layout, /trinque\.theme/);
   assert.match(layout, /prefers-color-scheme: dark/);

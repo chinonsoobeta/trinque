@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Icon } from "@/components/Icon";
 import { NotificationList } from "@/components/NotificationList";
 import { useAuth } from "@/components/AuthProvider";
 import { useUiText } from "@/components/useUiText";
@@ -45,5 +46,5 @@ export function NotificationBell() {
   return () => controller.abort();
 }, [authenticated, authHeaders]);
   if (!authenticated) return null;
-  return <div className="notification-bell"><button aria-label={t("notifications.unread", { count })} onClick={() => setOpen((value) => !value)}>♢{count > 0 && <span>{count > 99 ? "99+" : count}</span>}</button>{open && <div className="notification-popover"><NotificationList onRead={() => void refresh()} /></div>}</div>;
+  return <div className="notification-bell"><button aria-label={t("notifications.unread", { count })} onClick={() => setOpen((value) => !value)}><Icon name="bell" size={20} />{count > 0 && <span>{count > 99 ? "99+" : count}</span>}</button>{open && <div className="notification-popover"><NotificationList onRead={() => void refresh()} /></div>}</div>;
 }

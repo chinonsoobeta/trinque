@@ -6,6 +6,7 @@ import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { useAuth } from "@/components/AuthProvider";
 import { AppAvatar } from "@/components/AppPrimitives";
+import { Icon } from "@/components/Icon";
 import { useUiText } from "@/components/useUiText";
 
 type RootView = "discover" | "groups" | "saved";
@@ -61,8 +62,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         {desktopLinks.map((item) => <Link key={item.label} href={item.href} onClick={(event) => switchRootView(event, item.href)} className={active(item.href) ? "app-nav-link active" : "app-nav-link"}><span className="nav-label">{item.label}</span></Link>)}
       </nav>}
       <div className="app-header-actions">
-        {!authSurface && <Link className="header-search" href="/explore" aria-label={t("home.explore")}>⌕<span>{t("nav.explore")}</span></Link>}
-        {!authSurface && <Link className="app-create-action" href="/#capture" onClick={createDish}><span aria-hidden="true">＋</span><span>{t("nav.postDish")}</span></Link>}
+        {!authSurface && <Link className="header-search" href="/explore" aria-label={t("home.explore")}><Icon name="explore" size={18} /><span>{t("nav.explore")}</span></Link>}
+        {!authSurface && <Link className="app-create-action" href="/#capture" onClick={createDish}><Icon name="post" size={18} /><span>{t("nav.postDish")}</span></Link>}
         {!authSurface && authenticated && <NotificationBell />}
         {!loading && !authenticated ? <Link className="signin-link" href={`/auth/login?next=${encodeURIComponent(pathname || "/")}`}>{t("auth.signIn")}</Link> : authenticated && identity ? <div className="profile-menu">
           <button className="profile-menu-trigger" onClick={() => setMenuPathname((value) => value === pathname ? null : pathname)} aria-haspopup="menu" aria-expanded={menuOpen} aria-label={t("auth.openAccount")}><AppAvatar name={identity.displayName} size="small" /></button>
@@ -72,11 +73,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     </header>
     <div className="app-content">{children}</div>
     {!authSurface && <nav className="mobile-navigation" aria-label={t("nav.discover")}>
-      <Link href="/" onClick={(event) => switchRootView(event, "/")} className={active("/") ? "active" : ""}><span aria-hidden="true">⌂</span><small>{t("nav.discover")}</small></Link>
-      <Link href="/explore" className={pathname.startsWith("/explore") ? "active" : ""}><span aria-hidden="true">⌕</span><small>{t("nav.explore")}</small></Link>
-      <Link href="/#capture" className="mobile-create" onClick={createDish} aria-label={t("nav.postDish")}><span aria-hidden="true">＋</span></Link>
-      <Link href="/?view=groups" onClick={(event) => switchRootView(event, "/?view=groups")} className={active("/?view=groups") ? "active" : ""}><span aria-hidden="true">♢</span><small>{t("nav.groups")}</small></Link>
-      <Link href={authenticated ? "/account" : `/auth/login?next=${encodeURIComponent(pathname || "/")}`} className={pathname.startsWith("/account") ? "active" : ""}><span aria-hidden="true">○</span><small>{authenticated ? t("nav.profile") : t("auth.signIn")}</small></Link>
+      <Link href="/" onClick={(event) => switchRootView(event, "/")} className={active("/") ? "active" : ""}><Icon name="discover" size={22} /><small>{t("nav.discover")}</small></Link>
+      <Link href="/explore" className={pathname.startsWith("/explore") ? "active" : ""}><Icon name="explore" size={22} /><small>{t("nav.explore")}</small></Link>
+      <Link href="/#capture" className="mobile-create" onClick={createDish} aria-label={t("nav.postDish")}><Icon name="post" size={24} /></Link>
+      <Link href="/?view=groups" onClick={(event) => switchRootView(event, "/?view=groups")} className={active("/?view=groups") ? "active" : ""}><Icon name="groups" size={22} /><small>{t("nav.groups")}</small></Link>
+      <Link href={authenticated ? "/account" : `/auth/login?next=${encodeURIComponent(pathname || "/")}`} className={pathname.startsWith("/account") ? "active" : ""}><Icon name="profile" size={22} /><small>{authenticated ? t("nav.profile") : t("auth.signIn")}</small></Link>
     </nav>}
   </div>;
 }

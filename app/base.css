@@ -1,0 +1,100 @@
+/**
+ * Reset and base element styling.
+ *
+ * This replaces the Tailwind preflight the app used to pull in through
+ * `@import "tailwindcss"`. Tailwind was shipping its full reset while not a
+ * single component used a utility class, so the framework is gone and the parts
+ * the app actually depended on are written out here.
+ *
+ * Loaded after tokens.css and before components.css.
+ */
+
+*,
+*::before,
+*::after { box-sizing: border-box; border: 0 solid var(--border); }
+
+* { margin: 0; }
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: calc(var(--header-height) + var(--space-4));
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  min-width: 0;
+  overflow-x: hidden;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Headings inherit by default; every heading takes its size from a component
+   rule or a utility below, so a stray <h3> can never introduce a new size. */
+h1, h2, h3, h4, h5, h6 { font-size: inherit; font-weight: inherit; }
+
+ol, ul, menu { list-style: none; padding: 0; }
+
+/* Replaced elements are block so they never sit on a text baseline, and never
+   overflow their column. */
+img, svg, video, canvas, audio, iframe, embed, object { display: block; vertical-align: middle; }
+img, video { max-width: 100%; height: auto; }
+
+a { color: inherit; text-decoration: inherit; }
+
+button, input, optgroup, select, textarea {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  letter-spacing: inherit;
+}
+button, [type="button"], [type="submit"], [type="reset"] { appearance: button; cursor: pointer; }
+button:disabled, [type="button"]:disabled, [type="submit"]:disabled { opacity: .58; cursor: not-allowed; }
+textarea { resize: vertical; }
+::placeholder { color: var(--muted); opacity: 1; }
+
+table { border-collapse: collapse; border-color: inherit; text-indent: 0; }
+
+hr { height: 0; color: inherit; border-top-width: 1px; }
+abbr:where([title]) { text-decoration: underline dotted; }
+b, strong { font-weight: bolder; }
+code, kbd, samp, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1em; }
+small { font-size: 80%; }
+sub, sup { font-size: 75%; line-height: 0; position: relative; vertical-align: baseline; }
+sub { bottom: -.25em; }
+sup { top: -.5em; }
+[hidden] { display: none !important; }
+
+button, a { -webkit-tap-highlight-color: transparent; }
+
+/* Focus is never removed — only styled. */
+:focus-visible { outline: 3px solid var(--secondary); outline-offset: 3px; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Every interactive control clears the platform minimum on touch layouts. */
+@media (max-width: 480px) {
+  button, .button-link, input, select, textarea { min-height: var(--tap-target); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

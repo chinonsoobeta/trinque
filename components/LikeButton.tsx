@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import { Icon } from "@/components/Icon";
 import { useUiText } from "@/components/useUiText";
 
 export function LikeButton({ dishId, initialLiked = false, initialCount = 0 }: { dishId: string; initialLiked?: boolean; initialCount?: number }) {
@@ -34,5 +35,5 @@ export function LikeButton({ dishId, initialLiked = false, initialCount = 0 }: {
     finally { setBusy(false); }
   }
 
-  return <button className={liked ? "save saved" : "save"} disabled={busy} onClick={() => void toggle()} aria-label={t(liked ? "dish.unlike" : "dish.like")}>{liked ? "♥" : "♡"} {count}</button>;
+  return <button className={liked ? "save saved" : "save"} disabled={busy} onClick={() => void toggle()} aria-label={t(liked ? "dish.unlike" : "dish.like")}><Icon name={liked ? "liked" : "like"} size={18} /><span>{count}</span></button>;
 }

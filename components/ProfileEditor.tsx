@@ -54,7 +54,7 @@ export function ProfileEditor({ profile }: { profile: PublicProfile }) {
 
   return <form className="profile-editor" onSubmit={submit}>
     <div className="profile-avatar-editor">
-      <div className="profile-avatar">{avatarUrl ? <Image src={avatarUrl} alt={t("profile.photo")} width={128} height={128} sizes="128px" unoptimized /> : <span>{displayName.slice(0, 2).toUpperCase()}</span>}</div>
+      <div className="profile-avatar">{avatarUrl ? <Image src={avatarUrl} alt={t("profile.photo")} width={128} height={128} sizes="128px" /> : <span>{displayName.slice(0, 2).toUpperCase()}</span>}</div>
       <label className="secondary avatar-upload">{t("profile.addPhoto")}<input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/avif" disabled={busy} onChange={(event) => void uploadAvatar(event)} /></label>
       {avatarUrl && <button type="button" className="text-button" disabled={busy} onClick={() => void removeAvatar()}>{t("profile.removePhoto")}</button>}
     </div>

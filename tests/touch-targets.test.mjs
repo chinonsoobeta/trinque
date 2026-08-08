@@ -121,6 +121,23 @@ test("every empty state is the shared one", async () => {
   assert.ok(!css.includes(".empty-state{"), "the legacy empty-state rules are back");
 });
 
+/**
+ * The pairing is Fraunces for display and Inter for UI. Fraunces carries an
+ * optical-size axis, which is what lets one file serve the 88px hero and a
+ * 20px card title; below about 15px it is the wrong tool and Inter's larger
+ * x-height is what keeps the app's many 10-13px labels readable. The taste
+ * tags were the one pill set in italic Fraunces at 13px.
+ */
+test("the display face is not asked to do the UI face's job", () => {
+  const small = [...css.matchAll(/font:[^;}]*?\b(\d|1[0-4])px[^;}]*var\(--font-display\)/g)].map((match) => match[0].trim());
+  assert.deepEqual(small, []);
+});
+
+test("a count does not shift its neighbours as it ticks", () => {
+  // Proportional figures re-flow the action row the moment a like lands.
+  assert.match(css, /\.social-dish-actions, \.profile-stats b \{ font-variant-numeric: tabular-nums; \}/);
+});
+
 test("a screen that turns you away still says where you are and where to go", async () => {
   const moderation = await readFile(new URL("../app/moderation/page.tsx", import.meta.url), "utf8");
   const notifications = await readFile(new URL("../app/notifications/page.tsx", import.meta.url), "utf8");

@@ -149,7 +149,9 @@ export function GroupPlannerForm({ from }: { from?: GroupSnapshot | null }) {
         <label>{t("group.allergies")}<input value={allergies} onChange={(event) => setAllergies(event.target.value)} placeholder={t("group.allergyExample")} /></label>
         <label>{t("group.cuisines")}<input value={cuisineTypes} onChange={(event) => setCuisineTypes(event.target.value)} placeholder={t("group.cuisineExample")} /></label>
       </div>
-      {!groupLocation && <p className="location-status warning">{t("location.choose")}</p>}
+      {/* A hint, not a warning: this shows on arrival, before anyone has had
+          the chance to do anything wrong, and the amber read as a reprimand. */}
+      {!groupLocation && <p className="location-status">{t("location.choose")}</p>}
       <button className="primary full" disabled={busy || incomplete} onClick={() => void createGroup()}>{busy ? t("group.building") : authenticated ? t("group.rank") : t("auth.signIn")}</button>
     </div>
   </section>;

@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import { EmptyState, LoadingState, PageContainer } from "@/components/AppPrimitives";
 import { getSupabaseClient } from "@/lib/auth-client";
 import type { MessageKey } from "@/ios/i18n";
 import { useUiText } from "@/components/useUiText";
@@ -29,5 +31,11 @@ export default function AuthCallback() {
     window.localStorage.setItem("trinque.guestToken", payload.sessionToken);
     window.location.replace("/onboarding");
   })(); }, []);
-  return <main style={{ padding: "3rem", fontFamily: "serif" }}><h1>Trinque</h1><p>{t(messageKey ?? "auth.callback")}</p></main>;
+  // While it is working this is a wait, not a screen; only a failure needs a
+  // heading, and it needs a way back rather than a dead end in serif.
+  return <PageContainer className="callback-page">
+    {messageKey
+      ? <EmptyState eyebrow={t("nav.profile")} title={t(messageKey)} body={t("auth.signInBody")} action={<Link className="primary button-link" href="/auth/login">{t("auth.signIn")}</Link>} />
+      : <LoadingState label={t("auth.callback")} />}
+  </PageContainer>;
 }

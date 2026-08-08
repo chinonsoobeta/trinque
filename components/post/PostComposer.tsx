@@ -182,7 +182,9 @@ export function PostComposer() {
   if (phase === "capture") return <section className="composer composer-capture">
     <div className="composer-intro">
       <div className="eyebrow"><Icon name="camera" size={16} /> {t("nav.postDish")}</div>
-      <h1>{t("home.title")}</h1>
+      {/* Was `home.title` — the app's tagline, "Find good food with friends."
+          Every other screen announces what it is; this one recited the pitch. */}
+      <h1>{t("post.captureTitle")}</h1>
       <p>{t("home.body")}</p>
     </div>
     <div className="composer-actions">

@@ -23,7 +23,9 @@ export default function AccountPage() {
   }, [authenticated, authHeaders]);
 
   return <PageContainer className="account-page">
-    <header className="page-hero compact"><span className="kicker">{t("nav.profile")}</span><h1>{t("auth.openAccount")}</h1></header>
+    {/* `auth.openAccount` is the label on the menu item that comes here — "Open
+        account and privacy" — so the page you arrived at told you to open it. */}
+    <header className="page-hero compact"><span className="kicker">{t("nav.profile")}</span><h1>{t("auth.account")}</h1></header>
     <div className="account-grid">
 
       <section className="account-card">

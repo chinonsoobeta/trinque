@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PageContainer } from "@/components/AppPrimitives";
+import Link from "next/link";
+import { EmptyState, PageContainer } from "@/components/AppPrimitives";
 import { useAuth } from "@/components/AuthProvider";
 import type { MessageKey } from "@/ios/i18n";
 import { useUiLanguage, useUiText } from "@/components/useUiText";
@@ -40,8 +41,10 @@ export default function ModerationPage() {
     if (response.ok) setReports((current) => current.filter((report) => report.id !== reportId));
   }
 
-  if (denied || (!loading && !authenticated)) return <PageContainer><p>{t("moderation.denied")}</p></PageContainer>;
+  // A bare sentence on a blank page, with nothing to click and no heading to
+  // say where you were.
+  if (denied || (!loading && !authenticated)) return <PageContainer><EmptyState eyebrow={t("safety.title")} title={t("moderation.title")} body={t("moderation.denied")} action={<Link className="secondary button-link" href="/">{t("nav.discover")}</Link>} /></PageContainer>;
   return <PageContainer className="account-page"><header className="page-hero compact"><h1>{t("moderation.title")}</h1><p>{t("moderation.help")}</p></header>
-    <div className="safety-list">{reports.length ? reports.map((report) => <article className="account-card" key={report.id}><h2>{t(`safety.reason.${report.reason}`)}</h2><p>{t(report.targetType === "dish" ? "analysis.field.name" : report.targetType === "comment" ? "comments.title" : "nav.profile")} · {report.targetId}</p>{report.details && <p>{report.details}</p>}<small>{new Date(report.createdAt).toLocaleString(language)}</small><label>{t("moderation.reason")}<textarea maxLength={1000} value={note[report.id] ?? ""} onChange={(event) => setNote((current) => ({ ...current, [report.id]: event.target.value }))} /></label><div className="modal-actions">{(["hide", "remove", "restore", "resolve", "reject"] as const).map((action) => <button className={action === "remove" ? "primary" : "secondary"} key={action} onClick={() => void decide(report.id, action)}>{t(`moderation.${action}`)}</button>)}</div></article>) : <p>{t("moderation.empty")}</p>}</div>{statusKey && <p role="status">{t(statusKey)}</p>}
+    <div className="safety-list">{reports.length ? reports.map((report) => <article className="account-card" key={report.id}><h2>{t(`safety.reason.${report.reason}`)}</h2><p>{t(report.targetType === "dish" ? "analysis.field.name" : report.targetType === "comment" ? "comments.title" : "nav.profile")} · {report.targetId}</p>{report.details && <p>{report.details}</p>}<small>{new Date(report.createdAt).toLocaleString(language)}</small><label>{t("moderation.reason")}<textarea maxLength={1000} value={note[report.id] ?? ""} onChange={(event) => setNote((current) => ({ ...current, [report.id]: event.target.value }))} /></label><div className="modal-actions">{(["hide", "remove", "restore", "resolve", "reject"] as const).map((action) => <button className={action === "remove" ? "primary" : "secondary"} key={action} onClick={() => void decide(report.id, action)}>{t(`moderation.${action}`)}</button>)}</div></article>) : <EmptyState eyebrow={t("safety.title")} title={t("moderation.empty")} body={t("moderation.help")} />}</div>{statusKey && <p role="status">{t(statusKey)}</p>}
   </PageContainer>;
 }

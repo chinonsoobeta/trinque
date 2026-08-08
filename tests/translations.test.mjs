@@ -42,11 +42,13 @@ test("non-English translations do not fall back to English copy", () => {
       "notifications.title",
       "diet.halal",
       "dish.source",
+      // "Zoom" is the word each of these languages uses.
+      "onboarding.cropZoom",
     ]),
-    es: new Set(["diet.halal", "diet.kosher"]),
-    de: new Set(["diet.halal"]),
-    it: new Set(["diet.halal"]),
-    pt: new Set(["diet.halal"]),
+    es: new Set(["diet.halal", "diet.kosher", "onboarding.cropZoom"]),
+    de: new Set(["diet.halal", "onboarding.cropZoom"]),
+    it: new Set(["diet.halal", "onboarding.cropZoom"]),
+    pt: new Set(["diet.halal", "onboarding.cropZoom"]),
   };
   for (const lang of FULL_LANGUAGES) {
     for (const key of keys) {

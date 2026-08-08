@@ -45,11 +45,11 @@ test("new users receive a supported device-language default including UK English
 test("non-English catalogues do not fall back to English", () => {
   const keys = Object.keys(translations["en-US"]);
   const allowedSame = {
-    fr: new Set(["settings.measurement", "location.imperial", "analysis.field.cuisine", "group.date", "notifications.title", "diet.halal", "dish.source"]),
-    es: new Set(["diet.halal", "diet.kosher"]),
-    de: new Set(["diet.halal"]),
-    it: new Set(["diet.halal"]),
-    pt: new Set(["diet.halal"]),
+    fr: new Set(["settings.measurement", "location.imperial", "analysis.field.cuisine", "group.date", "notifications.title", "diet.halal", "dish.source", "onboarding.cropZoom"]),
+    es: new Set(["diet.halal", "diet.kosher", "onboarding.cropZoom"]),
+    de: new Set(["diet.halal", "onboarding.cropZoom"]),
+    it: new Set(["diet.halal", "onboarding.cropZoom"]),
+    pt: new Set(["diet.halal", "onboarding.cropZoom"]),
   };
   for (const language of ["fr", "es", "de", "it", "pt"]) {
     for (const key of keys) {

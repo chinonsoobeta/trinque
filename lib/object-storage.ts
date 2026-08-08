@@ -24,12 +24,20 @@ export function storageBucketName(): string {
   return process.env.SUPABASE_STORAGE_BUCKET?.trim() || DEFAULT_BUCKET;
 }
 
+/**
+ * Auth and object storage can live in different Supabase projects, so storage
+ * takes its own URL when one is set and otherwise shares the auth project's.
+ */
+function storageUrl(): string | undefined {
+  return process.env.SUPABASE_STORAGE_URL?.trim() || process.env.SUPABASE_URL?.trim();
+}
+
 export function storageConfigured(): boolean {
-  return Boolean(process.env.SUPABASE_URL?.trim() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim());
+  return Boolean(storageUrl() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim());
 }
 
 export function getObjectBucket(): ObjectBucket | null {
-  const url = process.env.SUPABASE_URL?.trim();
+  const url = storageUrl();
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!url || !serviceRoleKey) return null;
 

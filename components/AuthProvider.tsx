@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { getSupabaseClient, signOutSupabase } from "@/lib/auth-client";
+import type { MessageKey } from "@/ios/i18n";
 
 type Identity = {
   id: string;
@@ -21,6 +22,16 @@ type AuthContextValue = {
   authHeaders: () => Record<string, string>;
   refresh: () => Promise<void>;
   signOut: () => Promise<void>;
+  /**
+   * Ask for a sign-in without leaving the page. Liking, saving, commenting and
+   * following used to send a signed-out visitor to `/auth/login` with
+   * `window.location.assign`, which is a full page load: the feed they were
+   * reading, their scroll position and the dish they were about to save all
+   * went with it. The shell renders the prompt over what they were doing.
+   */
+  promptSignIn: (reason: MessageKey) => void;
+  signInPrompt: MessageKey | null;
+  closeSignInPrompt: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -42,6 +53,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return token ? { Authorization: `Session ${token}` } : {};
   }, []);
   const [loading, setLoading] = useState(true);
+  const [signInPrompt, setSignInPrompt] = useState<MessageKey | null>(null);
+  const promptSignIn = useCallback((reason: MessageKey) => setSignInPrompt(reason), []);
+  const closeSignInPrompt = useCallback(() => setSignInPrompt(null), []);
 
   const establishAppSession = useCallback(async (accessToken: string) => {
     const response = await fetch("/api/auth/session", { method: "POST", headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" });
@@ -137,7 +151,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     authHeaders,
     refresh,
     signOut,
-  }), [authHeaders, identity, loading, refresh, sessionToken, signOut, user]);
+    promptSignIn,
+    signInPrompt,
+    closeSignInPrompt,
+  }), [authHeaders, closeSignInPrompt, identity, loading, promptSignIn, refresh, sessionToken, signInPrompt, signOut, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

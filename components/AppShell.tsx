@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import { AuthModal } from "@/components/AuthModal";
 import { NotificationBell } from "@/components/NotificationBell";
 import { useAuth } from "@/components/AuthProvider";
 import { AppAvatar } from "@/components/AppPrimitives";
@@ -19,7 +20,7 @@ import { useUiText } from "@/components/useUiText";
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { authenticated, identity, loading, signOut } = useAuth();
+  const { authenticated, closeSignInPrompt, identity, loading, refresh, signInPrompt, signOut } = useAuth();
   const t = useUiText();
   const [menuPathname, setMenuPathname] = useState<string | null>(null);
   const authSurface = pathname.startsWith("/auth/");
@@ -77,5 +78,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Link href="/groups" className={active("/groups") ? "active" : ""}><Icon name="groups" size={22} /><small>{t("nav.groups")}</small></Link>
       <Link href={authenticated ? "/account" : signInHref} className={active("/account") ? "active" : ""}><Icon name="profile" size={22} /><small>{authenticated ? t("nav.profile") : t("auth.signIn")}</small></Link>
     </nav>}
+    {/* Asked for at the moment it is needed, over the page that needed it. */}
+    <AuthModal open={signInPrompt !== null} contextMessage={signInPrompt ? t(signInPrompt) : undefined}
+      onClose={closeSignInPrompt} onAuthenticated={() => { closeSignInPrompt(); void refresh(); }} />
   </div>;
 }

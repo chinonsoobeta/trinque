@@ -13,13 +13,13 @@ import { useUiText } from "@/components/useUiText";
  * It never fetches on mount — the feed payload carries `viewerSaved`.
  */
 export function SaveButton({ dishId, initialSaved = false, onChange }: { dishId: string; initialSaved?: boolean; onChange?: (saved: boolean) => void }) {
-  const { authenticated, authHeaders } = useAuth();
+  const { authenticated, authHeaders, promptSignIn } = useAuth();
   const t = useUiText();
   const [saved, setSaved] = useState(initialSaved);
   const [busy, setBusy] = useState(false);
 
   async function toggle() {
-    if (!authenticated) { window.location.assign(`/auth/login?next=${encodeURIComponent(window.location.pathname)}`); return; }
+    if (!authenticated) { promptSignIn("auth.needSignInSave"); return; }
     if (busy) return;
     const previous = saved;
     setSaved(!previous); setBusy(true);

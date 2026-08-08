@@ -9,9 +9,9 @@ import type { MessageKey } from "@/ios/i18n";
 
 export type AuthMode = "signin" | "signup" | "recovery";
 
-type AuthModalProps = { open: boolean; onClose: () => void; initialMode?: AuthMode; embedded?: boolean; contextMessage?: string };
+type AuthModalProps = { open: boolean; onClose: () => void; initialMode?: AuthMode; embedded?: boolean; contextMessage?: string; onAuthenticated?: () => void };
 
-export function AuthModal({ open, onClose, initialMode = "signin", embedded = false, contextMessage }: AuthModalProps) {
+export function AuthModal({ open, onClose, initialMode = "signin", embedded = false, contextMessage, onAuthenticated }: AuthModalProps) {
   const t = useUiText();
   const fieldId = useId();
   const [mode, setMode] = useState<AuthMode>(initialMode);
@@ -73,7 +73,13 @@ export function AuthModal({ open, onClose, initialMode = "signin", embedded = fa
         return;
       }
       if (mode === "signup" && !result.data.session) setStatusKey("auth.checkEmail");
-      else window.location.replace("/onboarding");
+      // A new account goes to onboarding; an existing one goes back to whatever
+      // it was doing. Signing in used to land on `/onboarding` either way, so
+      // `?next=` was written into every sign-in link and then ignored, and a
+      // returning user was asked to set up an account they already had.
+      else if (mode === "signup") window.location.replace("/onboarding");
+      else if (onAuthenticated) onAuthenticated();
+      else window.location.replace(loginReturnPath());
     } catch {
       setStatusKey(mode === "signup" ? "auth.createFailed" : "auth.failed");
     } finally { setBusy(false); }

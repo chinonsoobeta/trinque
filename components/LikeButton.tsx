@@ -12,7 +12,7 @@ import { useUiText } from "@/components/useUiText";
  * twenty round trips for something the feed query already had.
  */
 export function LikeButton({ dishId, initialLiked, initialCount = 0 }: { dishId: string; initialLiked?: boolean; initialCount?: number }) {
-  const { authenticated, authHeaders } = useAuth();
+  const { authenticated, authHeaders, promptSignIn } = useAuth();
   const t = useUiText();
   const [liked, setLiked] = useState(initialLiked ?? false);
   const [count, setCount] = useState(initialCount);
@@ -30,7 +30,7 @@ export function LikeButton({ dishId, initialLiked, initialCount = 0 }: { dishId:
   }, [authHeaders, authenticated, dishId, hydrated]);
 
   async function toggle() {
-    if (!authenticated) { window.location.assign(`/auth/login?next=${encodeURIComponent(window.location.pathname)}`); return; }
+    if (!authenticated) { promptSignIn("auth.needSignInLike"); return; }
     if (busy) return;
     const previousLiked = liked; const previousCount = count;
     setLiked(!liked); setCount(Math.max(0, count + (liked ? -1 : 1))); setBusy(true);

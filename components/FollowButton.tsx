@@ -5,14 +5,14 @@ import { useAuth } from "@/components/AuthProvider";
 import { useUiText } from "@/components/useUiText";
 
 export function FollowButton({ handle, initialFollowing, initialCount, onChange }: { handle: string; initialFollowing: boolean; initialCount: number; onChange?: (state: { following: boolean; count: number }) => void }) {
-  const { authenticated, authHeaders } = useAuth();
+  const { authenticated, authHeaders, promptSignIn } = useAuth();
   const t = useUiText();
   const [following, setFollowing] = useState(initialFollowing);
   const [count, setCount] = useState(initialCount);
   const [busy, setBusy] = useState(false);
 
   async function toggle() {
-    if (!authenticated) { window.location.assign(`/auth/login?next=${encodeURIComponent(window.location.pathname)}`); return; }
+    if (!authenticated) { promptSignIn("auth.needSignInFollow"); return; }
     if (busy) return;
     const previous = { following, count };
     const optimistic = { following: !following, count: Math.max(0, count + (following ? -1 : 1)) };

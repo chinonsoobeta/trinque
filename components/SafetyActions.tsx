@@ -7,7 +7,7 @@ import { useUiText } from "@/components/useUiText";
 type Props = { targetType: "dish" | "user" | "comment"; targetId: string; userId?: string; allowHide?: boolean };
 
 export function SafetyActions({ targetType, targetId, userId, allowHide = false }: Props) {
-  const { authenticated, authHeaders, identity } = useAuth();
+  const { authenticated, authHeaders, identity, promptSignIn } = useAuth();
   const t = useUiText();
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
@@ -17,7 +17,7 @@ export function SafetyActions({ targetType, targetId, userId, allowHide = false 
   if (identity?.id === userId) return null;
 
   async function act(path: string, body: Record<string, string>) {
-    if (!authenticated) { window.location.assign(`/auth/login?next=${encodeURIComponent(window.location.pathname)}`); return; }
+    if (!authenticated) { promptSignIn("auth.needSignInReport"); return; }
     setBusy(true); setStatus("");
     try {
       const response = await fetch(path, { method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify(body) });

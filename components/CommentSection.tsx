@@ -10,7 +10,7 @@ import { useUiLanguage, useUiText } from "@/components/useUiText";
 type Comment = { id: string; userId: string; body: string; createdAt: string; updatedAt: string; displayName: string | null; handle: string | null; avatarUrl: string | null };
 
 export function CommentSection({ dishId, dishOwnerId }: { dishId: string; dishOwnerId: string }) {
-  const { authenticated, identity, authHeaders } = useAuth();
+  const { authenticated, identity, authHeaders, promptSignIn } = useAuth();
   const t = useUiText();
   const language = useUiLanguage();
   const [comments, setComments] = useState<Comment[]>([]);
@@ -26,7 +26,7 @@ export function CommentSection({ dishId, dishOwnerId }: { dishId: string; dishOw
   async function submit(event: FormEvent) {
     event.preventDefault();
     const text = body.trim();
-    if (!authenticated) { window.location.assign(`/auth/login?next=${encodeURIComponent(window.location.pathname)}`); return; }
+    if (!authenticated) { promptSignIn("auth.needSignInComment"); return; }
     if (!text || text.length > 1000) return;
     const tempId = `pending-${Date.now()}`;
     const optimistic: Comment = { id: tempId, userId: identity?.id ?? "", body: text, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), displayName: identity?.displayName ?? t("comments.you"), handle: null, avatarUrl: null };

@@ -2,6 +2,7 @@ import { and, count, desc, eq, or } from "drizzle-orm";
 import { getDb } from "@/db";
 import { blocks, follows, profiles, publishedDishes, restaurants, users } from "@/db/schema";
 import { AuthenticationError, getOptionalIdentity, normalizeHandle, requireAuthenticatedIdentity } from "@/lib/auth";
+import { engagementColumns, withViewerState } from "@/lib/feed";
 
 
 export async function GET(request: Request, { params }: { params: Promise<{ handle: string }> }) {
@@ -20,12 +21,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ hand
     joinedAt: profiles.joinedAt,
   }).from(profiles).where(eq(profiles.handle, handle)).limit(1);
   if (!profile) return Response.json({ error: "profile_not_found", code: "profile_not_found" }, { status: 404 });
-  const [[followers], [following], [dishCount], dishes, viewer] = await Promise.all([
+  // The viewer is resolved first because the dish query needs their id to carry
+  // like and save state — a profile is a feed, and its cards must not each go
+  // and ask for their own.
+  const viewer = await getOptionalIdentity(request);
+  const viewerId = viewer && viewer.authType !== "guest" ? viewer.id : null;
+  const [[followers], [following], [dishCount], dishes] = await Promise.all([
     db.select({ count: count() }).from(follows).where(eq(follows.followingId, profile.userId)),
     db.select({ count: count() }).from(follows).where(eq(follows.followerId, profile.userId)),
     db.select({ count: count() }).from(publishedDishes).where(eq(publishedDishes.ownerId, profile.userId)),
-    db.select({ id: publishedDishes.id, name: publishedDishes.name, cuisine: publishedDishes.cuisine, description: publishedDishes.description, confidence: publishedDishes.confidence, createdAt: publishedDishes.createdAt, imageKey: publishedDishes.imageKey, provenance: publishedDishes.provenance, verificationStatus: publishedDishes.verificationStatus, restaurantName: restaurants.name, locality: restaurants.locality }).from(publishedDishes).leftJoin(restaurants, eq(restaurants.id, publishedDishes.restaurantId)).where(eq(publishedDishes.ownerId, profile.userId)).orderBy(desc(publishedDishes.createdAt)).limit(24),
-    getOptionalIdentity(request),
+    db.select({ id: publishedDishes.id, name: publishedDishes.name, cuisine: publishedDishes.cuisine, description: publishedDishes.description, confidence: publishedDishes.confidence, createdAt: publishedDishes.createdAt, imageKey: publishedDishes.imageKey, provenance: publishedDishes.provenance, verificationStatus: publishedDishes.verificationStatus, restaurantName: restaurants.name, locality: restaurants.locality, ...engagementColumns(viewerId) }).from(publishedDishes).leftJoin(restaurants, eq(restaurants.id, publishedDishes.restaurantId)).where(eq(publishedDishes.ownerId, profile.userId)).orderBy(desc(publishedDishes.createdAt)).limit(24),
   ]);
   let viewerFollowing = false;
   if (viewer && viewer.id !== profile.userId && viewer.authType !== "guest") {
@@ -34,7 +39,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ hand
     const [row] = await db.select({ followerId: follows.followerId }).from(follows).where(and(eq(follows.followerId, viewer.id), eq(follows.followingId, profile.userId))).limit(1);
     viewerFollowing = Boolean(row);
   }
-  const publicDishes = dishes.map(({ imageKey, ...dish }) => ({ ...dish, imageUrl: imageKey ? `${origin}/api/media/${imageKey}` : null }));
+  const publicDishes = dishes.map(({ imageKey, ...dish }) => ({ ...withViewerState(dish), imageUrl: imageKey ? `${origin}/api/media/${imageKey}` : null }));
   return Response.json({ profile, counts: { followers: followers?.count ?? 0, following: following?.count ?? 0, dishes: dishCount?.count ?? 0 }, dishes: publicDishes, viewerFollowing, viewerIsOwner: Boolean(viewer && viewer.authType !== "guest" && viewer.id === profile.userId) }, { headers: { "Cache-Control": "no-store" } });
 }
 

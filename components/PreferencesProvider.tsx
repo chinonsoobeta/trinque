@@ -58,8 +58,12 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
   }, []);
 
   useEffect(() => {
+    // Nothing is stored server-side for a visitor who has not signed in, and the
+    // write path below already skips them — asking anyway only produced a 401 in
+    // the console on every first visit.
+    if (!sessionToken) return;
     let active = true;
-    void fetch("/api/preferences", { headers: sessionToken ? { Authorization: `Session ${sessionToken}` } : undefined })
+    void fetch("/api/preferences", { headers: { Authorization: `Session ${sessionToken}` } })
       .then(async (response) => response.ok ? await response.json() as { preferences: Partial<Preferences> | null } : null)
       .then((payload) => {
         if (!active || !payload?.preferences) return;

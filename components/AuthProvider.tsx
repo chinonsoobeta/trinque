@@ -31,6 +31,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
+  // Reads storage rather than the state above so it keeps one identity for the
+  // life of the provider. Consumers list `authHeaders` in effect dependencies;
+  // when it was rebuilt on every context recompute, each of them refetched two
+  // or three times while the session was still settling. Storage is the source
+  // the state is restored from and is written at every site that sets it, so
+  // this is the current token, not a stale copy of it.
+  const authHeaders = useCallback((): Record<string, string> => {
+    const token = window.localStorage.getItem(SESSION_KEY);
+    return token ? { Authorization: `Session ${token}` } : {};
+  }, []);
   const [loading, setLoading] = useState(true);
 
   const establishAppSession = useCallback(async (accessToken: string) => {
@@ -124,10 +134,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     authenticated: Boolean(identity && identity.authType !== "guest"),
     sessionToken,
-    authHeaders: (): Record<string, string> => sessionToken ? { Authorization: `Session ${sessionToken}` } : {},
+    authHeaders,
     refresh,
     signOut,
-  }), [identity, loading, refresh, sessionToken, signOut, user]);
+  }), [authHeaders, identity, loading, refresh, sessionToken, signOut, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

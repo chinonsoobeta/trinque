@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import type { MessageKey } from "@/ios/i18n";
 import { EmptyState, LoadingState } from "@/components/AppPrimitives";
 import { SocialDishCard, type SocialDish } from "@/components/SocialDishCard";
 import { usePreferences } from "@/components/PreferencesProvider";
@@ -20,7 +21,10 @@ export function Feed({ type }: { type: FeedType }) {
   const [cursor, setCursor] = useState<string | null>(null);
   const [offset, setOffset] = useState<number | null>(0);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState("");
+  // The failure is a message key, not a translated string, so neither the load
+  // nor `loadMore` depends on `t` — its identity changes once the language store
+  // hydrates, which had the feed fetching itself twice on every visit.
+  const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
   const [done, setDone] = useState(false);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [reach, setReach] = useState<FeedReach>("requested");
@@ -40,42 +44,42 @@ export function Feed({ type }: { type: FeedType }) {
       try {
         const params = new URLSearchParams({ limit: "20", ...(areaLat && areaLng ? { lat: areaLat, lng: areaLng } : {}) });
         const response = await fetch(`/api/feed/${type === "following" ? "personal" : "trending"}?${params}`, { headers: authHeaders(), cache: "no-store", signal: controller.signal });
-        if (!response.ok) throw new Error(t("feed.failed"));
+        if (!response.ok) throw new Error("feed.failed");
         const payload = await response.json() as FeedPayload;
         if (!active) return;
         setDishes(payload.dishes);
         setReach(payload.reach ?? "requested");
-        setError("");
+        setErrorKey(null);
         if (type === "following") { setCursor(payload.nextCursor ?? null); setOffset(0); setDone(!payload.nextCursor); }
         else { setCursor(null); setOffset(payload.nextOffset ?? null); setDone(payload.nextOffset == null); }
         setLoadedKey(feedKey);
-      } catch (reason) {
+      } catch {
         if (!active || controller.signal.aborted) return;
         setDishes([]);
-        setError(reason instanceof Error ? reason.message : t("feed.failed"));
+        setErrorKey("feed.failed");
         setDone(true);
         setLoadedKey(feedKey);
       }
     })();
     return () => { active = false; controller.abort(); };
-  }, [areaLat, areaLng, authHeaders, authenticated, feedKey, t, type]);
+  }, [areaLat, areaLng, authHeaders, authenticated, feedKey, type]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || done || loadedKey !== feedKey) return;
-    setLoadingMore(true); setError("");
+    setLoadingMore(true); setErrorKey(null);
     try {
       const params = new URLSearchParams({ limit: "20", ...(areaLat && areaLng ? { lat: areaLat, lng: areaLng } : {}) });
       if (type === "following" && cursor) params.set("cursor", cursor);
       if (type === "trending" && offset) params.set("offset", String(offset));
       const response = await fetch(`/api/feed/${type === "following" ? "personal" : "trending"}?${params}`, { headers: authHeaders(), cache: "no-store" });
-      if (!response.ok) throw new Error(t("feed.failed"));
+      if (!response.ok) throw new Error("feed.failed");
       const payload = await response.json() as FeedPayload;
       setDishes((current) => { const map = new Map(current.map((dish) => [dish.id, dish])); for (const dish of payload.dishes) map.set(dish.id, dish); return [...map.values()]; });
       if (type === "following") { setCursor(payload.nextCursor ?? null); setDone(!payload.nextCursor); }
       else { setOffset(payload.nextOffset ?? null); setDone(payload.nextOffset == null); }
-    } catch (reason) { setError(reason instanceof Error ? reason.message : t("feed.failed")); }
+    } catch { setErrorKey("feed.failed"); }
     finally { setLoadingMore(false); }
-  }, [areaLat, areaLng, authHeaders, cursor, done, feedKey, loadedKey, loadingMore, offset, t, type]);
+  }, [areaLat, areaLng, authHeaders, cursor, done, feedKey, loadedKey, loadingMore, offset, type]);
 
   useEffect(() => {
     const node = sentinel.current;
@@ -88,9 +92,9 @@ export function Feed({ type }: { type: FeedType }) {
   if (initialLoading) return <section className="feed"><LoadingState label={t("feed.loading")} /></section>;
   return <section className="feed social-feed">
     {dishes.length > 0 && reach !== "requested" && <p className="feed-reach" role="status">{t(reach === "widened" ? "feed.widened" : "feed.everywhere")}</p>}
-    {dishes.length === 0 && !error && <EmptyState eyebrow={t(type === "following" ? "nav.following" : "feed.top")} title={t(type === "following" ? "feed.followEmpty" : "feed.publicEmpty")} body={t(type === "following" ? "feed.followHelp" : "feed.publicEmptyHelp")} action={type === "following" ? <a className="secondary button-link" href="/explore">{t("profile.findPeople")}</a> : undefined} />}
+    {dishes.length === 0 && !errorKey && <EmptyState eyebrow={t(type === "following" ? "nav.following" : "feed.top")} title={t(type === "following" ? "feed.followEmpty" : "feed.publicEmpty")} body={t(type === "following" ? "feed.followHelp" : "feed.publicEmptyHelp")} action={type === "following" ? <a className="secondary button-link" href="/explore">{t("profile.findPeople")}</a> : undefined} />}
     {dishes.map((dish) => <SocialDishCard key={dish.id} dish={dish} engagementLabel={type === "trending" ? t("feed.engagement24h", { likes: dish.likes24h ?? 0, comments: dish.comments24h ?? 0 }) : undefined} />)}
-    {error && <div className="feed-error" role="alert"><p>{error}</p><button className="secondary" onClick={() => void loadMore()}>{t("action.tryAgain")}</button></div>}
+    {errorKey && <div className="feed-error" role="alert"><p>{t(errorKey)}</p><button className="secondary" onClick={() => void loadMore()}>{t("action.tryAgain")}</button></div>}
     {loadingMore && <LoadingState label={t("feed.loadingMore")} />}<div ref={sentinel} aria-hidden="true" />
   </section>;
 }

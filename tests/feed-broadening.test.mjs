@@ -75,16 +75,19 @@ test("viewer state reaches the client as booleans", () => {
 });
 
 test("feeds carry like and save state so cards do not fetch their own", async () => {
-  const [trending, personal, saves, likeButton, saveButton, card] = await Promise.all([
+  const [trending, personal, saves, profile, likeButton, saveButton, card] = await Promise.all([
     source("../app/api/feed/trending/route.ts"),
     source("../app/api/feed/personal/route.ts"),
     source("../app/api/saves/route.ts"),
+    source("../app/api/profiles/[handle]/route.ts"),
     source("../components/LikeButton.tsx"),
     source("../components/SaveButton.tsx"),
     source("../components/SocialDishCard.tsx"),
   ]);
-  for (const route of [trending, personal, saves]) assert.match(route, /engagementColumns\(/);
-  for (const route of [trending, personal, saves]) assert.match(route, /withViewerState\(/);
+  // A profile is a feed too — twenty-four cards, each of which used to ask for
+  // its own like state on mount.
+  for (const route of [trending, personal, saves, profile]) assert.match(route, /engagementColumns\(/);
+  for (const route of [trending, personal, saves, profile]) assert.match(route, /withViewerState\(/);
 
   // The N+1: one `GET .../like` per card on mount. The button may still ask
   // when nobody told it, but a card that was told must not.

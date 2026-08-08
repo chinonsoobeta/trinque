@@ -22,6 +22,12 @@ function Groups() {
   const { flash } = useToast();
   const track = useAnalytics();
   const t = useUiText();
+  // The latest `t`, held in a ref so the loader below need not list it as a
+  // dependency: its identity changes when the language store hydrates, and that
+  // re-ran the effect and fetched the group a second time. Every toast below
+  // fires after a network round trip, long after this ref has been filled.
+  const text = useRef(t);
+  useEffect(() => { text.current = t; }, [t]);
   const language = useUiLanguage();
 
   const inviteCode = params.get("join");
@@ -39,13 +45,13 @@ function Groups() {
       void fetch("/api/groups/join", { method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ inviteCode, language }) })
         .then(async (response) => {
           if (!active) return;
-          if (!response.ok) { flash(t("group.inviteInvalid")); setResolved({ group: null }); return; }
+          if (!response.ok) { flash(text.current("group.inviteInvalid")); setResolved({ group: null }); return; }
           const payload = await response.json() as { group: GroupSnapshot };
           track("invite_joined", { outcome: "success" });
-          flash(t("group.joined"));
+          flash(text.current("group.joined"));
           router.replace(`/groups/${payload.group.id}`);
         })
-        .catch(() => { if (active) { flash(t("error.generic")); setResolved({ group: null }); } });
+        .catch(() => { if (active) { flash(text.current("error.generic")); setResolved({ group: null }); } });
       return () => { active = false; };
     }
 
@@ -59,7 +65,7 @@ function Groups() {
       })
       .catch(() => { if (active) setResolved({ group: null }); });
     return () => { active = false; };
-  }, [authHeaders, editing, flash, inviteCode, language, loading, router, sessionToken, t, track]);
+  }, [authHeaders, editing, flash, inviteCode, language, loading, router, sessionToken, text, track]);
 
   if (!ready) return <LoadingState label={t("group.eyebrow")} />;
   if (!authenticated && inviteCode) return <EmptyState eyebrow={t("group.eyebrow")} title={t("group.createTitle")} body={t("auth.signInHelp")} action={<Link className="primary button-link" href={`/auth/login?context=group&next=${encodeURIComponent(`/groups?join=${inviteCode}`)}`}>{t("auth.signIn")}</Link>} />;

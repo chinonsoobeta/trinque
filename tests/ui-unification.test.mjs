@@ -18,13 +18,17 @@ test("shared application shell is mounted globally", async () => {
 });
 
 test("discover removes fabricated social proof and invalid location fallback", async () => {
-  const home = await source("app/page.tsx");
+  const [home, saved] = await Promise.all([source("app/page.tsx"), source("app/saved/page.tsx")]);
   assert.doesNotMatch(home, /12 new matches this week/);
   assert.doesNotMatch(home, /18 locals agree/);
   assert.doesNotMatch(home, /location\?\.locality \?\? "—"/);
   assert.doesNotMatch(home, /new Set\(\[2\]\)/);
   assert.match(home, /t\("location\.change"\)/);
-  assert.match(home, /FeedCard/);
+  // Discover and Saved read published dishes; neither carries a demo array.
+  assert.match(home, /<Feed /);
+  assert.doesNotMatch(home, /const dishes(:| =)/);
+  assert.doesNotMatch(saved, /const dishes(:| =) \[/);
+  assert.match(saved, /\/api\/saves/);
 });
 
 test("social feeds use the shared image-first dish card and preserve pagination contracts", async () => {
@@ -46,17 +50,19 @@ test("settings no longer nests the authentication modal", async () => {
 });
 
 test("group planner uses the signed-in session and has one dietary control", async () => {
-  const [home, mobile] = await Promise.all([
-    source("app/page.tsx"),
+  const [form, types, mobile] = await Promise.all([
+    source("components/group/GroupPlannerForm.tsx"),
+    source("components/group/types.ts"),
     source("ios/App.tsx"),
   ]);
+  const home = `${form}\n${types}`;
   assert.match(home, /const \{ authenticated, authHeaders, sessionToken \} = useAuth\(\)/);
-  assert.match(home, /headers: \{ \.\.\.sessionHeaders, "Content-Type": "application\/json" \}/);
+  assert.match(home, /headers: \{ \.\.\.authHeaders\(\), "Content-Type": "application\/json" \}/);
   assert.match(home, /dietaryRequirements, cuisineTypes/);
   assert.doesNotMatch(home, /setVegetarianRequired/);
   assert.doesNotMatch(home, /t\("group\.vegetarian"\).*inputMode="numeric"/);
   assert.match(home, /group-location-button/);
-  assert.match(home, /const \[allergies, setAllergies\] = useState\(""\)/);
+  assert.match(home, /const \[allergies, setAllergies\] = useState\(from\?\.allergies\.join\(", "\) \?\? ""\)/);
   assert.match(mobile, /const \[allergies, setAllergies\] = useState\(''\)/);
   assert.doesNotMatch(home, /useState\("sesame"\)/);
   assert.doesNotMatch(mobile, /useState\('sesame'\)/);

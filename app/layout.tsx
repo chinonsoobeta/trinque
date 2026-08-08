@@ -3,6 +3,8 @@ import { headers } from "next/headers";
 import { Fraunces, Inter } from "next/font/google";
 import { AppShell } from "@/components/AppShell";
 import { AuthProvider } from "@/components/AuthProvider";
+import { PreferencesProvider } from "@/components/PreferencesProvider";
+import { ToastProvider } from "@/components/ToastProvider";
 import "./tokens.css";
 import "./base.css";
 import "./components.css";
@@ -42,6 +44,11 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const themeBootstrap = `(function(){try{var p=localStorage.getItem('trinque.theme')||'system';if(!/^(system|light|dark)$/.test(p))p='system';var d=p==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;document.documentElement.dataset.theme=d;document.documentElement.dataset.themePreference=p}catch(_){}})()`;
-  const serviceWorker = `(function(){if('serviceWorker'in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})})()`;
-  return <html lang="en-CA" className={`${display.variable} ${ui.variable}`} suppressHydrationWarning><head><meta name="theme-color" content="#7a263a" /><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" /><link rel="icon" href="/favicon.svg" type="image/svg+xml" /><link rel="apple-touch-icon" href="/icon-192.png" /><script dangerouslySetInnerHTML={{ __html: themeBootstrap }} /><script dangerouslySetInnerHTML={{ __html: serviceWorker }} /></head><body><AuthProvider><AppShell>{children}</AppShell></AuthProvider></body></html>;
+  // The worker caches HTML and static chunks, which in development means it
+  // serves the previous build's markup for a chunk URL that no longer exists —
+  // so it registers in production and tears itself down everywhere else.
+  const serviceWorker = process.env.NODE_ENV === "production"
+    ? `(function(){if('serviceWorker'in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})})()`
+    : `(function(){if('serviceWorker'in navigator)navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister()})}).catch(function(){})})()`;
+  return <html lang="en-CA" className={`${display.variable} ${ui.variable}`} suppressHydrationWarning><head><meta name="theme-color" content="#7a263a" /><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" /><link rel="icon" href="/favicon.svg" type="image/svg+xml" /><link rel="apple-touch-icon" href="/icon-192.png" /><script dangerouslySetInnerHTML={{ __html: themeBootstrap }} /><script dangerouslySetInnerHTML={{ __html: serviceWorker }} /></head><body><AuthProvider><PreferencesProvider><ToastProvider><AppShell>{children}</AppShell></ToastProvider></PreferencesProvider></AuthProvider></body></html>;
 }

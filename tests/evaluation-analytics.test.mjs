@@ -23,9 +23,15 @@ test("the corpus plan covers 50 honest unmeasured cases across every pilot count
 });
 
 test("evaluation and feedback remain measured, consent-aware, localized, and available on web and iOS", async () => {
-  const [analyticsRoute, analyticsLibrary, feedbackRoute, web, ios, harness] = await Promise.all([
-    "../app/api/analytics/route.ts", "../lib/analytics.ts", "../app/api/feedback/route.ts", "../app/page.tsx", "../ios/App.tsx", "../scripts/evaluate-identifier.mjs",
+  // The web events are raised from the composer, the group surfaces and the
+  // analytics hook, which together replaced the single root page component.
+  const [analyticsRoute, analyticsLibrary, feedbackRoute, composer, matchTier, hook, plannerForm, planView, groupsPage, ios, harness] = await Promise.all([
+    "../app/api/analytics/route.ts", "../lib/analytics.ts", "../app/api/feedback/route.ts",
+    "../components/post/PostComposer.tsx", "../components/post/MatchTier.tsx", "../components/useAnalytics.ts",
+    "../components/group/GroupPlannerForm.tsx", "../components/group/GroupPlanView.tsx", "../app/groups/page.tsx",
+    "../ios/App.tsx", "../scripts/evaluate-identifier.mjs",
   ].map((path) => readFile(new URL(path, import.meta.url), "utf8")));
+  const web = [composer, matchTier, hook, plannerForm, planView, groupsPage].join("\n");
   assert.match(analyticsRoute, /recordConsentedAnalytics/);
   assert.match(analyticsLibrary, /analyticsConsent/);
   assert.match(feedbackRoute, /wrong_identification/);

@@ -3,11 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { PageContainer } from "@/components/AppPrimitives";
-import { PrivacySettings } from "@/components/PrivacySettings";
-import { SafetyCenter } from "@/components/SafetyCenter";
 import { useAuth } from "@/components/AuthProvider";
 import { useUiLanguage, useUiText } from "@/components/useUiText";
-import { LANGUAGE_LABEL_KEYS, UI_LANGUAGES } from "@/ios/i18n";
+import { LANGUAGE_LABEL_KEYS } from "@/ios/i18n";
 
 export default function AccountPage() {
   const { authenticated, identity, loading, authHeaders } = useAuth();
@@ -38,8 +36,15 @@ export default function AccountPage() {
 
       <section className="account-card">
         <span className="kicker">{t("settings.title")}</span>
-        <h2>{t("settings.language")}</h2>
-        <div className="setting-options">{UI_LANGUAGES.map((item) => <button key={item} className={language === item ? "active" : ""} onClick={() => { window.localStorage.setItem("trinque.language", item); window.dispatchEvent(new Event("trinque:language")); }}>{t(LANGUAGE_LABEL_KEYS[item])}</button>)}</div>
+        <h2>{t(LANGUAGE_LABEL_KEYS[language])}</h2>
+        <p>{t("location.privacy")}</p>
+        <Link className="secondary button-link" href="/settings">{t("settings.title")}</Link>
+      </section>
+
+      <section className="account-card">
+        <span className="kicker">{t("nav.saved")}</span>
+        <h2>{t("home.savedTitle")}</h2>
+        <Link className="secondary button-link" href="/saved">{t("nav.saved")}</Link>
       </section>
 
       <section className="account-card">
@@ -48,12 +53,6 @@ export default function AccountPage() {
         <Link className="secondary button-link" href="/notifications">{t("notifications.title")}</Link>
       </section>
 
-      <section className="account-card account-card-wide">
-        <span className="kicker">{t("privacy.title")}</span>
-        <PrivacySettings />
-      </section>
-
-      <SafetyCenter />
     </div>
   </PageContainer>;
 }

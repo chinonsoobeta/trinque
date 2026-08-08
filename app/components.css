@@ -107,8 +107,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .app-nav-link { padding: 10px 13px; border-radius: var(--radius-pill); text-decoration: none; color: var(--muted); font-size: 13px; font-weight: 750; white-space: nowrap; }
 .app-nav-link:hover, .app-nav-link.active { color: var(--primary); background: color-mix(in srgb, var(--primary) 9%, transparent); }
 .app-header-actions { justify-self: end; display: flex; align-items: center; gap: 9px; }
-.header-search, .signin-link { min-height: 42px; display: inline-flex; align-items: center; gap: 7px; padding: 0 13px; border-radius: var(--radius-pill); color: var(--muted); text-decoration: none; font-size: 12px; font-weight: 800; }
-.header-search:hover { background: var(--surface); color: var(--primary); }
+.signin-link { min-height: 42px; display: inline-flex; align-items: center; gap: 7px; padding: 0 13px; border-radius: var(--radius-pill); color: var(--muted); text-decoration: none; font-size: 12px; font-weight: 800; }
 .app-create-action { min-height: 43px; display: inline-flex; align-items: center; gap: 7px; padding: 0 15px; border-radius: var(--radius-pill); background: var(--primary); color: var(--on-primary); text-decoration: none; font-size: 12px; font-weight: 850; box-shadow: 0 9px 22px color-mix(in srgb, var(--primary) 22%, transparent); }
 .app-create-action:hover { background: var(--hover); transform: translateY(-1px); }
 .signin-link { border: 1px solid var(--border-strong); background: var(--surface); color: var(--primary); }
@@ -295,7 +294,44 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .publication-section h3::before { display: block; margin-bottom: 5px; color: var(--secondary); font: 800 9px var(--font-ui); letter-spacing: .12em; text-transform: uppercase; }
 .publication-section:first-of-type h3::before { content: "Step 4 · Restaurant"; }
 .publication-section:nth-of-type(2) h3::before { content: "Step 5 · Optional knowledge"; }
-.analyzer-content > form > .modal-actions::before { content: "Step 6 · Review and publish"; display: block; width: 100%; margin-bottom: 6px; color: var(--secondary); font-size: 9px; font-weight: 850; letter-spacing: .12em; text-transform: uppercase; }
+.composer-content > form > .modal-actions::before { content: "Step 6 · Review and publish"; display: block; width: 100%; margin-bottom: 6px; color: var(--secondary); font-size: 9px; font-weight: 850; letter-spacing: .12em; text-transform: uppercase; }
+.restaurant-search-note { margin: 8px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+
+/* Publishing is a route now, not a dialog: the same two-column reading order,
+   sized to the page rather than to a viewport-height modal. */
+.composer { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--elevated); box-shadow: var(--shadow-soft); }
+.composer-capture { grid-template-columns: minmax(0, 1fr); }
+.composer-image { position: relative; min-height: 420px; background-size: cover; background-position: center; }
+.composer-image::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, #0002, transparent 50%, #0006); }
+.composer-image > span { position: absolute; z-index: 1; left: 18px; bottom: 18px; display: inline-flex; align-items: center; gap: 6px; padding: 9px 11px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--surface) 91%, transparent); color: var(--primary); font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.composer-content { display: flex; flex-direction: column; justify-content: center; padding: var(--space-6) var(--space-6); }
+.composer-content h2 { margin: 10px 0; font: 500 35px/1.08 var(--font-display); letter-spacing: -.03em; }
+.composer-intro { max-width: 52ch; }
+.composer-intro h2 { margin: 10px 0; font: 500 34px/1.1 var(--font-display); letter-spacing: -.03em; }
+.composer-intro p { color: var(--muted); line-height: 1.6; }
+.composer-capture { padding: var(--space-6); }
+.composer-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-top: var(--space-5); }
+
+/* Discover: the hero actions sit on one line, so the location link has to be a
+   chip in the same row rather than loose text the button can ride over. */
+.discover-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-top: var(--space-5); }
+.compact-location { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 14px; border: 1px solid var(--border); border-radius: var(--radius-pill); background: var(--surface); color: var(--text); font-size: 12px; font-weight: 700; text-decoration: none; transition: border-color var(--duration-base) var(--ease), color var(--duration-base) var(--ease); }
+.compact-location:hover { border-color: var(--border-strong); color: var(--primary); }
+.compact-location svg { color: var(--secondary); }
+.discover-page .feed, .saved-page .feed { margin-top: var(--space-6); }
+
+/* Routes that are a hero plus one column of content share the same rhythm. */
+.saved-page .page-hero, .groups-page .page-hero, .settings-page .page-hero, .post-page .page-hero { margin-bottom: var(--space-2); }
+.settings-page { max-width: 780px; }
+.setting-select { min-height: 44px; width: min(320px, 100%); padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font: 500 13px var(--font-ui); }
+.settings-page .setting-block + .setting-block { border-top: 1px solid var(--border); }
+.shortlist-secondary { margin-top: var(--space-5); }
+
+/* The planner stacks a search row, a saved-area shortcut and its results; only
+   the row inside is a flex line, so the rest cannot be dragged onto it. */
+.group-location-search { display: grid; gap: var(--space-2); margin-bottom: var(--space-4); }
+.group-location-search .text-button { justify-self: start; }
+.group-location-search .location-status { margin: 0; }
 
 /* Group planner: consumer language + richer hierarchy */
 .group-starter { max-width: 860px; margin-top: 44px; padding: 30px; border: 1px solid var(--border); border-radius: var(--radius-lg) 28px 28px 8px; background: var(--elevated); box-shadow: var(--shadow-soft); }
@@ -312,8 +348,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .app-brand b { display: none; }
   .desktop-navigation { justify-self: start; }
   .app-nav-link { padding-inline: 10px; font-size: 12px; }
-  .header-search span, .app-create-action span:last-child { display: none; }
-  .header-search { width: 42px; justify-content: center; padding: 0; border: 1px solid var(--border); background: var(--surface); }
+  .app-create-action span:last-child { display: none; }
   .app-create-action { width: 42px; justify-content: center; padding: 0; }
   .dish-detail-article { gap: 30px; grid-template-columns: minmax(0, 1fr) minmax(330px, .85fr); }
   .dish-detail-image { min-height: 560px; }
@@ -323,7 +358,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 @media (max-width: 760px) {
   html { scroll-padding-top: 72px; }
   .app-header { min-height: 66px; grid-template-columns: auto 1fr; padding: 0 16px; }
-  .desktop-navigation, .header-search, .app-create-action, .app-header-actions .notification-bell { display: none; }
+  .desktop-navigation, .app-create-action, .app-header-actions .notification-bell { display: none; }
   .app-header-actions { gap: 6px; }
   .signin-link { min-height: 38px; padding-inline: 12px; }
   .profile-menu-trigger { width: 38px; height: 38px; }
@@ -596,4 +631,12 @@ article.skeleton-card { height: auto; overflow: hidden; border: 1px solid var(--
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     padding-bottom: env(safe-area-inset-bottom);
   }
+}
+
+@media (max-width: 900px) {
+  .composer { grid-template-columns: minmax(0, 1fr); }
+  .composer-image { min-height: 300px; }
+  .composer-content { padding: var(--space-5); }
+  .composer-content h2, .composer-intro h2 { font-size: clamp(26px, 7vw, 34px); }
+  .discover-actions > .primary, .discover-actions > .compact-location { flex: 1 1 auto; justify-content: center; }
 }

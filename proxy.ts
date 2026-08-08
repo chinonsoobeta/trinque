@@ -13,6 +13,15 @@ export function proxy(request: NextRequest) {
   const origin = request.headers.get("origin");
   const originAllowed = isOriginAllowed(origin, selfOrigin(request));
 
+  const legacy = legacyRootDestination(request);
+  if (legacy) {
+    const url = request.nextUrl.clone();
+    const [pathname, search = ""] = legacy.split("?");
+    url.pathname = pathname;
+    url.search = search;
+    return decorate(NextResponse.redirect(url), requestId, startedAt, origin, originAllowed);
+  }
+
   if (request.method === "OPTIONS" && origin) {
     if (!originAllowed) return decorate(new NextResponse(null, { status: 403 }), requestId, startedAt, origin, false);
     return decorate(new NextResponse(null, {
@@ -27,6 +36,22 @@ export function proxy(request: NextRequest) {
   const headers = new Headers(request.headers);
   headers.set("X-Request-Id", requestId);
   return decorate(NextResponse.next({ request: { headers } }), requestId, startedAt, origin, originAllowed);
+}
+
+/**
+ * `/` used to host Discover, Groups and Saved behind a `?view=` parameter, and
+ * invitations were shared as `/?join=CODE`. Those links are in the wild, so
+ * they still have to reach the routes that replaced them.
+ */
+function legacyRootDestination(request: NextRequest): string | null {
+  if (request.nextUrl.pathname !== "/") return null;
+  const join = request.nextUrl.searchParams.get("join");
+  if (join) return `/groups?join=${encodeURIComponent(join)}`;
+  const view = request.nextUrl.searchParams.get("view");
+  if (view === "groups") return "/groups";
+  if (view === "saved") return "/saved";
+  if (view === "explore") return "/explore";
+  return null;
 }
 
 function isOriginAllowed(origin: string | null, self: string): boolean {

@@ -111,14 +111,14 @@ test("iOS safety uses a signed-in app session and supports onboarding and undo",
 });
 
 test("users can review safety choices and moderators have a guarded queue", async () => {
-  const [center, account, moderationPage, moderationRoute, safetyRoute] = await Promise.all([
+  const [center, settings, moderationPage, moderationRoute, safetyRoute] = await Promise.all([
     readFile(new URL("../components/SafetyCenter.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/account/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/settings/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/moderation/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/api/moderation/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/safety/route.ts", import.meta.url), "utf8"),
   ]);
-  assert.match(account, /SafetyCenter/);
+  assert.match(settings, /SafetyCenter/);
   for (const action of ["block", "mute", "hide"]) assert.match(center, new RegExp(`action: "${action}"`));
   assert.match(safetyRoute, /export async function GET/);
   assert.match(moderationPage, /\/api\/moderation/);

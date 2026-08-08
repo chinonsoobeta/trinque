@@ -38,9 +38,9 @@ test("invite joining requires an unexpired, unrevoked code", async () => {
 test("Group creation tells the client when profile setup is required", async () => {
   const [route, page] = await Promise.all([
     source("../app/api/groups/route.ts"),
-    source("../app/page.tsx"),
+    source("../components/group/GroupPlannerForm.tsx"),
   ]);
   assert.match(route, /"profile_incomplete"/);
   assert.match(page, /failure\?\.code === "profile_incomplete"/);
-  assert.match(page, /assign\("\/onboarding"\)/);
+  assert.match(page, /push\("\/onboarding"\)/);
 });

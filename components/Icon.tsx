@@ -12,7 +12,8 @@ import type { SVGProps } from "react";
 export type IconName =
   | "discover" | "explore" | "post" | "groups" | "profile" | "saved"
   | "like" | "liked" | "comment" | "bell" | "close" | "check" | "chevronRight"
-  | "camera" | "settings" | "location" | "sparkle" | "share" | "eye" | "eyeOff" | "alert";
+  | "camera" | "settings" | "location" | "sparkle" | "share" | "eye" | "eyeOff" | "alert"
+  | "arrowUp" | "wallet";
 
 type IconProps = Omit<SVGProps<SVGSVGElement>, "children"> & { name: IconName; size?: number; title?: string };
 
@@ -72,4 +73,6 @@ const PATHS: Record<IconName, React.ReactNode> = {
   eye: <><path d="M2.6 12S6 5.9 12 5.9 21.4 12 21.4 12 18 18.1 12 18.1 2.6 12 2.6 12Z" /><circle cx="12" cy="12" r="2.9" /></>,
   eyeOff: <><path d="M4 4.2 19.8 20" /><path d="M9.6 9.8a3 3 0 0 0 4.2 4.2" /><path d="M6.7 6.9C4.1 8.5 2.6 12 2.6 12S6 18.1 12 18.1a9 9 0 0 0 4.1-.98" /><path d="M18.4 15.1c1.9-1.5 3-3.1 3-3.1S18 5.9 12 5.9c-.6 0-1.2.06-1.7.17" /></>,
   alert: <><circle cx="12" cy="12" r="8.8" /><path d="M12 7.7v5" /><path d="M12 15.9h.01" /></>,
+  arrowUp: <><path d="M12 19.5V5" /><path d="m5.8 11.2 6.2-6.2 6.2 6.2" /></>,
+  wallet: <><path d="M3.8 7.6h13.4a2 2 0 0 1 2 2v7.8a2 2 0 0 1-2 2H5.8a2 2 0 0 1-2-2Z" /><path d="M3.8 7.6V6.4a1.8 1.8 0 0 1 1.8-1.8h9.6" /><path d="M15.6 13.5h.01" /></>,
 };

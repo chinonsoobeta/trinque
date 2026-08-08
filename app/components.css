@@ -170,7 +170,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .social-dish-actions { display: flex; align-items: center; gap: 9px; margin-top: 17px; padding-top: 15px; border-top: 1px solid var(--border); }
 .social-dish-card .save { position: static; width: auto; height: 40px; min-width: 58px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius-pill); background: var(--surface); color: var(--primary); font-size: 12px; backdrop-filter: none; }
 .social-dish-card .save.saved { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
-.comment-link, .details-link { min-height: 40px; display: inline-flex; align-items: center; padding: 0 11px; border-radius: var(--radius-pill); text-decoration: none; color: var(--muted); font-size: 11px; font-weight: 750; }
+.comment-link, .details-link { min-height: 40px; display: inline-flex; align-items: center; gap: 5px; padding: 0 11px; border-radius: var(--radius-pill); text-decoration: none; color: var(--muted); font-size: 11px; font-weight: 750; }
 .comment-link:hover, .details-link:hover { background: var(--subtle); color: var(--primary); }
 .details-link { margin-left: auto; color: var(--primary); }
 .engagement-note { display: block; margin-top: 10px; color: var(--muted); font-size: 10px; }
@@ -639,4 +639,17 @@ article.skeleton-card { height: auto; overflow: hidden; border: 1px solid var(--
   .composer-content { padding: var(--space-5); }
   .composer-content h2, .composer-intro h2 { font-size: clamp(26px, 7vw, 34px); }
   .discover-actions > .primary, .discover-actions > .compact-location { flex: 1 1 auto; justify-content: center; }
+}
+
+/* Says the results came from further out than the viewer asked for, so a full
+   feed is never mistaken for a full neighbourhood. */
+.feed-reach {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--secondary) 30%, var(--border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--secondary) 8%, transparent);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
 }

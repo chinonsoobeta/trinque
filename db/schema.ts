@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import { SUPPORTED_COUNTRY_CODES, SUPPORTED_CURRENCY_CODES } from "../lib/regions.ts";
 
 export const users = sqliteTable("users", {
@@ -65,9 +65,13 @@ export const follows = sqliteTable("follows", {
 
 export const saves = sqliteTable("saves", {
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  dishId: integer("dish_id").notNull(),
+  dishId: text("dish_id").notNull().references((): AnySQLiteColumn => publishedDishes.id, { onDelete: "cascade" }),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-}, (table) => [primaryKey({ columns: [table.userId, table.dishId] })]);
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.dishId] }),
+  index("saves_user_created_idx").on(table.userId, table.createdAt),
+  index("saves_dish_idx").on(table.dishId),
+]);
 
 export const preferences = sqliteTable("preferences", {
   userId: text("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),

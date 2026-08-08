@@ -4,13 +4,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { EmptyState, LoadingState } from "@/components/AppPrimitives";
 import { SocialDishCard, type SocialDish } from "@/components/SocialDishCard";
+import { usePreferences } from "@/components/PreferencesProvider";
 import { useUiText } from "@/components/useUiText";
 
 type FeedType = "following" | "trending";
 type Dish = SocialDish & { confidence: number; createdAt: string; likes24h?: number; comments24h?: number };
+type FeedReach = "requested" | "widened" | "everywhere";
+type FeedPayload = { dishes: Dish[]; nextCursor?: string | null; nextOffset?: number | null; reach?: FeedReach };
 
 export function Feed({ type }: { type: FeedType }) {
   const { authenticated, authHeaders } = useAuth();
+  const { location } = usePreferences();
   const t = useUiText();
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -19,8 +23,13 @@ export function Feed({ type }: { type: FeedType }) {
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const [reach, setReach] = useState<FeedReach>("requested");
   const sentinel = useRef<HTMLDivElement | null>(null);
-  const feedKey = `${type}:${authenticated ? "authenticated" : "anonymous"}`;
+  // Kept as primitives rather than an object so the load effect re-runs when the
+  // area actually moves, not on every render.
+  const areaLat = type === "trending" && location ? String(location.latitude) : null;
+  const areaLng = type === "trending" && location ? String(location.longitude) : null;
+  const feedKey = `${type}:${authenticated ? "authenticated" : "anonymous"}:${areaLat && areaLng ? `${areaLat},${areaLng}` : "anywhere"}`;
   const initialLoading = type !== "following" || authenticated ? loadedKey !== feedKey : false;
 
   useEffect(() => {
@@ -29,12 +38,13 @@ export function Feed({ type }: { type: FeedType }) {
     const controller = new AbortController();
     void (async () => {
       try {
-        const params = new URLSearchParams({ limit: "20" });
+        const params = new URLSearchParams({ limit: "20", ...(areaLat && areaLng ? { lat: areaLat, lng: areaLng } : {}) });
         const response = await fetch(`/api/feed/${type === "following" ? "personal" : "trending"}?${params}`, { headers: authHeaders(), cache: "no-store", signal: controller.signal });
         if (!response.ok) throw new Error(t("feed.failed"));
-        const payload = await response.json() as { dishes: Dish[]; nextCursor?: string | null; nextOffset?: number | null };
+        const payload = await response.json() as FeedPayload;
         if (!active) return;
         setDishes(payload.dishes);
+        setReach(payload.reach ?? "requested");
         setError("");
         if (type === "following") { setCursor(payload.nextCursor ?? null); setOffset(0); setDone(!payload.nextCursor); }
         else { setCursor(null); setOffset(payload.nextOffset ?? null); setDone(payload.nextOffset == null); }
@@ -48,24 +58,24 @@ export function Feed({ type }: { type: FeedType }) {
       }
     })();
     return () => { active = false; controller.abort(); };
-  }, [authHeaders, authenticated, feedKey, t, type]);
+  }, [areaLat, areaLng, authHeaders, authenticated, feedKey, t, type]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || done || loadedKey !== feedKey) return;
     setLoadingMore(true); setError("");
     try {
-      const params = new URLSearchParams({ limit: "20" });
+      const params = new URLSearchParams({ limit: "20", ...(areaLat && areaLng ? { lat: areaLat, lng: areaLng } : {}) });
       if (type === "following" && cursor) params.set("cursor", cursor);
       if (type === "trending" && offset) params.set("offset", String(offset));
       const response = await fetch(`/api/feed/${type === "following" ? "personal" : "trending"}?${params}`, { headers: authHeaders(), cache: "no-store" });
       if (!response.ok) throw new Error(t("feed.failed"));
-      const payload = await response.json() as { dishes: Dish[]; nextCursor?: string | null; nextOffset?: number | null };
+      const payload = await response.json() as FeedPayload;
       setDishes((current) => { const map = new Map(current.map((dish) => [dish.id, dish])); for (const dish of payload.dishes) map.set(dish.id, dish); return [...map.values()]; });
       if (type === "following") { setCursor(payload.nextCursor ?? null); setDone(!payload.nextCursor); }
       else { setOffset(payload.nextOffset ?? null); setDone(payload.nextOffset == null); }
     } catch (reason) { setError(reason instanceof Error ? reason.message : t("feed.failed")); }
     finally { setLoadingMore(false); }
-  }, [authHeaders, cursor, done, feedKey, loadedKey, loadingMore, offset, t, type]);
+  }, [areaLat, areaLng, authHeaders, cursor, done, feedKey, loadedKey, loadingMore, offset, t, type]);
 
   useEffect(() => {
     const node = sentinel.current;
@@ -77,8 +87,9 @@ export function Feed({ type }: { type: FeedType }) {
   if (type === "following" && !authenticated) return <EmptyState eyebrow={t("nav.following")} title={t("feed.followHelp")} body={t("auth.signInHelp")} action={<a className="primary button-link" href="/auth/login?next=/explore%3Ffeed%3Dfollowing">{t("auth.signIn")}</a>} />;
   if (initialLoading) return <section className="feed"><LoadingState label={t("feed.loading")} /></section>;
   return <section className="feed social-feed">
+    {dishes.length > 0 && reach !== "requested" && <p className="feed-reach" role="status">{t(reach === "widened" ? "feed.widened" : "feed.everywhere")}</p>}
     {dishes.length === 0 && !error && <EmptyState eyebrow={t(type === "following" ? "nav.following" : "feed.top")} title={t(type === "following" ? "feed.followEmpty" : "feed.publicEmpty")} body={t(type === "following" ? "feed.followHelp" : "feed.publicEmptyHelp")} action={type === "following" ? <a className="secondary button-link" href="/explore">{t("profile.findPeople")}</a> : undefined} />}
-    {dishes.map((dish) => <SocialDishCard key={dish.id} dish={dish} engagementLabel={type === "trending" ? `${dish.likes24h ?? 0} likes · ${dish.comments24h ?? 0} comments in the previous 24 hours` : undefined} />)}
+    {dishes.map((dish) => <SocialDishCard key={dish.id} dish={dish} engagementLabel={type === "trending" ? t("feed.engagement24h", { likes: dish.likes24h ?? 0, comments: dish.comments24h ?? 0 }) : undefined} />)}
     {error && <div className="feed-error" role="alert"><p>{error}</p><button className="secondary" onClick={() => void loadMore()}>{t("action.tryAgain")}</button></div>}
     {loadingMore && <LoadingState label={t("feed.loadingMore")} />}<div ref={sentinel} aria-hidden="true" />
   </section>;

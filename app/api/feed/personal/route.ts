@@ -2,6 +2,7 @@ import { and, desc, eq, lt, or, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { blocks, follows, hiddenDishes, mutes, profiles, publishedDishes, restaurants } from "@/db/schema";
 import { AuthenticationError, requireAuthenticatedIdentity } from "@/lib/auth";
+import { engagementColumns, withViewerState } from "@/lib/feed";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
@@ -30,6 +31,7 @@ export async function GET(request: Request) {
       contributorName: profiles.displayName,
       contributorHandle: profiles.handle,
       contributorAvatarUrl: profiles.avatarUrl,
+      ...engagementColumns(identity.id),
     }).from(publishedDishes)
       .innerJoin(follows, and(eq(follows.followingId, publishedDishes.ownerId), eq(follows.followerId, identity.id)))
       .leftJoin(profiles, eq(profiles.userId, publishedDishes.ownerId))
@@ -46,7 +48,7 @@ export async function GET(request: Request) {
     const hasMore = rows.length > limit;
     const dishes = hasMore ? rows.slice(0, limit) : rows;
     const last = dishes.at(-1);
-    return Response.json({ dishes: dishes.map(({ imageKey, ...dish }) => ({ ...dish, imageUrl: imageKey ? `${origin}/api/media/${imageKey}` : null })), nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null });
+    return Response.json({ dishes: dishes.map(({ imageKey, ...dish }) => ({ ...withViewerState(dish), imageUrl: imageKey ? `${origin}/api/media/${imageKey}` : null })), nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null });
   } catch (error) {
     const status = error instanceof AuthenticationError ? error.status : 503;
     return Response.json({ error: error instanceof AuthenticationError ? error.message : "Unable to load following feed." }, { status });

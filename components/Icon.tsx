@@ -13,7 +13,7 @@ export type IconName =
   | "discover" | "explore" | "post" | "groups" | "profile" | "saved"
   | "like" | "liked" | "comment" | "bell" | "close" | "check" | "chevronRight"
   | "camera" | "settings" | "location" | "sparkle" | "share" | "eye" | "eyeOff" | "alert"
-  | "arrowUp" | "wallet";
+  | "arrowUp" | "wallet" | "savedFilled";
 
 type IconProps = Omit<SVGProps<SVGSVGElement>, "children"> & { name: IconName; size?: number; title?: string };
 
@@ -58,6 +58,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
   groups: <><circle cx="9" cy="8.5" r="3.2" /><path d="M2.8 20a6.2 6.2 0 0 1 12.4 0" /><path d="M16.2 5.6a3.2 3.2 0 0 1 0 6.1" /><path d="M17.6 14.4A6.2 6.2 0 0 1 21.2 20" /></>,
   profile: <><circle cx="12" cy="8" r="3.6" /><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0" /></>,
   saved: <path d="M6 3.8h12a1 1 0 0 1 1 1v15.4l-7-4.2-7 4.2V4.8a1 1 0 0 1 1-1Z" />,
+  savedFilled: <path fill="currentColor" stroke="none" d="M6 3.8h12a1 1 0 0 1 1 1v15.4l-7-4.2-7 4.2V4.8a1 1 0 0 1 1-1Z" />,
   like: <path d="M12 20.3 4.7 13a4.6 4.6 0 0 1 6.5-6.5l.8.8.8-.8A4.6 4.6 0 0 1 19.3 13Z" />,
   liked: <path fill="currentColor" stroke="none" d="M12 20.8 4.35 13.1a5.1 5.1 0 0 1 7.2-7.2l.45.45.45-.45a5.1 5.1 0 0 1 7.2 7.2Z" />,
   comment: <path d="M20.5 11.6a7.9 7.9 0 0 1-8.5 7.9 9 9 0 0 1-2.6-.4L4 20.5l1.4-4.5a7.7 7.7 0 0 1-1.4-4.4A7.9 7.9 0 0 1 12.3 3.7a7.9 7.9 0 0 1 8.2 7.9Z" />,

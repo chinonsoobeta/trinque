@@ -7,14 +7,14 @@ import { EmptyState, LoadingState, PageContainer } from "@/components/AppPrimiti
 import { SocialDishCard, type SocialDish } from "@/components/SocialDishCard";
 import { useUiText } from "@/components/useUiText";
 
-type SavedResponse = { savedDishIds: number[]; dishes?: SocialDish[] };
+type SavedResponse = { savedDishIds: string[]; dishes?: SocialDish[] };
 
 /**
  * Saved dishes, from `/api/saves` rather than a local `Set` over a demo array.
  *
- * The endpoint still answers with numeric ids from an older schema, so it
- * returns dishes only once the saves table can reference a published dish —
- * until then this renders the empty state rather than inventing content.
+ * The endpoint answers with whole dishes in the same shape every other feed
+ * uses, so this renders the one shared card and nothing has to be looked up a
+ * second time.
  */
 export default function SavedPage() {
   const { authenticated, authHeaders, loading } = useAuth();
@@ -41,6 +41,6 @@ export default function SavedPage() {
     {!ready ? <LoadingState label={t("feed.loading")} />
       : !authenticated ? <EmptyState eyebrow={t("nav.saved")} title={t("auth.signIn")} body={t("auth.signInBody")} action={<Link className="primary button-link" href="/auth/login?context=save&next=%2Fsaved">{t("auth.signIn")}</Link>} />
       : !dishes?.length ? <EmptyState eyebrow={t("nav.saved")} title={t("home.emptyTitle")} body={t("home.emptyBody")} action={<Link className="secondary button-link" href="/">{t("home.explore")}</Link>} />
-      : <section className="feed social-feed">{dishes.map((dish) => <SocialDishCard key={dish.id} dish={dish} />)}</section>}
+      : <section className="feed social-feed">{dishes.map((dish) => <SocialDishCard key={dish.id} dish={{ ...dish, viewerSaved: true }} onSaveChange={(saved) => { if (!saved) setDishes((current) => current?.filter((item) => item.id !== dish.id) ?? null); }} />)}</section>}
   </PageContainer>;
 }

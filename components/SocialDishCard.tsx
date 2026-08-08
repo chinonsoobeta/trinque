@@ -5,6 +5,7 @@ import { AppAvatar } from "@/components/AppPrimitives";
 import { Icon } from "@/components/Icon";
 import { MediaImage } from "@/components/MediaImage";
 import { LikeButton } from "@/components/LikeButton";
+import { SaveButton } from "@/components/SaveButton";
 import { useUiText } from "@/components/useUiText";
 import type { MessageKey } from "@/ios/i18n";
 
@@ -13,9 +14,10 @@ export type SocialDish = {
   restaurantName?: string | null; locality?: string | null; contributorName?: string | null;
   contributorHandle?: string | null; contributorAvatarUrl?: string | null; provenance?: string | null;
   verificationStatus?: string | null; likesCount?: number; commentsCount?: number;
+  viewerLiked?: boolean; viewerSaved?: boolean;
 };
 
-export function SocialDishCard({ dish, engagementLabel }: { dish: SocialDish; engagementLabel?: string }) {
+export function SocialDishCard({ dish, engagementLabel, onSaveChange }: { dish: SocialDish; engagementLabel?: string; onSaveChange?: (saved: boolean) => void }) {
   const t = useUiText();
   const contributor = dish.contributorName ?? (dish.contributorHandle ? `@${dish.contributorHandle}` : t("comments.member"));
   const provenance = dish.provenance ? t(`provenance.${dish.provenance}` as MessageKey) : "";
@@ -32,7 +34,7 @@ export function SocialDishCard({ dish, engagementLabel }: { dish: SocialDish; en
       </div>
       <Link className="social-dish-copy" href={`/dishes/${dish.id}`}><h2>{dish.name}</h2><p>{dish.description}</p></Link>
       {(provenance || verification) && <p className="record-honesty">{provenance}{provenance && verification ? " · " : ""}{verification}</p>}
-      <div className="social-dish-actions"><LikeButton dishId={dish.id} initialCount={dish.likesCount ?? 0} /><Link className="comment-link" href={`/dishes/${dish.id}#comments`} aria-label={t("comments.title")}><Icon name="comment" size={18} />{dish.commentsCount != null ? <span>{dish.commentsCount}</span> : null}<span>{t("comments.title")}</span></Link><Link className="details-link" href={`/dishes/${dish.id}`}>{t("dish.view")}<Icon name="chevronRight" size={15} /></Link></div>
+      <div className="social-dish-actions"><LikeButton dishId={dish.id} initialLiked={dish.viewerLiked} initialCount={dish.likesCount ?? 0} /><SaveButton dishId={dish.id} initialSaved={dish.viewerSaved ?? false} onChange={onSaveChange} /><Link className="comment-link" href={`/dishes/${dish.id}#comments`} aria-label={t("comments.title")}><Icon name="comment" size={18} />{dish.commentsCount != null ? <span>{dish.commentsCount}</span> : null}<span>{t("comments.title")}</span></Link><Link className="details-link" href={`/dishes/${dish.id}`}>{t("dish.view")}<Icon name="chevronRight" size={15} /></Link></div>
       {engagementLabel && <small className="engagement-note">{engagementLabel}</small>}
     </div>
   </article>;

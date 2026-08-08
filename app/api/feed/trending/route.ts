@@ -1,6 +1,8 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import { getDb } from "@/db";
 import { profiles, publishedDishes, restaurants } from "@/db/schema";
+import { broadenUntilFound, engagementColumns, parseArea, withViewerState } from "@/lib/feed";
+import { getOptionalIdentity } from "@/lib/auth";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
@@ -11,19 +13,27 @@ const MAX_LIMIT = 50;
  * Recency decays linearly from 1 to 0 over 24 hours. Engagement is calculated
  * with correlated aggregate subqueries in one SQL statement to avoid N+1 reads
  * and to avoid the count multiplication caused by joining likes and comments.
+ *
+ * When the caller passes an area, the feed broadens rather than emptying: the
+ * requested radius, then a wider one, then everywhere. `reach` says which of
+ * those answered, so the surface can be honest about showing food from further
+ * out instead of pretending the area is where the results came from.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const limit = clampLimit(url.searchParams.get("limit"));
   const offset = clampOffset(url.searchParams.get("offset"));
+  const area = parseArea(url.searchParams);
   const db = await getDb();
-  const origin = new URL(request.url).origin;
+  const origin = url.origin;
+  const viewer = await getOptionalIdentity(request).catch(() => null);
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const likes24h = sql<number>`(SELECT COUNT(*) FROM likes l WHERE l.dish_id = ${publishedDishes.id} AND l.created_at >= ${cutoff})`;
   const comments24h = sql<number>`(SELECT COUNT(*) FROM comments c WHERE c.dish_id = ${publishedDishes.id} AND c.created_at >= ${cutoff})`;
   const recency = sql<number>`MAX(0.0, 1.0 - ((julianday('now') - julianday(${publishedDishes.createdAt})) * 24.0 / 24.0))`;
   const score = sql<number>`((${likes24h}) * 3.0 + (${comments24h}) * 2.0 + (${recency}))`;
-  const rows = await db.select({
+
+  const page = (areaFilter: SQL | undefined) => db.select({
     id: publishedDishes.id,
     name: publishedDishes.name,
     cuisine: publishedDishes.cuisine,
@@ -42,15 +52,23 @@ export async function GET(request: Request) {
     likes24h,
     comments24h,
     score,
+    ...engagementColumns(viewer?.id ?? null),
   }).from(publishedDishes)
     .leftJoin(restaurants, eq(restaurants.id, publishedDishes.restaurantId))
-    .leftJoin(profiles, eq(profiles.userId, publishedDishes.ownerId)).where(eq(publishedDishes.moderationStatus, "active"))
+    .leftJoin(profiles, eq(profiles.userId, publishedDishes.ownerId))
+    .where(and(eq(publishedDishes.moderationStatus, "active"), areaFilter))
     .orderBy(sql`${score} DESC`, desc(publishedDishes.createdAt), desc(publishedDishes.id))
     .limit(limit + 1)
     .offset(offset);
+
+  const { rows, reach } = await broadenUntilFound(area, page);
   const hasMore = rows.length > limit;
   const visible = hasMore ? rows.slice(0, limit) : rows;
-  return Response.json({ dishes: visible.map(({ imageKey, ...dish }) => ({ ...dish, imageUrl: imageKey ? `${origin}/api/media/${imageKey}` : null })), nextOffset: hasMore ? offset + limit : null }, { headers: { "Cache-Control": "public, max-age=30" } });
+  return Response.json({
+    dishes: visible.map(({ imageKey, ...dish }) => ({ ...withViewerState(dish), imageUrl: imageKey ? `${origin}/api/media/${imageKey}` : null })),
+    nextOffset: hasMore ? offset + limit : null,
+    reach,
+  }, { headers: { "Cache-Control": viewer ? "private, no-store" : "public, max-age=30" } });
 }
 
 function clampLimit(raw: string | null) { const value = Number(raw ?? DEFAULT_LIMIT); return Number.isInteger(value) ? Math.max(1, Math.min(MAX_LIMIT, value)) : DEFAULT_LIMIT; }

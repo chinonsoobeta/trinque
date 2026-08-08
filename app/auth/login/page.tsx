@@ -22,7 +22,9 @@ function LoginContent() {
 function LoginShell({ mode, contextMessage }: { mode: AuthMode; contextMessage?: string }) {
   const t = useUiText();
   return <main className="auth-page">
-    <section className="auth-story"><span className="kicker">{t("home.eyebrow")}</span><h1>{t("home.savedTitle")}</h1><p>{t("auth.signInHelp")}</p><div className="auth-story-note"><Icon name="sparkle" size={18} /><p>{t("analysis.canonicalNotice")}</p></div></section>
+    {/* The heading was `home.savedTitle` — "Your saved dishes" — borrowed from
+        another screen, so the sign-in page announced itself as Saved. */}
+    <section className="auth-story"><span className="kicker">{t("home.eyebrow")}</span><h1>{t("home.title")}</h1><p>{t("auth.signInHelp")}</p><div className="auth-story-note"><Icon name="sparkle" size={18} /><p>{t("analysis.canonicalNotice")}</p></div></section>
     <AuthModal key={mode} open initialMode={mode} embedded contextMessage={contextMessage} onClose={() => window.location.assign("/")} />
   </main>;
 }

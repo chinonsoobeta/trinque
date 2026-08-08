@@ -395,9 +395,13 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .related-dish-grid { grid-template-columns: 1fr; }
   .related-dish-card { display: grid; grid-template-columns: 120px 1fr; }
   .related-dish-card > img, .related-placeholder { width: 120px; height: 100%; min-height: 130px; }
-  .auth-page { min-height: auto; width: min(100% - 28px, 620px); display: block; padding: 36px 0 70px; }
-  .auth-story { margin-bottom: 28px; }
-  .auth-story h1 { font-size: clamp(42px, 13vw, 62px); }
+  /* The story is the desktop half of a two-column page; on a phone it is a
+     preamble, and at the display size it stood 400px of it above the fold and
+     pushed the form the visitor came for off the bottom of the screen. */
+  .auth-page { min-height: auto; width: min(100% - 28px, 620px); display: block; padding: 24px 0 70px; }
+  .auth-story { margin-bottom: 20px; }
+  .auth-story h1 { margin: 8px 0 12px; font-size: clamp(30px, 8.6vw, 40px); }
+  .auth-story > p { font-size: 15px; line-height: 1.5; }
   .auth-story-note { display: none; }
   .auth-modal { padding: 26px 20px; border-radius: var(--radius-lg) 24px 24px 8px; }
   .auth-modal-backdrop:not(.embedded) { align-items: end; padding: 0; }

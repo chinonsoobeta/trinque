@@ -138,7 +138,9 @@ export function AuthModal({ open, onClose, initialMode = "signin", embedded = fa
       {mode === "signin" && <button className="text-button auth-inline-action" disabled={busy} onClick={() => void reset()}>{t("auth.forgot")}</button>}
       {mode !== "recovery" && <button className="text-button auth-switch" onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); clearMessages(); }}>{t(mode === "signin" ? "auth.newHere" : "auth.haveAccount")}</button>}
       {statusKey && <p role="status" aria-live="polite" className="auth-status">{t(statusKey)}</p>}
-      <small className="auth-footnote">{t("auth.signInHelp")}</small>
+      {/* The sign-in page says this above the card already; only the modal,
+          which arrives over another screen with no such preamble, needs it. */}
+      {!embedded && <small className="auth-footnote">{t("auth.signInHelp")}</small>}
     </div>
   </div>;
 }

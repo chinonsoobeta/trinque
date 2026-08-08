@@ -44,6 +44,22 @@ test("social feeds use the shared image-first dish card and preserve pagination 
   assert.match(personal, /imageUrl/);
 });
 
+test("one dish card and one dish view-model across every surface", async () => {
+  const [feed, saved, profile, card] = await Promise.all([
+    source("components/Feed.tsx"),
+    source("app/saved/page.tsx"),
+    source("components/ProfileView.tsx"),
+    source("components/SocialDishCard.tsx"),
+  ]);
+  // There were two: `FeedCard` on numeric demo ids and `SocialDishCard` on real
+  // string ids. A pattern learned in one place has to hold in the other.
+  assert.match(card, /export type SocialDish = \{/);
+  for (const [name, file] of [["Feed.tsx", feed], ["saved/page.tsx", saved], ["ProfileView.tsx", profile]]) {
+    assert.match(file, /import \{ SocialDishCard, type SocialDish \} from "@\/components\/SocialDishCard"/, `${name} does not use the shared card`);
+    assert.ok(!/\bFeedCard\b/.test(file), `${name} still references the deleted FeedCard`);
+  }
+});
+
 test("settings no longer nests the authentication modal", async () => {
   const authControls = await source("components/AuthControls.tsx");
   assert.doesNotMatch(authControls, /AuthModal/);

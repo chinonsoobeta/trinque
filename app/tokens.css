@@ -19,7 +19,11 @@
   --hover: #5e1d2d;
   --secondary: var(--terracotta);
   --text: #241f1c;
-  --muted: #756a63;
+  /* Secondary text. Was #756a63, which clears 4.5:1 on the page and the card
+     but lands at 4.43 on --subtle, the tinted surface the group shortlist and
+     the analysis panels sit on — so the same 10px caption passed or failed
+     depending on which panel it was in. */
+  --muted: #6f645d;
   --border: #e5d9cf;
   --success: #667449;
   --warning: #b9772d;
@@ -29,6 +33,15 @@
   /* Derived surfaces, kept as tokens so the mix ratios stay consistent. */
   --subtle: color-mix(in srgb, var(--primary) 7%, var(--bg));
   --border-strong: color-mix(in srgb, var(--primary) 22%, var(--border));
+
+  /* A status colour reads well as a band of colour and badly as 10px text on
+     its own 10% tint — the cuisine chip measured 4.38:1 in the light theme,
+     under the 4.5 small text needs. Mixing toward the page's own text colour
+     keeps the hue and buys the contrast, and works in both themes because
+     --text moves with them. */
+  --success-text: color-mix(in srgb, var(--success) 72%, var(--text));
+  --warning-text: color-mix(in srgb, var(--warning) 72%, var(--text));
+  --danger-text: color-mix(in srgb, var(--danger) 72%, var(--text));
 
   /* Type. --font-display and --font-ui are set by next/font in layout.tsx and
      fall back to system faces if the font files ever fail to load. */

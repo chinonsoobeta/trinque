@@ -81,7 +81,7 @@ test("the one tab strip in the app is the shared control", async () => {
 });
 
 test("an irreversible action does not look like an ordinary one", async () => {
-  assert.match(css, /\.text-button\.danger \{ color: var\(--danger\); \}/);
+  assert.match(css, /\.text-button\.danger \{ color: var\(--danger-text\); \}/);
   const destructive = [
     ["../components/DishOwnerControls.tsx", "privacy.deleteDish"],
     ["../components/CommentSection.tsx", "safety.removeComment"],
@@ -96,6 +96,21 @@ test("an irreversible action does not look like an ordinary one", async () => {
     const button = source.split(`{t("${key}")}`)[0].lastIndexOf('className="text-button');
     assert.ok(button >= 0, `${file}: ${key} is no longer a text button`);
     assert.match(source.slice(button, button + 40), /text-button danger/, `${file}: ${key} is not marked destructive`);
+  }
+});
+
+/**
+ * Contrast measured in the browser at 1280, both themes, all twelve routes.
+ * The status colours are chosen to read as a band of colour, and were being
+ * used as 10px text on their own 10% tint: the cuisine chip came out at
+ * 4.38:1 in the light theme. The -text variants mix toward the page's own
+ * text colour, which darkens them in light and lightens them in dark.
+ */
+test("a status colour is never used raw as text", () => {
+  const raw = [...css.matchAll(/(?<!-)color:\s*var\(--(success|warning|danger)\)/g)].map((match) => match[0]);
+  assert.deepEqual(raw, []);
+  for (const tone of ["success", "warning", "danger"]) {
+    assert.ok(css.includes(`var(--${tone}-text)`), `--${tone}-text is unused`);
   }
 });
 

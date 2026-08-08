@@ -57,6 +57,11 @@ button, input, optgroup, select, textarea {
 button, [type="button"], [type="submit"], [type="reset"] { appearance: button; cursor: pointer; }
 button:disabled, [type="button"]:disabled, [type="submit"]:disabled { opacity: .58; cursor: not-allowed; }
 textarea { resize: vertical; }
+/* One box, one size, one accent. The privacy confirmations styled their own at
+   18px in the brand colour; every other checkbox in the app — the nine dietary
+   constraints on the group planner among them — was left at the browser's 17px
+   default blue. */
+[type="checkbox"], [type="radio"] { width: 18px; height: 18px; flex: none; accent-color: var(--primary); cursor: pointer; }
 ::placeholder { color: var(--muted); opacity: 1; }
 
 table { border-collapse: collapse; border-color: inherit; text-indent: 0; }

@@ -1,17 +1,10 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useSyncExternalStore } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import { coarseLocation, normalizeLocation, type NormalizedLocation } from "@/lib/location";
-import type { MeasurementSystem, ThemePreference } from "@/lib/regions";
-import { resolveUiLanguage, UI_LANGUAGES, type UiLanguage } from "@/ios/i18n";
+import { applyPreferences, getServerSnapshot, getSnapshot, subscribe, type Preferences } from "@/lib/preferences-store";
 
-export type Preferences = {
-  language: UiLanguage;
-  theme: ThemePreference;
-  measurementSystem: MeasurementSystem;
-  location: NormalizedLocation | null;
-};
+export type { Preferences };
 
 type PreferencesContextValue = Preferences & {
   ready: boolean;
@@ -24,38 +17,14 @@ const PreferencesContext = createContext<PreferencesContextValue | null>(null);
  * Language, theme, units and area, in one place.
  *
  * These used to live in the root page component, which meant every screen that
- * needed them had to be part of that component. Reading order is
- * localStorage first (so the first paint is right) then `/api/preferences`
- * (so a second device agrees), and writes go to both.
+ * needed them had to be part of that component. The values themselves now live
+ * in `lib/preferences-store`, which the translator also reads — this component
+ * owns only the network half: read `/api/preferences` so a second device agrees,
+ * and write back when something changes.
  */
 export function PreferencesProvider({ children }: { children: React.ReactNode }) {
   const { sessionToken } = useAuth();
-  const [language, setLanguage] = useState<UiLanguage>("en-CA");
-  const [theme, setTheme] = useState<ThemePreference>("system");
-  const [measurementSystem, setMeasurementSystem] = useState<MeasurementSystem>("metric");
-  const [location, setLocation] = useState<NormalizedLocation | null>(null);
-  const [ready, setReady] = useState(false);
-
-  // Deferred by a tick: the server rendered the defaults, so reading storage
-  // during the effect body itself would change state mid-hydration.
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const storedLanguage = window.localStorage.getItem("trinque.language") as UiLanguage | null;
-      const storedTheme = window.localStorage.getItem("trinque.theme");
-      const storedMeasurement = window.localStorage.getItem("trinque.measurement");
-      const storedLocation = window.localStorage.getItem("trinque.location");
-      const restoredLanguage = storedLanguage && UI_LANGUAGES.includes(storedLanguage) ? storedLanguage : resolveUiLanguage(navigator.languages);
-      setLanguage(restoredLanguage);
-      if (storedTheme === "light" || storedTheme === "dark" || storedTheme === "system") setTheme(storedTheme);
-      if (storedMeasurement === "metric" || storedMeasurement === "imperial") setMeasurementSystem(storedMeasurement);
-      if (storedLocation) {
-        try { setLocation(normalizeLocation(JSON.parse(storedLocation) as NormalizedLocation, restoredLanguage)); }
-        catch { window.localStorage.removeItem("trinque.location"); }
-      }
-      setReady(true);
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, []);
+  const { language, theme, measurementSystem, location, ready } = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   useEffect(() => {
     // Nothing is stored server-side for a visitor who has not signed in, and the
@@ -65,14 +34,7 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     let active = true;
     void fetch("/api/preferences", { headers: { Authorization: `Session ${sessionToken}` } })
       .then(async (response) => response.ok ? await response.json() as { preferences: Partial<Preferences> | null } : null)
-      .then((payload) => {
-        if (!active || !payload?.preferences) return;
-        const stored = payload.preferences;
-        if (stored.language) { setLanguage(stored.language); window.localStorage.setItem("trinque.language", stored.language); window.dispatchEvent(new Event("trinque:language")); }
-        if (stored.theme) setTheme(stored.theme);
-        if (stored.measurementSystem) setMeasurementSystem(stored.measurementSystem);
-        if (stored.location) setLocation(stored.location);
-      })
+      .then((payload) => { if (active && payload?.preferences) applyPreferences(payload.preferences); })
       .catch(() => undefined);
     return () => { active = false; };
   }, [sessionToken]);
@@ -90,26 +52,13 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
   }, [language, theme]);
 
   const persist = useCallback(async (next: Partial<Preferences>) => {
-    const nextLanguage = next.language ?? language;
-    const nextTheme = next.theme ?? theme;
-    const nextMeasurement = next.measurementSystem ?? measurementSystem;
-    const chosenLocation = next.location === undefined ? location : next.location;
-    const nextLocation = chosenLocation ? { ...chosenLocation, language: nextLanguage, measurementSystem: nextMeasurement } : null;
-
-    setLanguage(nextLanguage); setTheme(nextTheme); setMeasurementSystem(nextMeasurement); setLocation(nextLocation);
-    window.localStorage.setItem("trinque.language", nextLanguage);
-    window.dispatchEvent(new Event("trinque:language"));
-    window.localStorage.setItem("trinque.theme", nextTheme);
-    window.localStorage.setItem("trinque.measurement", nextMeasurement);
-    if (nextLocation) window.localStorage.setItem("trinque.location", JSON.stringify(coarseLocation(nextLocation)));
-    else window.localStorage.removeItem("trinque.location");
-
+    const applied = applyPreferences(next);
     if (!sessionToken) return;
     const headers = { Authorization: `Session ${sessionToken}`, "Content-Type": "application/json" };
-    await fetch("/api/preferences", { method: "PUT", headers, body: JSON.stringify({ language: nextLanguage, theme: nextTheme, measurementSystem: nextMeasurement, location: nextLocation }) }).catch(() => undefined);
+    await fetch("/api/preferences", { method: "PUT", headers, body: JSON.stringify({ language: applied.language, theme: applied.theme, measurementSystem: applied.measurementSystem, location: applied.location }) }).catch(() => undefined);
     // Storing an area is a consent decision, not only a preference.
-    if (next.location !== undefined) await fetch("/api/privacy", { method: "PUT", headers, body: JSON.stringify({ locationConsent: Boolean(nextLocation) }) }).catch(() => undefined);
-  }, [language, location, measurementSystem, sessionToken, theme]);
+    if (next.location !== undefined) await fetch("/api/privacy", { method: "PUT", headers, body: JSON.stringify({ locationConsent: Boolean(applied.location) }) }).catch(() => undefined);
+  }, [sessionToken]);
 
   const value = useMemo<PreferencesContextValue>(
     () => ({ language, theme, measurementSystem, location, ready, persist }),

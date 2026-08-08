@@ -33,13 +33,28 @@ function storageUrl(): string | undefined {
 }
 
 export function storageConfigured(): boolean {
-  return Boolean(storageUrl() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim());
+  return Boolean(storageUrl() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) || localBucketDirectory() !== null;
+}
+
+/**
+ * A development-only directory that stands in for Supabase Storage, so the app can
+ * be run end to end without production credentials. Deliberately gated on
+ * NODE_ENV: a deployment that loses its storage credentials must keep failing
+ * loudly rather than silently writing images onto an ephemeral filesystem.
+ */
+function localBucketDirectory(): string | null {
+  const directory = process.env.LOCAL_OBJECT_STORAGE_DIR?.trim();
+  if (!directory || process.env.NODE_ENV !== "development") return null;
+  return directory;
 }
 
 export function getObjectBucket(): ObjectBucket | null {
   const url = storageUrl();
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  if (!url || !serviceRoleKey) return null;
+  if (!url || !serviceRoleKey) {
+    const directory = localBucketDirectory();
+    return directory ? localBucket(directory) : null;
+  }
 
   // The service role key bypasses row level security, so this client must never
   // be constructed in code that reaches the browser, and it must not try to
@@ -69,6 +84,41 @@ export function getObjectBucket(): ObjectBucket | null {
     async delete(key) {
       const { error } = await bucket.remove([key]);
       if (error) throw new Error(`storage_delete_failed: ${error.message}`);
+    },
+  };
+}
+
+/** Filesystem implementation of {@link ObjectBucket} for local development. */
+function localBucket(directory: string): ObjectBucket {
+  const resolve = async (key: string) => {
+    const { join, normalize } = await import("node:path");
+    // Keys reach this function from route parameters, so a traversal attempt
+    // must not be able to read or write outside the bucket directory.
+    const safe = normalize(key).replace(/^(\.\.[/\\])+/, "").replace(/[/\\]/g, "_");
+    return join(directory, safe);
+  };
+  return {
+    async put(key, value, options) {
+      const { mkdir, writeFile } = await import("node:fs/promises");
+      await mkdir(directory, { recursive: true });
+      const path = await resolve(key);
+      await writeFile(path, value instanceof Uint8Array ? value : new Uint8Array(value));
+      await writeFile(`${path}.type`, options?.httpMetadata?.contentType ?? "application/octet-stream");
+    },
+    async get(key) {
+      const { readFile } = await import("node:fs/promises");
+      const path = await resolve(key);
+      try {
+        const bytes = await readFile(path);
+        const contentType = await readFile(`${path}.type`, "utf8").catch(() => "application/octet-stream");
+        return { bytes: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, httpMetadata: { contentType } };
+      } catch { return null; }
+    },
+    async delete(key) {
+      const { rm } = await import("node:fs/promises");
+      const path = await resolve(key);
+      await rm(path, { force: true });
+      await rm(`${path}.type`, { force: true });
     },
   };
 }

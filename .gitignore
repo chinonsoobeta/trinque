@@ -44,3 +44,6 @@ next-env.d.ts
 # Vercel
 .vercel
 *.db
+
+# Local development object storage (stands in for Supabase Storage)
+/.local-storage/

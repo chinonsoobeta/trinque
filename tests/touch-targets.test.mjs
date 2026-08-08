@@ -46,6 +46,66 @@ test("the settings sections are headings, not spans that look like them", async 
   assert.match(privacy, /<h2>\{t\("privacy\.title"\)\}<\/h2>/);
 });
 
+/**
+ * Consistency is a usability property: a shape learned on one card has to hold
+ * on the next. Both signature shapes were written out by hand at every site and
+ * had drifted — 28/8 on a dish card, 26/8 on a taste card, 34/8 on the skeleton
+ * standing in for the dish card, 24/8 on the auth modal; 26/0 and 25/0 on
+ * sheets. They are tokens now, and no site may go back to spelling them out.
+ */
+test("the two card shapes come from tokens, not from hand-written corners", () => {
+  const handwritten = [...css.matchAll(/border-radius:[^;}]*\b(2[4-9]|3[0-9])px\b[^;}]*/g)]
+    .map((match) => match[0].trim())
+    // A single uniform corner is not the signature shape — only the
+    // multi-value forms are, and those are what drifted.
+    .filter((rule) => rule.split(/\s+/).length > 2);
+  assert.deepEqual(handwritten, []);
+  assert.ok(css.includes("var(--radius-card)"), "the card shape token is unused");
+  assert.ok(css.includes("var(--radius-sheet)"), "the sheet shape token is unused");
+});
+
+test("buttons use one weight scale", () => {
+  // 750, 850 and 900 had crept in beside 700 and 800, so the same emphasis
+  // came out a shade heavier depending on which rule you landed in.
+  const weights = new Set([...css.matchAll(/font-weight:\s*(\d{3})/g)].map((match) => match[1]));
+  for (const value of [...css.matchAll(/font:\s*(\d{3})\s/g)].map((match) => match[1])) weights.add(value);
+  assert.deepEqual([...weights].sort(), ["400", "500", "600", "700", "800"]);
+});
+
+test("the one tab strip in the app is the shared control", async () => {
+  const explore = await readFile(new URL("../app/explore/page.tsx", import.meta.url), "utf8");
+  // Explore hand-rolled its own: 39px tall, no roving tabindex, no arrow keys.
+  assert.match(explore, /<Tabs label=/);
+  assert.ok(!explore.includes('className="filters"'), "the legacy tab strip is back");
+  assert.ok(!css.includes(".filters"), "the legacy tab strip rules are back");
+});
+
+test("an irreversible action does not look like an ordinary one", async () => {
+  assert.match(css, /\.text-button\.danger \{ color: var\(--danger\); \}/);
+  const destructive = [
+    ["../components/DishOwnerControls.tsx", "privacy.deleteDish"],
+    ["../components/CommentSection.tsx", "safety.removeComment"],
+    ["../components/SafetyActions.tsx", "safety.blockUser"],
+    ["../components/AccountPrivacyActions.tsx", "privacy.delete"],
+    ["../components/PrivacySettings.tsx", "privacy.delete"],
+  ];
+  for (const [file, key] of destructive) {
+    const source = await readFile(new URL(file, import.meta.url), "utf8");
+    // The button carrying the key has to be the danger variant. Muting,
+    // signing out and removing a photo are reversible and stay accent-coloured.
+    const button = source.split(`{t("${key}")}`)[0].lastIndexOf('className="text-button');
+    assert.ok(button >= 0, `${file}: ${key} is no longer a text button`);
+    assert.match(source.slice(button, button + 40), /text-button danger/, `${file}: ${key} is not marked destructive`);
+  }
+});
+
+test("every empty state is the shared one", async () => {
+  const notifications = await readFile(new URL("../components/NotificationList.tsx", import.meta.url), "utf8");
+  assert.match(notifications, /<EmptyState title=\{t\("notifications\.empty"\)\}/);
+  // The dashed box the notification list used to draw for itself.
+  assert.ok(!css.includes(".empty-state{"), "the legacy empty-state rules are back");
+});
+
 test("a screen that turns you away still says where you are and where to go", async () => {
   const moderation = await readFile(new URL("../app/moderation/page.tsx", import.meta.url), "utf8");
   const notifications = await readFile(new URL("../app/notifications/page.tsx", import.meta.url), "utf8");

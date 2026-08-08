@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { LoadingState } from "@/components/AppPrimitives";
+import { EmptyState, LoadingState } from "@/components/AppPrimitives";
 import { useAuth } from "@/components/AuthProvider";
 import { useUiLanguage, useUiText } from "@/components/useUiText";
 
@@ -25,7 +25,9 @@ export function NotificationList({ onRead }: { onRead?: () => void }) {
   }
 
   if (loading) return <LoadingState label={t("notifications.loading")} />;
-  if (!items.length) return <div className="empty-state"><p>{t("notifications.empty")}</p></div>;
+  // Was a bare sentence in a dashed box on the legacy `.empty-state` rules —
+  // the one empty state in the app that did not look like the others.
+  if (!items.length) return <EmptyState title={t("notifications.empty")} body={t("notifications.emptyHelp")} />;
   return <div className="notification-list">{items.map((item) => <button key={item.id} className={item.read ? "notification read" : "notification unread"} onClick={() => void markRead(item)}><b>{item.actorDisplayName ?? t("notifications.someone")}</b> {t(notificationCopyKey(item.type))}<small>{new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.createdAt))}</small></button>)}</div>;
 }
 

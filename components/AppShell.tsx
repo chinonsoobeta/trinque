@@ -57,7 +57,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="app-header-actions">
         {!authSurface && <Link className="app-create-action" href="/post"><Icon name="post" size={18} /><span>{t("nav.postDish")}</span></Link>}
         {!authSurface && authenticated && <NotificationBell />}
-        {!loading && !authenticated ? <Link className="signin-link" href={signInHref}>{t("auth.signIn")}</Link> : authenticated && identity ? <div className="profile-menu">
+        {/* Who you are is only known after the session call answers. Rendering
+            nothing until then made the header's right-hand side grow when it
+            did, and the centred navigation slid sideways with it. */}
+        {loading ? <span className="header-auth-placeholder" aria-hidden="true" /> : !authenticated ? <Link className="signin-link" href={signInHref}>{t("auth.signIn")}</Link> : identity ? <div className="profile-menu">
           <button className="profile-menu-trigger" onClick={() => setMenuPathname((value) => value === pathname ? null : pathname)} aria-haspopup="menu" aria-expanded={menuOpen} aria-label={t("auth.openAccount")}><AppAvatar name={identity.displayName} size="small" /></button>
           {menuOpen && <div className="profile-menu-popover" role="menu">
             <div className="profile-menu-identity"><AppAvatar name={identity.displayName} size="medium" /><div><b>{identity.displayName}</b>{identity.email && <small>{identity.email}</small>}</div></div>

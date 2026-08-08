@@ -68,6 +68,19 @@
   --radius-lg: 24px;
   --radius-xl: 34px;
   --radius-pill: 999px;
+  /* The signature card shape: three soft corners and one tight one. It was
+     written out by hand at every site, so the same motif came out 28/8 on a
+     dish card, 26/8 on a taste card, 25/6 in the mobile override and 34/8 on
+     the skeleton that stands in for the dish card while it loads. */
+  --radius-card: var(--radius-lg) 28px 28px 8px;
+  /* The same shape at hero scale: the profile header, the dish photo and the
+     auth modal all wear it, and all three had picked a different number for it
+     — 32, 36 and 30, with the tight corner at 10. */
+  --radius-card-lg: var(--radius-xl) 34px 34px 10px;
+  /* A sheet rising from the bottom of a phone: soft top corners, square feet.
+     Written by hand as 26/0 on the auth modal, 26/0 on the settings panel and
+     25/0 on the analyzer, so the same gesture arrived a pixel apart. */
+  --radius-sheet: var(--radius-lg) 26px 0 0;
 
   /* Scrims sit on photography, not on the page, so they stay dark in both
      themes — the text they carry is always white. */

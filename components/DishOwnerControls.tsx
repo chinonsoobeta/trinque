@@ -28,7 +28,7 @@ export function DishOwnerControls({ dishId, ownerId }: { dishId: string; ownerId
 
   return <div className="modal-actions">
     <button className="secondary" onClick={() => setEditing(true)}>{t("owner.editTitle")}</button>
-    <button className="text-button" disabled={busy} onClick={() => void remove()}>{t("privacy.deleteDish")}</button>
+    <button className="text-button danger" disabled={busy} onClick={() => void remove()}>{t("privacy.deleteDish")}</button>
     {editing && <DishEditDialog dish={{ id: dishId }} t={t} guestToken={sessionToken} onClose={() => setEditing(false)} onUpdated={() => window.location.reload()} />}
   </div>;
 }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import type { MessageKey } from "@/ios/i18n";
-import { EmptyState, LoadingState } from "@/components/AppPrimitives";
+import { EmptyState, LoadingState, SkeletonFeed } from "@/components/AppPrimitives";
 import { SocialDishCard, type SocialDish } from "@/components/SocialDishCard";
 import { usePreferences } from "@/components/PreferencesProvider";
 import { useUiText } from "@/components/useUiText";
@@ -89,7 +89,7 @@ export function Feed({ type }: { type: FeedType }) {
   }, [done, initialLoading, loadMore]);
 
   if (type === "following" && !authenticated) return <EmptyState eyebrow={t("nav.following")} title={t("feed.followHelp")} body={t("auth.signInHelp")} action={<a className="primary button-link" href="/auth/login?next=/explore%3Ffeed%3Dfollowing">{t("auth.signIn")}</a>} />;
-  if (initialLoading) return <section className="feed"><LoadingState label={t("feed.loading")} /></section>;
+  if (initialLoading) return <SkeletonFeed label={t("feed.loading")} count={4} />;
   return <section className="feed social-feed">
     {dishes.length > 0 && reach !== "requested" && <p className="feed-reach" role="status">{t(reach === "widened" ? "feed.widened" : "feed.everywhere")}</p>}
     {dishes.length === 0 && !errorKey && <EmptyState eyebrow={t(type === "following" ? "nav.following" : "feed.top")} title={t(type === "following" ? "feed.followEmpty" : "feed.publicEmpty")} body={t(type === "following" ? "feed.followHelp" : "feed.publicEmptyHelp")} action={type === "following" ? <a className="secondary button-link" href="/explore">{t("profile.findPeople")}</a> : undefined} />}

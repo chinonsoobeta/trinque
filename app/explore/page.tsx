@@ -6,7 +6,7 @@ import { DiscoverPeople } from "@/components/DiscoverPeople";
 import { Feed } from "@/components/Feed";
 import { Icon } from "@/components/Icon";
 import { SearchResults } from "@/components/SearchResults";
-import { LoadingState, PageContainer } from "@/components/AppPrimitives";
+import { LoadingState, PageContainer, Tabs } from "@/components/AppPrimitives";
 import { useUiText } from "@/components/useUiText";
 
 export default function ExplorePage() {
@@ -57,10 +57,12 @@ function ExploreContent() {
         {query ? <button type="button" className="text-button" onClick={() => { setDraft(""); go({ q: "" }); }}>{t("search.clear")}</button> : null}
         <button className="primary">{t("search.action")}</button>
       </form>
-      {!query && <div className="filters" role="tablist" aria-label={t("home.explore")}>
-        <button role="tab" aria-selected={feed === "trending"} className={feed === "trending" ? "active" : ""} onClick={() => go({ feed: "trending" })}>{t("feed.top")}</button>
-        <button role="tab" aria-selected={feed === "following"} className={feed === "following" ? "active" : ""} onClick={() => go({ feed: "following" })}>{t("nav.following")}</button>
-      </div>}
+      {/* Was a hand-rolled tab strip on the legacy `.filters` rules: 39px tall,
+          no roving tabindex and no arrow keys, so the one tablist in the app
+          did not behave like one. `Tabs` is the shared control. */}
+      {!query && <Tabs label={t("home.explore")} value={feed}
+        options={[{ value: "trending" as const, label: t("feed.top") }, { value: "following" as const, label: t("nav.following") }]}
+        onChange={(next) => go({ feed: next })} />}
     </header>
     {query ? <SearchResults query={query} /> : <><Feed type={feed} /><DiscoverPeople /></>}
   </PageContainer>;

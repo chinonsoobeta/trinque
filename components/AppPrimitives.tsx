@@ -38,8 +38,14 @@ export function Skeleton({ variant = "text", count = 1 }: { variant?: "text" | "
   return <>{Array.from({ length: count }, (_, index) => <span key={index} className={`skeleton skeleton-${variant}`} aria-hidden="true" />)}</>;
 }
 
+/**
+ * Carries `social-feed` so the placeholders sit in the same grid, at the same
+ * card size, as the dishes that replace them. A spinner and the word "Loading"
+ * reserve no space at all, which is why the feed used to arrive and shove
+ * everything below it down the page.
+ */
 export function SkeletonFeed({ label, count = 3 }: { label: string; count?: number }) {
-  return <div className="feed" role="status" aria-live="polite" aria-busy="true">
+  return <div className="feed social-feed" role="status" aria-live="polite" aria-busy="true">
     <span className="sr-only">{label}</span>
     {Array.from({ length: count }, (_, index) => <article key={index} className="skeleton-card" aria-hidden="true">
       <span className="skeleton skeleton-card" />

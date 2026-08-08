@@ -41,7 +41,7 @@ export function AccountPrivacyActions() {
 
   return <div className="account-privacy-actions">
     <button className="text-button full" disabled={busy} onClick={() => void exportAccount()}>{t("privacy.export")}</button>
-    <button className="text-button full" disabled={busy} onClick={() => void deleteAccount()}>{t("privacy.delete")}</button>
+    <button className="text-button danger full" disabled={busy} onClick={() => void deleteAccount()}>{t("privacy.delete")}</button>
     {status && <p className="privacy-note" role="status">{status}</p>}
   </div>;
 }

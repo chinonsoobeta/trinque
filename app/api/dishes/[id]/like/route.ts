@@ -1,9 +1,8 @@
 import { and, count, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { likes, notifications, publishedDishes } from "@/db/schema";
-import { AuthenticationError, requireOnboardedIdentity } from "@/lib/auth";
+import { AuthenticationError, getOptionalIdentity, requireOnboardedIdentity } from "@/lib/auth";
 
-export const runtime = "edge";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

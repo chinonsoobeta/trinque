@@ -3,7 +3,6 @@ import { getDb } from "@/db";
 import { blocks, follows, hiddenDishes, mutes, profiles, publishedDishes, restaurants } from "@/db/schema";
 import { AuthenticationError, requireAuthenticatedIdentity } from "@/lib/auth";
 
-export const runtime = "edge";
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 

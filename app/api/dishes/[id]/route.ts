@@ -4,7 +4,6 @@ import { publishedDishes } from "@/db/schema";
 import { requireOnboardedIdentity, AuthenticationError } from "@/lib/auth";
 import { deleteDishImage } from "@/lib/uploads";
 
-export const runtime = "edge";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   let identity;

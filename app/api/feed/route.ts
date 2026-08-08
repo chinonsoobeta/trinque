@@ -3,7 +3,6 @@ import { getDb } from "@/db";
 import { blocks, hiddenDishes, mutes, publishedDishes, restaurants } from "@/db/schema";
 import { requireIdentity } from "@/lib/identity";
 
-export const runtime = "edge";
 
 /** Public-to-Trinque feed: only reviewed, published records; never raw profiles or email addresses. */
 export async function GET(request: Request) {

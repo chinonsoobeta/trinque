@@ -20,10 +20,10 @@ Without `GCP_API_KEY`, health and location search report a `credentials`/unavail
 
 ## Preferences and theme
 
-Durable guest or trusted identities can save language, `system`/`light`/`dark` theme, measurement override, and one coarse current location in D1 through migration `0003`. Web also mirrors preferences in local storage; iOS uses AsyncStorage. New users start from system theme and the closest supported device language.
+Durable guest or trusted identities can save language, `system`/`light`/`dark` theme, measurement override, and one coarse current location in the database through migration `0003`. Web also mirrors preferences in local storage; iOS uses AsyncStorage. New users start from system theme and the closest supported device language.
 
 Web applies the saved theme in the document head before meaningful render and follows `prefers-color-scheme` in system mode. iOS waits for local preferences before rendering the principal UI, integrates with `Appearance`, uses adaptive semantic colors instead of inversion, and updates the status bar.
 
 ## Credential blocker
 
-Live provider smoke tests cannot be run until the owner configures `GCP_API_KEY` in the Worker production/preview environment and confirms the applicable Google Maps Platform terms. Deterministic injected provider tests cover the implementation without committing a credential.
+Live provider smoke tests cannot be run until the owner configures `GCP_API_KEY` in the Vercel production/preview environment and confirms the applicable Google Maps Platform terms. Deterministic injected provider tests cover the implementation without committing a credential.

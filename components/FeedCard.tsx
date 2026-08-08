@@ -122,10 +122,10 @@ export function FeedCard({ dish, t, language, onSave, onDelete, onLike, onEdit }
 
       <div className="feed-card-actions">
         <button className="feed-card-action" onClick={() => onLike?.(dish.id)} aria-label={t("dish.like")}>
-          ♡ {(dish.likes ?? 0) > 0 ? t("dish.likeCount", { count: dish.likes }) : ""}
+          ♡ {(dish.likes ?? 0) > 0 ? t("dish.likeCount", { count: dish.likes ?? 0 }) : ""}
         </button>
         <button className="feed-card-action" onClick={() => window.location.assign(`/dishes/${dish.id}`)} aria-label={t("comments.add")}>
-          ◷ {(dish.commentCount ?? 0) > 0 ? t("dish.commentCount", { count: dish.commentCount }) : ""}
+          ◷ {(dish.commentCount ?? 0) > 0 ? t("dish.commentCount", { count: dish.commentCount ?? 0 }) : ""}
         </button>
         <button className="feed-card-action" onClick={() => onSave?.(dish.id)} aria-label={dish.isSaved ? t("save.removed") : t("save.added")}>
           {dish.isSaved ? "♥" : "♡"}

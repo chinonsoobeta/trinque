@@ -3,7 +3,6 @@ import { getDb } from "@/db";
 import { follows, notifications, profiles } from "@/db/schema";
 import { AuthenticationError, getOptionalIdentity, normalizeHandle, requireOnboardedIdentity } from "@/lib/auth";
 
-export const runtime = "edge";
 
 async function target(handleValue: string) {
   const handle = normalizeHandle(handleValue);

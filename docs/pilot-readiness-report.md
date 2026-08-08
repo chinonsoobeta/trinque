@@ -24,7 +24,7 @@ Report date: 2026-07-23. Validated source: local commit `1e42a89`. Recommendatio
 
 ## Current production check
 
-Current Worker preview: `https://trinque2.chinonsoobeta.workers.dev`. Health endpoint reports D1, R2, Places, and OpenAI status independently. `GOOGLE_PLACES_API_KEY` is supported as a legacy fallback; `GCP_API_KEY` is the current server-side Places secret.
+Current Worker preview: `https://trinque2.chinonsoobeta.workers.dev`. Health endpoint reports database, storage, Places, and OpenAI status independently. `GOOGLE_PLACES_API_KEY` is supported as a legacy fallback; `GCP_API_KEY` is the current server-side Places secret.
 
 ## Safety and data controls
 
@@ -46,10 +46,10 @@ Group ranking rejects unknown required dietary data and allergens. The server st
 
 ## Required evidence before a controlled pilot
 
-- Set and verify `OPENAI_API_KEY`, `GCP_API_KEY`, D1 `DB`, R2 `UPLOADS`, and Supabase public configuration in the Worker.
+- Set and verify every variable in `.env.example` on the Vercel project.
 - Obtain recorded human native-language review for French, Spanish, German, Italian, and Portuguese.
 - Run a live multi-account group plan with an eligible candidate, vote, finalization, RSVP, and calendar export.
-- Test moderation actions, feed filtering, account deletion, privacy export, and R2 media deletion.
+- Test moderation actions, feed filtering, account deletion, privacy export, and stored media deletion.
 - Run real-device auth and mobile browser flows on supported iOS and Android devices.
 
-The product remains **NO-GO**. The live Worker matches the tested source, but live OpenAI analysis, human native review, and multi-account/physical-device journeys are not yet measured.
+The product remains **NO-GO**. The live deployment matches the tested source, but live OpenAI analysis, human native review, and multi-account/physical-device journeys are not yet measured.

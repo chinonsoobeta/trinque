@@ -4,7 +4,6 @@ import { contentReports } from "@/db/schema";
 import { AuthenticationError, requireOnboardedIdentity } from "@/lib/auth";
 import { enforceUsageBudget, UsageBudgetError } from "@/lib/operations";
 
-export const runtime = "edge";
 const targetTypes = ["user", "dish", "comment"] as const;
 const reasons = ["harmful", "spam", "false", "stale", "other"] as const;
 

@@ -1,6 +1,5 @@
 import { getOrCreateLegacyIdentity, sessionCookie } from "@/lib/auth";
 
-export const runtime = "edge";
 
 const headers = { "Access-Control-Allow-Headers": "Authorization, Content-Type", "Access-Control-Allow-Methods": "POST, OPTIONS", "Cache-Control": "no-store" };
 

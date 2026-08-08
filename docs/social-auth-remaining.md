@@ -1,6 +1,6 @@
 # Social/auth integration status and follow-up checklist
 
-This patch establishes the D1 session model, browser auth provider, public profiles, follows, likes, comments, feeds, notifications, authenticated saves, legacy mutation guards, targeted group invite notifications, R2-backed avatars, and authenticated social privacy/export/delete handling.
+This patch establishes the database session model, browser auth provider, public profiles, follows, likes, comments, feeds, notifications, authenticated saves, legacy mutation guards, targeted group invite notifications, object-storage-backed avatars, and authenticated social privacy/export/delete handling.
 
 ## Completed compatibility hardening
 
@@ -16,12 +16,12 @@ This patch establishes the D1 session model, browser auth provider, public profi
 - Notifications UI
   - The delivery patch wires `NotificationBell` into the existing topbar; the component renders only for authenticated users.
 - Avatar uploads
-  - `POST/DELETE /api/profile/avatar` uses the existing Cloudflare runtime R2 binding rather than adding another storage provider.
+  - `POST/DELETE /api/profile/avatar` uses the same Supabase Storage bucket as dish images rather than adding another storage provider.
   - Uploads are limited to JPEG/PNG/WebP/AVIF and 5 MB, stored under `avatars/<user>/...`, and served publicly through the same route.
   - Previous managed avatar objects are deleted on replacement/removal where possible.
 - Privacy/account deletion
   - Authenticated users can export the new social/session/profile/group data through `/api/privacy/social`.
-  - Account deletion removes attributable comments/social activity, owned dishes/groups, sessions/preferences/consents/diagnostics, clears R2 avatar data, and leaves a non-PII local tombstone.
+  - Account deletion removes attributable comments/social activity, owned dishes/groups, sessions/preferences/consents/diagnostics, clears stored avatar data, and leaves a non-PII local tombstone.
   - `auth_subject_hash` + `deleted_at` prevent a still-valid Supabase or trusted ChatGPT credential from silently recreating the local account.
   - Existing guest privacy/export/delete behavior is left intact.
 
@@ -40,11 +40,11 @@ After supported iOS versions have migrated, remove the authenticated `guestToken
 
 ## Deployment/configuration
 
-- Apply `drizzle/0009_social_auth_foundation.sql` to D1 before deploying code that writes the new tables/columns.
-- Keep `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` configured in the Cloudflare runtime. Do not expose a service-role key to the browser.
+- Apply `drizzle/0009_social_auth_foundation.sql` to the database before deploying code that writes the new tables/columns.
+- Keep `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` configured on the Vercel project. Do not expose a service-role key to the browser.
 - Supabase Auth should enable Email/Password and Google providers as desired.
 - Add every production/preview callback origin to Supabase redirect allow-lists with `/auth/callback`.
-- The avatar route discovers and reuses the configured R2 bucket binding by preferring common image-binding names and then structurally detecting an R2 binding. If the deployment has multiple R2 buckets, set/use a preferred image binding name (`DISH_IMAGES`, `IMAGES`, `IMAGE_BUCKET`, `R2_BUCKET`, or `BUCKET`) so selection is deterministic.
+- The avatar route uses the same Supabase Storage bucket as dish images, named by `SUPABASE_STORAGE_BUCKET` and defaulting to `dish-images`. Avatar keys are namespaced under `avatars/`.
 
 ## Feed notes
 

@@ -1,7 +1,7 @@
-export type CapabilityName = "openai" | "places" | "d1" | "r2";
+export type CapabilityName = "openai" | "places" | "database" | "storage";
 export type CapabilityHealth = {
   status: "available" | "unavailable";
-  reason: "configured" | "missing_credential" | "missing_binding";
+  reason: "configured" | "missing_credential" | "missing_configuration";
 };
 
 export type CapabilityStatus = {
@@ -27,8 +27,8 @@ export function capabilityStatus(input: {
   const capabilities: CapabilityStatus["capabilities"] = {
     openai: { status: liveAnalysis ? "available" : "unavailable", reason: liveAnalysis ? "configured" : "missing_credential" },
     places: { status: locationSearch ? "available" : "unavailable", reason: locationSearch ? "configured" : "missing_credential" },
-    d1: { status: persistence ? "available" : "unavailable", reason: persistence ? "configured" : "missing_binding" },
-    r2: { status: uploads ? "available" : "unavailable", reason: uploads ? "configured" : "missing_binding" },
+    database: { status: persistence ? "available" : "unavailable", reason: persistence ? "configured" : "missing_configuration" },
+    storage: { status: uploads ? "available" : "unavailable", reason: uploads ? "configured" : "missing_configuration" },
   };
   return {
     status: liveAnalysis && locationSearch && persistence && uploads ? "ready" : "degraded",

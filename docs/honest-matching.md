@@ -1,6 +1,6 @@
 # Honest nearby matching
 
-Live matching reads reviewed, published dish records from D1 and normalized restaurant alternatives from the configured Places provider. The old deterministic catalog is exported only as `demoNearbyCatalog` and is not reachable from the live publication path.
+Live matching reads reviewed, published dish records from the database and normalized restaurant alternatives from the configured Places provider. The old deterministic catalog is exported only as `demoNearbyCatalog` and is not reachable from the live publication path.
 
 ## Ranking
 
@@ -16,4 +16,4 @@ Unsupported countries and invalid coordinates are rejected before ranking. `seed
 
 Every result includes distance, an explanation code and fallback explanation, provenance, verification, last-confirmed information, a dietary caveat and current-availability state. Web and iOS localize the explanation and status labels while preserving original restaurant and dish names.
 
-Provider failures are returned separately from D1 dish results. Missing credentials or a live provider failure never causes seeded restaurants to appear in live tiers.
+Provider failures are returned separately from database dish results. Missing credentials or a live provider failure never causes seeded restaurants to appear in live tiers.

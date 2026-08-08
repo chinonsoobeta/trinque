@@ -4,7 +4,6 @@ import { feedbackReports } from "@/db/schema";
 import { requireIdentity } from "@/lib/identity";
 import { SUPPORTED_COUNTRY_CODES, type SupportedCountry } from "@/lib/regions";
 
-export const runtime = "edge";
 const reasons = ["wrong_identification", "stale_dish", "closed_restaurant"] as const;
 const targets = ["analysis", "published_dish", "restaurant"] as const;
 

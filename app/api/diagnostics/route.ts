@@ -3,7 +3,6 @@ import { getDb } from "@/db";
 import { clientErrorReports, userConsents } from "@/db/schema";
 import { requireIdentity } from "@/lib/identity";
 
-export const runtime = "edge";
 const kinds = ["js_exception", "unhandled_rejection", "api_error"] as const;
 
 export async function POST(request: Request) {

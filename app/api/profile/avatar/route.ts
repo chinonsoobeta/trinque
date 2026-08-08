@@ -2,20 +2,21 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { profiles, users } from "@/db/schema";
 import { AuthenticationError, requireAuthenticatedIdentity } from "@/lib/auth";
-import { AVATAR_CONTENT_TYPES, AVATAR_MAX_BYTES, avatarKey, avatarKeyFromUrl, avatarUrlForKey, getImageBucket } from "@/lib/r2-avatar";
+import { AVATAR_CONTENT_TYPES, AVATAR_MAX_BYTES, avatarKey, avatarKeyFromUrl, avatarUrlForKey, getImageBucket } from "@/lib/avatar-storage";
 
-export const runtime = "edge";
 
 export async function GET(request: Request) {
   const key = new URL(request.url).searchParams.get("key");
   if (!key?.startsWith("avatars/")) return new Response("Not found", { status: 404 });
   try {
     const object = await (await getImageBucket()).get(key);
-    if (!object?.body) return new Response("Not found", { status: 404 });
-    return new Response(object.body, {
+    if (!object) return new Response("Not found", { status: 404 });
+    return new Response(object.bytes, {
       headers: {
-        "Content-Type": object.httpMetadata?.contentType ?? "application/octet-stream",
-        "Cache-Control": object.httpMetadata?.cacheControl ?? "public, max-age=3600, stale-while-revalidate=86400",
+        "Content-Type": object.httpMetadata.contentType ?? "application/octet-stream",
+        // Avatar keys carry a UUID and are never overwritten, so the object a
+        // key names cannot change underneath a cached copy.
+        "Cache-Control": object.httpMetadata.cacheControl ?? "public, max-age=31536000, immutable",
       },
     });
   } catch {

@@ -3,7 +3,6 @@ import { getDb } from "@/db";
 import { saves } from "@/db/schema";
 import { AuthenticationError, requireOnboardedIdentity } from "@/lib/auth";
 
-export const runtime = "edge";
 const cors = { "Access-Control-Allow-Headers": "Authorization, Content-Type", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" };
 export function OPTIONS() { return new Response(null, { status: 204, headers: cors }); }
 

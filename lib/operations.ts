@@ -3,6 +3,8 @@ import { getDb } from "../db/index.ts";
 import { usageCounters } from "../db/schema.ts";
 import { getRuntimeEnv } from "./runtime-env.ts";
 
+export { logOperation, requestIdFor } from "./request-log.ts";
+
 export type BudgetAction = "analysis" | "places" | "publish" | "invite_join" | "vote" | "report";
 const DEFAULT_LIMITS: Record<BudgetAction, { user: number; global: number }> = {
   analysis: { user: 12, global: 500 },
@@ -16,16 +18,6 @@ const DEFAULT_LIMITS: Record<BudgetAction, { user: number; global: number }> = {
 export class UsageBudgetError extends Error {
   readonly retryAfterSeconds: number;
   constructor(retryAfterSeconds: number) { super("usage_budget_exceeded"); this.retryAfterSeconds = retryAfterSeconds; }
-}
-
-export function requestIdFor(request: Request): string {
-  const supplied = request.headers.get("x-request-id")?.trim();
-  return supplied && /^[A-Za-z0-9_-]{8,80}$/.test(supplied) ? supplied : crypto.randomUUID();
-}
-
-export function logOperation(event: string, details: { requestId: string; action?: string; status?: number; code?: string; durationMs?: number; countryCode?: string }) {
-  const safe = { timestamp: new Date().toISOString(), event, ...details };
-  console.info(JSON.stringify(safe));
 }
 
 export async function enforceUsageBudget(action: BudgetAction, userId?: string | null, now = new Date()): Promise<void> {

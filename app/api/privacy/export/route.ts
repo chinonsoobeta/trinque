@@ -3,7 +3,6 @@ import { getDb } from "@/db";
 import { analyticsEvents, clientErrorReports, feedbackReports, groupMembers, groupRsvps, groupVotes, groups, preferences, publishedDishes, saves, userConsents, users } from "@/db/schema";
 import { requireIdentity } from "@/lib/identity";
 
-export const runtime = "edge";
 
 export async function GET(request: Request) {
   const identity = await requireIdentity(request);

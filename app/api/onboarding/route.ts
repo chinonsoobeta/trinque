@@ -4,7 +4,6 @@ import { preferences, profiles, users } from "@/db/schema";
 import { normalizeHandle, requireAuthenticatedIdentity, AuthenticationError } from "@/lib/auth";
 import { isSupportedCountry, SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/lib/regions";
 
-export const runtime = "edge";
 
 export async function GET(request: Request) {
   try {

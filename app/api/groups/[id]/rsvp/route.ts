@@ -4,7 +4,6 @@ import { groupRsvps, groups } from "@/db/schema";
 import { groupMembership, groupSnapshot } from "@/lib/group-api";
 import { AuthenticationError, requireOnboardedIdentity } from "@/lib/auth";
 
-export const runtime = "edge";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   let identity;

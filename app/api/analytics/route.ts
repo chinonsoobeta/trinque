@@ -1,7 +1,6 @@
 import { parseAnalyticsInput, recordConsentedAnalytics } from "@/lib/analytics";
 import { requireIdentity } from "@/lib/identity";
 
-export const runtime = "edge";
 
 export async function POST(request: Request) {
   const identity = await requireIdentity(request);

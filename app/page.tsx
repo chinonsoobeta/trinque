@@ -4,8 +4,8 @@ import Image from "next/image";
 
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { coarseLocation, normalizeLocation, type NormalizedLocation } from "@/lib/location";
-import type { RestaurantPlace } from "@/lib/places/types";
-import { type MeasurementSystem, type ThemePreference } from "@/lib/regions";
+import type { LocationSuggestion, RestaurantPlace } from "@/lib/places/types";
+import { isSupportedCountry, type MeasurementSystem, type ThemePreference } from "@/lib/regions";
 import { resolveUiLanguage, translate, UI_LANGUAGES, type MessageKey, type UiLanguage } from "@/ios/i18n";
 import { NotificationBell } from "@/components/NotificationBell";
 import { useAuth } from "@/components/AuthProvider";
@@ -29,7 +29,7 @@ type AnalysisEnvelope =
 type MatchResult = { kind: "dish" | "restaurant_alternative"; id: string; dishName: string | null; restaurantName: string; locality: string; distanceKm: number; score: number; reasonCode: "semantic_and_distance" | "nearby_alternative" | "restaurant_only"; provenance: string; verificationStatus: string; lastConfirmedAt: string | null; dietaryCaveat: string; currentAvailabilityConfirmed: boolean; priceAmount: number | null; currencyCode: string | null; imageUrl: string | null; attribution?: "Google Maps" };
 type MatchTiers = { confirmedNearbyDishes: MatchResult[]; communityOrInferredDishes: MatchResult[]; restaurantLevelAlternatives: MatchResult[] };
 type PublishRestaurant = { provider: "google" | "community"; providerPlaceId?: string | null; name: string; latitude: number; longitude: number; locality: string; administrativeRegion: string; countryCode: NormalizedLocation["countryCode"]; address: string; currencyCode: string };
-type PublicationMetadata = { restaurant: PublishRestaurant; knowledge: { priceKnowledge: "unknown" | "exact" | "approximate"; priceAmount?: number; availabilityKnowledge: "unknown" | "recently_confirmed" | "historical"; lastConfirmedAt?: string }; retainImage: boolean; reviewConfirmed: true; restaurantConfirmed: true };
+type PublicationMetadata = { restaurant: PublishRestaurant; knowledge: { priceKnowledge: "unknown" | "exact" | "approximate"; priceAmount?: number; availabilityKnowledge: "unknown" | "recently_confirmed" | "historical"; lastConfirmedAt?: string }; retainImage: boolean; reviewConfirmed: true; restaurantConfirmed: true; tasteNotes?: string; dietaryNotes?: string; personalComments?: string };
 type PublishedDish = Analysis & { id: string; sourceMode: "live" | "demo"; imageUrl?: string | null; localPreview?: string; provenance?: string; verificationStatus?: string; availabilityKnowledge?: string; contributorLabel?: string; isOwner?: boolean; ownerId?: string; isSaved?: boolean; restaurant?: { name: string } | null; caption?: string; tasteNotes?: string; dietaryNotes?: string; personalComments?: string; locationTag?: string; moderationStatus?: string };
 type GroupCandidate = { candidateId: string; name: string; restaurant: string; neighborhood: string; distanceKm: number; price: string; image: string; score: number; eligible: boolean; tier: "fits" | "needs_checking" | "does_not_fit"; explanation: string; reasons: string[]; conflicts: string[]; kind: "published_dish" | "provider_restaurant" | "seed_demo"; provenance?: string | null; verificationStatus?: string | null; currentAvailabilityConfirmed: boolean; dietaryCaveat: string };
 type GroupSnapshot = { id: string; name: string; eventTime: string; eventLocalDate: string | null; eventLocalTime: string | null; neighborhood: string; budgetMax: number; maxDistanceKm: number; distanceUnit: "metric" | "imperial"; allergies: string[]; dietaryRequirements: string[]; cuisineTypes: string[]; inviteCode: string; inviteExpiresAt: string | null; inviteRevokedAt: string | null; status: "voting" | "finalized"; selectedCandidateId: string | null; candidates: GroupCandidate[]; votes: Record<string, number>; rsvps: Record<string, number>; memberCount: number; viewerRole: "owner" | "participant"; viewerVote: string | null; viewerRsvp: string | null; timeZone: string | null; currencyCode: string | null; locale: string | null; locality: string | null; administrativeRegion?: string | null; countryCode: string | null; latitude?: number | null; longitude?: number | null };
@@ -397,7 +397,7 @@ export default function Home() {
             )}
           </section>
         ) : view === "groups" ? (
-          <GroupPlanner flash={flash} t={t} location={location} language={language} track={trackAnalytics} onRequestLocation={() => setSettingsOpen(true)} />
+          <GroupPlanner flash={flash} t={t} language={language} track={trackAnalytics} />
         ) : view === "saved" ? (
           <>
             <section className="hero">
@@ -458,7 +458,7 @@ export default function Home() {
       <nav className="mobile-nav" aria-label={t("nav.discover")}>
         <button className={view === "discover" ? "active" : ""} onClick={() => setView("discover")}><span>⌂</span>{t("nav.discover")}</button>
         <button className={view === "explore" ? "active" : ""} onClick={() => setView("explore")}><span>◉</span>{t("nav.explore")}</button>
-        <button className="mobile-add" onClick={() => fileRef.current?.click()} aria-label={t("nav.post")}>＋</button>
+        <button className="mobile-add" onClick={() => fileRef.current?.click()} aria-label={t("nav.postDish")}>＋</button>
         <button className={view === "groups" ? "active" : ""} onClick={() => setView("groups")}><span>♢</span>{t("nav.groups")}</button>
         <button className={view === "saved" ? "active" : ""} onClick={() => setView("saved")}><span>○</span>{t("nav.profile")}</button>
       </nav>
@@ -606,6 +606,7 @@ function GroupPlanner({ flash, t, language, track }: { flash: (text: string) => 
   const [locationSuggestions, setLocationSuggestions] = useState<LocationSuggestion[]>([]);
   const [locationBusy, setLocationBusy] = useState(false);
   const [locationStatus, setLocationStatus] = useState("");
+  const joinAttempted = useRef(false);
 
   useEffect(() => {
     void fetch("/api/health").then(async (response) => {
@@ -697,7 +698,7 @@ function GroupPlanner({ flash, t, language, track }: { flash: (text: string) => 
     setCuisineTypes(group.cuisineTypes.join(", "));
     if (group.eventLocalDate) setEventLocalDate(group.eventLocalDate);
     if (group.eventLocalTime) setEventLocalTime(group.eventLocalTime);
-    setGroupLocation(group.locality && group.countryCode && typeof group.latitude === "number" && typeof group.longitude === "number" ? { latitude: group.latitude, longitude: group.longitude, locality: group.locality, countryCode: group.countryCode, administrativeRegion: group.administrativeRegion ?? "", language, measurementSystem: "metric", timeZone: group.timeZone ?? "", locale: group.locale ?? language, currencyCode: group.currencyCode ?? "", source: "manual" } : null);
+    setGroupLocation(group.locality && isSupportedCountry(group.countryCode) && typeof group.latitude === "number" && typeof group.longitude === "number" ? { latitude: group.latitude, longitude: group.longitude, locality: group.locality, countryCode: group.countryCode, administrativeRegion: group.administrativeRegion ?? "", language, measurementSystem: "metric", timeZone: group.timeZone ?? "", locale: group.locale ?? language, currencyCode: group.currencyCode ?? "", source: "manual" } : null);
     setGroup(null);
   }
 
@@ -712,12 +713,13 @@ function GroupPlanner({ flash, t, language, track }: { flash: (text: string) => 
   const winner = group.candidates.find((candidate) => candidate.candidateId === group.selectedCandidateId);
   const winnerCopy = winner ? groupCandidateCopy(t, winner) : null;
 
+  const plan = group;
   function renderCandidate(candidate: GroupCandidate, index: number) {
-    const distance = new Intl.NumberFormat(language, { style: "unit", unit: group.distanceUnit === "imperial" ? "mile" : "kilometer", unitDisplay: "short", maximumFractionDigits: 1 }).format(group.distanceUnit === "imperial" ? candidate.distanceKm * .621371 : candidate.distanceKm);
-    const canVote = candidate.tier !== "does_not_fit" && group.status === "voting";
+    const distance = new Intl.NumberFormat(language, { style: "unit", unit: plan.distanceUnit === "imperial" ? "mile" : "kilometer", unitDisplay: "short", maximumFractionDigits: 1 }).format(plan.distanceUnit === "imperial" ? candidate.distanceKm * .621371 : candidate.distanceKm);
+    const canVote = candidate.tier !== "does_not_fit" && plan.status === "voting";
     const tierLabel = candidate.tier === "fits" ? t("group.fitEligible") : candidate.tier === "needs_checking" ? t("group.needsCheck") : t("group.hardConflict");
-    const isWinner = candidate.candidateId === group.selectedCandidateId;
-    return <article className={`vote-card${isWinner ? " winner" : ""}${candidate.tier === "does_not_fit" ? " ineligible" : ""}`} key={candidate.candidateId}><div className="vote-image" style={candidate.image ? { backgroundImage: `url(${candidate.image})` } : undefined}><span>{candidate.tier === "fits" ? `#${index + 1}` : "!"}</span></div><div className="vote-copy"><div><span>{tierLabel}</span><h3>{candidate.restaurant}</h3><p>{candidate.name} · {candidate.price} · {distance}</p>{candidate.conflicts.map((reason, i) => <small key={i}>{groupConflictLabel(t, reason)}</small>)}{candidate.kind === "provider_restaurant" ? <small>{t("match.restaurantReason")}</small> : <small>{`${t(`provenance.${candidate.provenance ?? "community_submitted"}` as MessageKey)} · ${t(`verification.${candidate.verificationStatus ?? "unverified"}` as MessageKey)}`} · {candidate.currentAvailabilityConfirmed ? t("availability.confirmed") : t("availability.unknown")}</small>}<small>{candidate.dietaryCaveat === "provider_information_unconfirmed" ? t("group.providerCaveat") : t("analysis.warning")}</small></div>{canVote && <button disabled={busy || group.status === "finalized"} onClick={() => void groupAction("vote", { candidateId: candidate.candidateId })}>▲ <b>{group.votes[candidate.candidateId] ?? 0}</b></button>}</div></article>;
+    const isWinner = candidate.candidateId === plan.selectedCandidateId;
+    return <article className={`vote-card${isWinner ? " winner" : ""}${candidate.tier === "does_not_fit" ? " ineligible" : ""}`} key={candidate.candidateId}><div className="vote-image" style={candidate.image ? { backgroundImage: `url(${candidate.image})` } : undefined}><span>{candidate.tier === "fits" ? `#${index + 1}` : "!"}</span></div><div className="vote-copy"><div><span>{tierLabel}</span><h3>{candidate.restaurant}</h3><p>{candidate.name} · {candidate.price} · {distance}</p>{candidate.conflicts.map((reason, i) => <small key={i}>{groupConflictLabel(t, reason)}</small>)}{candidate.kind === "provider_restaurant" ? <small>{t("match.restaurantReason")}</small> : <small>{`${t(`provenance.${candidate.provenance ?? "community_submitted"}` as MessageKey)} · ${t(`verification.${candidate.verificationStatus ?? "unverified"}` as MessageKey)}`} · {candidate.currentAvailabilityConfirmed ? t("availability.confirmed") : t("availability.unknown")}</small>}<small>{candidate.dietaryCaveat === "provider_information_unconfirmed" ? t("group.providerCaveat") : t("analysis.warning")}</small></div>{canVote && <button disabled={busy || plan.status === "finalized"} onClick={() => void groupAction("vote", { candidateId: candidate.candidateId })}>▲ <b>{plan.votes[candidate.candidateId] ?? 0}</b></button>}</div></article>;
   }
   return <section className="group-page">
     <div className="group-intro"><div className="eyebrow"><span>♢</span> {t("group.eyebrow")}</div><h1>{group.status === "finalized" ? t("group.finalTitle") : t("group.voteTitle")}</h1><p>{t("group.constraints")}</p>{placesUnavailable && <p className="location-status warning">{t("match.providerUnavailable")}</p>}<div className="members"><span style={{ background: colors[0] }}>{t("group.memberCount", { count: group.memberCount })}</span></div></div>

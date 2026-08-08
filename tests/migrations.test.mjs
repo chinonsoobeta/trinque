@@ -22,7 +22,7 @@ function apply(db, sql) {
   }
 }
 
-test("D1 migration journal and SQL files stay in lockstep", async () => {
+test("the migration journal and SQL files stay in lockstep", async () => {
   const files = await migrationFiles();
   const journal = JSON.parse(await readFile(new URL("meta/_journal.json", root), "utf8"));
   assert.deepEqual(journal.entries.map((entry) => entry.tag), files.map((file) => file.tag));

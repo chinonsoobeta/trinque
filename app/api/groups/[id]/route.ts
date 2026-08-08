@@ -1,7 +1,6 @@
 import { groupSnapshot } from "@/lib/group-api";
 import { requireIdentity } from "@/lib/identity";
 
-export const runtime = "edge";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const identity = await requireIdentity(request);

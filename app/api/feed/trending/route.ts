@@ -2,7 +2,6 @@ import { desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { profiles, publishedDishes, restaurants } from "@/db/schema";
 
-export const runtime = "edge";
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 

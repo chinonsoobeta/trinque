@@ -5,7 +5,6 @@ import { groupSnapshot } from "@/lib/group-api";
 import { selectGroupWinner, type RankedGroupCandidate } from "@/lib/group-planning";
 import { AuthenticationError, requireOnboardedIdentity } from "@/lib/auth";
 
-export const runtime = "edge";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   let identity;

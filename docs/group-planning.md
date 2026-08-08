@@ -1,6 +1,6 @@
 # Multi-user group planning
 
-Phase 5 replaces the prototype invite display with membership-authorized group plans backed by D1.
+Phase 5 replaces the prototype invite display with membership-authorized group plans backed by the database.
 
 ## Identity and access
 
@@ -12,7 +12,7 @@ Phase 5 replaces the prototype invite display with membership-authorized group p
 
 ## Candidates and honesty
 
-New plans are built from nearby published dish records in D1 and, when configured, Google restaurant-level alternatives. Demo restaurants are never substituted into a live plan. Restaurant-level alternatives remain ineligible when price, dietary fit, allergens, or menu availability cannot be supported; the UI says that no matching dish is claimed.
+New plans are built from nearby published dish records in the database and, when configured, Google restaurant-level alternatives. Demo restaurants are never substituted into a live plan. Restaurant-level alternatives remain ineligible when price, dietary fit, allergens, or menu availability cannot be supported; the UI says that no matching dish is claimed.
 
 ## Regional plan data
 
@@ -26,4 +26,4 @@ Plans persist their normalized location, country, currency, time zone, formattin
 
 ## Credential-dependent behavior
 
-Without `GCP_API_KEY`, group creation still uses eligible nearby published D1 dishes. Provider health remains unavailable and no seeded Vancouver or other demo results are inserted. A real multi-account route smoke test and real provider candidate check require deployed D1/Places configuration.
+Without `GCP_API_KEY`, group creation still uses eligible nearby published dishes. Provider health remains unavailable and no seeded Vancouver or other demo results are inserted. A real multi-account route smoke test and real provider candidate check require deployed database/Places configuration.

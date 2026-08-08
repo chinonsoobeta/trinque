@@ -5,7 +5,6 @@ import { groupMembership, groupSnapshot } from "@/lib/group-api";
 import { AuthenticationError, requireOnboardedIdentity } from "@/lib/auth";
 import { budgetResponse, enforceUsageBudget, requestIdFor, UsageBudgetError } from "@/lib/operations";
 
-export const runtime = "edge";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const requestId = requestIdFor(request);

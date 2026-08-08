@@ -3,7 +3,6 @@ import { getDb } from "@/db";
 import { blocks, follows, profiles, publishedDishes, restaurants, users } from "@/db/schema";
 import { AuthenticationError, getOptionalIdentity, normalizeHandle, requireAuthenticatedIdentity } from "@/lib/auth";
 
-export const runtime = "edge";
 
 export async function GET(request: Request, { params }: { params: Promise<{ handle: string }> }) {
   const { handle: rawHandle } = await params;

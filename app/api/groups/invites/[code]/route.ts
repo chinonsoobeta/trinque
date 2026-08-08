@@ -3,7 +3,6 @@ import { getDb } from "@/db";
 import { groups } from "@/db/schema";
 import { requireIdentity } from "@/lib/identity";
 
-export const runtime = "edge";
 
 export async function GET(request: Request, { params }: { params: Promise<{ code: string }> }) {
   if (!await requireIdentity(request)) return Response.json({ error: "authentication_required", code: "authentication_required" }, { status: 401 });

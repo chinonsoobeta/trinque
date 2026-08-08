@@ -4,7 +4,7 @@ import { groupCandidates, groupMembers, groups, publishedDishes, restaurants } f
 import { distanceBetween } from "@/lib/dish-matching";
 import { groupSnapshot } from "@/lib/group-api";
 import { DIETARY_REQUIREMENTS, instantForLocalTime, rankGroupCandidates, type DietaryRequirement, type GroupCandidateSource } from "@/lib/group-planning";
-import { AuthenticationError, requireOnboardedIdentity } from "@/lib/auth";
+import { AuthenticationError, getOptionalIdentity, requireOnboardedIdentity } from "@/lib/auth";
 import { normalizeLocation, type NormalizedLocation } from "@/lib/location";
 import { placesApiKey } from "@/lib/places/http";
 import { createPlacesProvider } from "@/lib/places/provider";
@@ -12,10 +12,9 @@ import { PlacesProviderError } from "@/lib/places/types";
 import { SUPPORTED_LANGUAGES, type SupportedCurrency, type SupportedLanguage } from "@/lib/regions";
 import { enforceUsageBudget, UsageBudgetError } from "@/lib/operations";
 
-export const runtime = "edge";
 
 export async function GET(request: Request) {
-  const identity = await requireIdentity(request);
+  const identity = await getOptionalIdentity(request);
   if (!identity) return Response.json({ error: "authentication_required", code: "authentication_required" }, { status: 401 });
   const db = await getDb();
   const [latest] = await db.select({ id: groups.id }).from(groupMembers).innerJoin(groups, eq(groupMembers.groupId, groups.id)).where(eq(groupMembers.userId, identity.id)).orderBy(desc(groupMembers.joinedAt)).limit(1);
@@ -66,7 +65,7 @@ export async function POST(request: Request) {
   const inviteExpiresAt = new Date(now.getTime() + 7 * 86400000).toISOString();
   await db.insert(groups).values({ id, ownerId: identity.id, name: body.name?.trim().slice(0, 80) || "Friday supper", eventTime: eventTime.toISOString(), eventLocalDate: body.eventLocalDate ?? null, eventLocalTime: body.eventLocalTime ?? null, neighborhood: location.locality, ...constraints, distanceUnit, allergies: JSON.stringify(constraints.allergies), dietaryRequirements: JSON.stringify(constraints.dietaryRequirements), cuisineTypes: JSON.stringify(constraints.cuisineTypes), inviteCode: crypto.randomUUID().replace(/-/g, "").slice(0, 12), inviteExpiresAt, latitude: location.latitude, longitude: location.longitude, locality: location.locality, administrativeRegion: location.administrativeRegion, countryCode: location.countryCode, currencyCode: location.currencyCode as SupportedCurrency, timeZone: location.timeZone, locale: location.locale, displayLanguage: body.language, updatedAt: now.toISOString() });
   await db.insert(groupMembers).values({ groupId: id, userId: identity.id, role: "owner", language: body.language });
-  for (const candidate of ranked) await db.insert(groupCandidates).values({ groupId: id, candidateId: candidate.candidateId, name: candidate.name, restaurant: candidate.restaurant, neighborhood: candidate.neighborhood, distanceKm: candidate.distanceKm, price: candidate.price, image: candidate.image, score: candidate.score, eligible: candidate.eligible, explanation: candidate.explanation, conflicts: JSON.stringify(candidate.conflicts), kind: candidate.kind, restaurantId: candidate.restaurantId, providerPlaceId: candidate.providerPlaceId, priceAmount: candidate.priceAmount, currencyCode: candidate.currencyCode as SupportedCurrency, provenance: candidate.provenance, verificationStatus: candidate.verificationStatus, currentAvailabilityConfirmed: candidate.currentAvailabilityConfirmed, dietaryCaveat: candidate.dietaryCaveat });
+  for (const candidate of ranked) await db.insert(groupCandidates).values({ groupId: id, candidateId: candidate.candidateId, name: candidate.name, restaurant: candidate.restaurant, neighborhood: candidate.neighborhood, distanceKm: candidate.distanceKm, price: candidate.price, image: candidate.image, score: candidate.score, eligible: candidate.eligible, explanation: candidate.explanation, conflicts: JSON.stringify(candidate.reasons), kind: candidate.kind, restaurantId: candidate.restaurantId, providerPlaceId: candidate.providerPlaceId, priceAmount: candidate.priceAmount, currencyCode: candidate.currencyCode as SupportedCurrency, provenance: candidate.provenance, verificationStatus: candidate.verificationStatus, currentAvailabilityConfirmed: candidate.currentAvailabilityConfirmed, dietaryCaveat: candidate.dietaryCaveat });
   return Response.json({ group: await groupSnapshot(id, identity.id), providerStatus }, { status: 201 });
 }
 

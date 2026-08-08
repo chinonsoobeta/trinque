@@ -5,7 +5,6 @@ import { supportedCountry, SUPPORTED_LANGUAGES, type SupportedLanguage } from "@
 import { budgetResponse, enforceUsageBudget, requestIdFor, UsageBudgetError } from "@/lib/operations";
 import { requireIdentity } from "@/lib/identity";
 
-export const runtime = "edge";
 const headers = { "Access-Control-Allow-Headers": "Authorization, Content-Type", "Access-Control-Allow-Methods": "POST, OPTIONS", "Cache-Control": "no-store" };
 
 export function OPTIONS() { return new Response(null, { status: 204, headers }); }

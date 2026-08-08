@@ -6,8 +6,10 @@ export type TrinqueRuntimeEnv = {
   GOOGLE_PLACES_API_KEY?: string;
   SUPABASE_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
-  DB?: unknown;
-  UPLOADS?: unknown;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
+  SUPABASE_STORAGE_BUCKET?: string;
+  TURSO_DATABASE_URL?: string;
+  TURSO_AUTH_TOKEN?: string;
   APPLE_DEVELOPER_TEAM_ID?: string;
   TRINQUE_ALLOWED_ORIGINS?: string;
   TRINQUE_BUDGET_ANALYSIS_USER_HOURLY?: string;
@@ -23,12 +25,9 @@ export type TrinqueRuntimeEnv = {
 };
 
 export async function getRuntimeEnv(): Promise<TrinqueRuntimeEnv> {
-  try {
-    const { env } = await import("cloudflare:workers");
-    return env as TrinqueRuntimeEnv;
-  } catch {
-    return {};
-  }
+  // Vercel injects project environment variables into the Node process, so the
+  // platform-specific binding lookup this used to perform is no longer needed.
+  return process.env as TrinqueRuntimeEnv;
 }
 
 export function selectOpenAIKey(

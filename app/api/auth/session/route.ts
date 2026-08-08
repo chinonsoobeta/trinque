@@ -1,3 +1,6 @@
+import { eq } from "drizzle-orm";
+import { getDb } from "@/db";
+import { profiles } from "@/db/schema";
 import {
   AuthenticationError,
   clearedSessionCookie,
@@ -7,7 +10,6 @@ import {
   sessionCookie,
 } from "@/lib/auth";
 
-export const runtime = "edge";
 
 const cors = {
   "Access-Control-Allow-Headers": "Authorization, Content-Type",
@@ -21,7 +23,21 @@ export function OPTIONS() {
 
 export async function GET(request: Request) {
   const identity = await getOptionalIdentity(request);
-  return Response.json({ authenticated: Boolean(identity && identity.authType !== "guest"), identity }, { headers: cors });
+  return Response.json({
+    authenticated: Boolean(identity && identity.authType !== "guest"),
+    identity: identity ? { ...identity, handle: await handleFor(identity.id) } : identity,
+  }, { headers: cors });
+}
+
+/** The handle lives on the profile, and the account page links to it. */
+async function handleFor(userId: string): Promise<string | null> {
+  try {
+    const db = await getDb();
+    const [profile] = await db.select({ handle: profiles.handle }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
+    return profile?.handle ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function POST(request: Request) {

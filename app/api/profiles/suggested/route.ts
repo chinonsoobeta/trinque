@@ -3,7 +3,6 @@ import { getDb } from "@/db";
 import { profiles } from "@/db/schema";
 import { getOptionalIdentity } from "@/lib/auth";
 
-export const runtime = "edge";
 
 export async function GET(request: Request) {
   const viewer = await getOptionalIdentity(request);

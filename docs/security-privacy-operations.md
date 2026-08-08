@@ -4,7 +4,7 @@ This document describes implementation controls, not legal advice and not a clai
 
 ## Usage budgets and rate limits
 
-D1 stores atomic hourly counters for `analysis`, `places`, `publish`, `invite_join`, and `vote`. Global counters apply to every action; authenticated publishing, invite joining, and voting also receive member-scoped counters. Limits are configurable with the environment variables listed in the project readiness documentation. A rejected request returns `429`, a safe `rate_limit` code, a request ID, and `Retry-After`.
+The database stores atomic hourly counters for `analysis`, `places`, `publish`, `invite_join`, and `vote`. Global counters apply to every action; authenticated publishing, invite joining, and voting also receive member-scoped counters. Limits are configurable with the environment variables listed in the project readiness documentation. A rejected request returns `429`, a safe `rate_limit` code, a request ID, and `Retry-After`.
 
 Counters contain an action, an opaque internal scope, the hourly window, and a count. They do not contain request bodies, images, authorization headers, locations, restaurant searches, or provider credentials. Old counter cleanup should be scheduled operationally once production volume justifies it.
 
@@ -14,7 +14,7 @@ Operational logging is JSON and allowlisted to timestamp, request ID, action, st
 
 ## Uploads and retention
 
-PNG, JPEG, and WebP uploads are base64-decoded server-side, limited to 5 MB decoded, and checked against their file signatures. A declared MIME type alone is not trusted. Image retention is opt-in during publishing. Images are served `private, no-store` and can be removed independently, with the dish, or with all user data. If R2 deletion is unavailable, destructive database deletion stops and reports the failure rather than orphaning the image silently.
+PNG, JPEG, and WebP uploads are base64-decoded server-side, limited to 5 MB decoded, and checked against their file signatures. A declared MIME type alone is not trusted. Image retention is opt-in during publishing. Images are served `private, no-store` and can be removed independently, with the dish, or with all user data. If image deletion is unavailable, destructive database deletion stops and reports the failure rather than orphaning the image silently.
 
 Deletion prevents future retrieval from Trinque storage. It cannot recall copies a user previously downloaded or copies cached before the `private, no-store` policy was introduced; this limitation must be stated in the reviewed privacy notice.
 

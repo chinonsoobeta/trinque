@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-test("D1 migrations preserve durable identities and independent three-member group state", async () => {
+test("migrations preserve durable identities and independent three-member group state", async () => {
   const sql = await readFile(new URL("../drizzle/0000_useful_maria_hill.sql", import.meta.url), "utf8");
   const publishSql = await readFile(new URL("../drizzle/0001_fair_the_hunter.sql", import.meta.url), "utf8");
   const groupSql = await readFile(new URL("../drizzle/0002_unusual_lady_mastermind.sql", import.meta.url), "utf8");

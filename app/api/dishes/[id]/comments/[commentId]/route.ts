@@ -3,7 +3,6 @@ import { getDb } from "@/db";
 import { comments, publishedDishes } from "@/db/schema";
 import { AuthenticationError, requireOnboardedIdentity } from "@/lib/auth";
 
-export const runtime = "edge";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string; commentId: string }> }) {
   try {

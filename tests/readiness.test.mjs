@@ -10,8 +10,8 @@ test("readiness is only complete when every live capability is configured", () =
     capabilities: {
       openai: { status: "available", reason: "configured" },
       places: { status: "available", reason: "configured" },
-      d1: { status: "available", reason: "configured" },
-      r2: { status: "available", reason: "configured" },
+      database: { status: "available", reason: "configured" },
+      storage: { status: "available", reason: "configured" },
     },
     liveAnalysis: true,
     locationSearch: true,
@@ -45,22 +45,28 @@ test("Sites Worker secrets take precedence while local Node env remains supporte
   assert.equal(selectGooglePlacesKey("", "", "", ""), undefined);
 });
 
-test("Cloudflare production configuration includes public Supabase auth credentials", () => {
-  const wranglerConfig = JSON.parse(readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8"));
-
-  assert.match(wranglerConfig.vars?.SUPABASE_URL ?? "", /^https:\/\/[a-z0-9]+\.supabase\.co$/);
-  assert.match(wranglerConfig.vars?.SUPABASE_PUBLISHABLE_KEY ?? "", /^sb_publishable_.+/);
-  assert.equal("SUPABASE_SERVICE_ROLE_KEY" in (wranglerConfig.vars ?? {}), false);
-  assert.equal("GCP_API_KEY" in (wranglerConfig.vars ?? {}), false);
-  assert.equal("GOOGLE_PLACES_API_KEY" in (wranglerConfig.vars ?? {}), false);
+test("no secret ever appears in a committed, publicly readable configuration file", () => {
+  const environmentTemplate = readFileSync(new URL("../.env.example", import.meta.url), "utf8");
+  for (const secret of ["SUPABASE_SERVICE_ROLE_KEY", "TURSO_AUTH_TOKEN", "OPENAI_API_KEY_2", "GCP_API_KEY"]) {
+    assert.match(environmentTemplate, new RegExp(`^${secret}=$`, "m"), `${secret} must be present but empty in .env.example`);
+  }
 });
 
-test("the deployment architecture has no Vercel integration", () => {
+test("the deployment architecture is Vercel-native with no Cloudflare entry points left", () => {
   const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(packageJson.scripts.build, "next build");
+  assert.equal(packageJson.scripts.start, "next start");
+  assert.equal(packageJson.scripts.dev, "next dev");
+
   const directPackages = { ...packageJson.dependencies, ...packageJson.devDependencies };
-  assert.equal(Object.keys(directPackages).some((name) => name === "vercel" || name.startsWith("@vercel/")), false);
-  assert.equal(existsSync(new URL("../vercel.json", import.meta.url)), false);
-  assert.equal(existsSync(new URL("../.vercel", import.meta.url)), false);
-  assert.equal(existsSync(new URL("../docs/vercel-ui-modernization-notes.md", import.meta.url)), false);
-  assert.doesNotMatch(readFileSync(new URL("../.gitignore", import.meta.url), "utf8"), /vercel/i);
+  for (const removed of ["vinext", "wrangler", "@cloudflare/vite-plugin", "@vitejs/plugin-rsc", "react-server-dom-webpack"]) {
+    assert.equal(removed in directPackages, false, `${removed} is a Cloudflare-only dependency`);
+  }
+  assert.equal("@libsql/client" in packageJson.dependencies, true);
+
+  for (const removed of ["../worker/index.ts", "../vite.config.ts", "../wrangler.jsonc", "../.openai/hosting.json"]) {
+    assert.equal(existsSync(new URL(removed, import.meta.url)), false, `${removed} still exists`);
+  }
+  assert.equal(existsSync(new URL("../proxy.ts", import.meta.url)), true);
+  assert.doesNotMatch(readFileSync(new URL("../proxy.ts", import.meta.url), "utf8"), /from "cloudflare:/);
 });

@@ -22,9 +22,8 @@ import {
   users,
 } from "@/db/schema";
 import { AuthenticationError, authSubjectHashForIdentity, clearedSessionCookie, requireAuthenticatedIdentity } from "@/lib/auth";
-import { avatarKeyFromUrl, getImageBucket } from "@/lib/r2-avatar";
+import { avatarKeyFromUrl, getImageBucket } from "@/lib/avatar-storage";
 
-export const runtime = "edge";
 
 export async function GET(request: Request) {
   try {

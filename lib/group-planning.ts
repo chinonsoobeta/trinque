@@ -21,14 +21,14 @@ export type GroupCandidateSource = { candidateId: string; name: string; restaura
 
 export type RankedGroupCandidate = GroupCandidateSource & { price: string; image: string; score: number; eligible: boolean; tier: Tier; explanation: string; reasons: string[] };
 
-const REASON_TRANSLATIONS: Record<string, (locale?: string) => string> = {
+const REASON_TRANSLATIONS: Record<string, (locale?: string, detail?: string) => string> = {
   over_budget: () => "Over budget",
   beyond_distance: () => "Too far",
   price_unknown: () => "Price not known",
   vegetarian_unknown: () => "Cannot confirm vegetarian",
   vegetarian_unsupported: () => "Does not support vegetarian",
-  allergen_unknown: (_, detail) => `Cannot confirm ${detail ?? "allergen"}`,
-  allergen_conflict: (_, detail) => `Contains ${detail ?? "allergen"}`,
+  allergen_unknown: (_locale, detail) => `Cannot confirm ${detail ?? "allergen"}`,
+  allergen_conflict: (_locale, detail) => `Contains ${detail ?? "allergen"}`,
   cuisine_unknown_or_mismatch: () => "Cuisine type does not match",
 };
 

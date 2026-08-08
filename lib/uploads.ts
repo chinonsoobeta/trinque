@@ -1,10 +1,12 @@
+import { getObjectBucket, type StoredObject } from "./object-storage.ts";
+
 export async function storeDishImage(dataUrl: string, ownerId: string): Promise<string | null> {
   const decoded = decodeDishImage(dataUrl);
-  const { env } = await import("cloudflare:workers");
-  if (!env.UPLOADS) throw new Error("uploads_unavailable");
+  const bucket = getObjectBucket();
+  if (!bucket) throw new Error("uploads_unavailable");
   const extension = decoded.contentType === "image/png" ? "png" : decoded.contentType === "image/webp" ? "webp" : "jpg";
   const key = `${ownerId}-${crypto.randomUUID()}.${extension}`;
-  await env.UPLOADS.put(key, decoded.bytes, { httpMetadata: { contentType: decoded.contentType } });
+  await bucket.put(key, decoded.bytes, { httpMetadata: { contentType: decoded.contentType } });
   return key;
 }
 
@@ -24,14 +26,15 @@ function signatureMatches(contentType: string, bytes: Uint8Array): boolean {
   return bytes.length >= 12 && String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
 }
 
-export async function getDishImage(key: string) {
-  const { env } = await import("cloudflare:workers");
-  return env.UPLOADS?.get(key) ?? null;
+export async function getDishImage(key: string): Promise<StoredObject | null> {
+  return (await getObjectBucket()?.get(key)) ?? null;
 }
 
 export async function deleteDishImage(key: string): Promise<boolean> {
-  const { env } = await import("cloudflare:workers");
-  if (!env.UPLOADS) return false;
-  await env.UPLOADS.delete(key);
+  const bucket = getObjectBucket();
+  if (!bucket) return false;
+  // Callers translate `false` into a 503 rather than a 500, so a storage
+  // failure has to be reported instead of thrown.
+  try { await bucket.delete(key); } catch { return false; }
   return true;
 }

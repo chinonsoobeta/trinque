@@ -34,11 +34,11 @@ The app includes a deterministic photo-analysis demo. To connect it to the web a
 
 Use your Mac's local network address instead of `localhost` when testing on a physical iPhone. The OpenAI API key stays only in the web/server environment and is never shipped in the mobile bundle.
 
-Guest sessions are created server-side and stored as an opaque token on the device. Profiles, preferences, and saved dishes are persisted in the platform D1 database; authenticated ChatGPT browser users are recognized from trusted hosting headers.
+Guest sessions are created server-side and stored as an opaque token on the device. Profiles, preferences, and saved dishes are persisted in the Turso/libSQL database; authenticated ChatGPT browser users are recognized from trusted hosting headers.
 
 To enable live photo analysis, copy .env.example to .env.local and add an OpenAI API key. Never commit the key.
 
-For production, add `OPENAI_API_KEY` and `GCP_API_KEY` as secrets in the Sites environment. `GOOGLE_PLACES_API_KEY` remains supported as a legacy fallback. The public client never receives them. `GET /api/health` reports OpenAI, Places, D1, and R2 independently without exposing secret values.
+For production, set the environment variables listed in `.env.example` on the Vercel project. `OPENAI_API_KEY` and `GOOGLE_PLACES_API_KEY` remain supported as legacy fallbacks. The public client never receives them. `GET /api/health` reports OpenAI, Places, database, and storage independently without exposing secret values.
 
 Pilot operations also support `TRINQUE_ALLOWED_ORIGINS` plus per-action `TRINQUE_BUDGET_<ACTION>_USER_HOURLY` and `TRINQUE_BUDGET_<ACTION>_GLOBAL_HOURLY` settings for `ANALYSIS`, `PLACES`, `PUBLISH`, `INVITE_JOIN`, and `VOTE`. Defaults are safe and bounded; configure names only in source control and values only in server-side environment settings. See `docs/security-privacy-operations.md`.
 

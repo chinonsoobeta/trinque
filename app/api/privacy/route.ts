@@ -4,7 +4,6 @@ import { preferences, publishedDishes, userConsents, users } from "@/db/schema";
 import { requireIdentity } from "@/lib/identity";
 import { deleteDishImage } from "@/lib/uploads";
 
-export const runtime = "edge";
 
 export async function GET(request: Request) {
   const identity = await requireIdentity(request);

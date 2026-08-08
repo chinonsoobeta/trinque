@@ -3,7 +3,6 @@ import { getDb } from "@/db";
 import { blocks, groups, notifications, profiles } from "@/db/schema";
 import { AuthenticationError, normalizeHandle, requireOnboardedIdentity } from "@/lib/auth";
 
-export const runtime = "edge";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {

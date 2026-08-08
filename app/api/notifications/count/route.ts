@@ -3,7 +3,6 @@ import { getDb } from "@/db";
 import { notifications } from "@/db/schema";
 import { AuthenticationError, requireAuthenticatedIdentity } from "@/lib/auth";
 
-export const runtime = "edge";
 
 export async function GET(request: Request) {
   try {

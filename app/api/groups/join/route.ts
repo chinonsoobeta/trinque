@@ -6,7 +6,6 @@ import { AuthenticationError, requireOnboardedIdentity } from "@/lib/auth";
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/lib/regions";
 import { budgetResponse, enforceUsageBudget, requestIdFor, UsageBudgetError } from "@/lib/operations";
 
-export const runtime = "edge";
 
 export async function POST(request: Request) {
   const requestId = requestIdFor(request);

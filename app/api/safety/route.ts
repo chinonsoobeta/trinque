@@ -3,7 +3,6 @@ import { getDb } from "@/db";
 import { blocks, follows, hiddenDishes, mutes, notifications, profiles, publishedDishes } from "@/db/schema";
 import { AuthenticationError, requireOnboardedIdentity } from "@/lib/auth";
 
-export const runtime = "edge";
 
 export async function GET(request: Request) {
   try {

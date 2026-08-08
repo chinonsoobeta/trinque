@@ -7,7 +7,6 @@ import { budgetResponse, enforceUsageBudget, logOperation, requestIdFor, UsageBu
 import { decodeDishImage } from "@/lib/uploads";
 import { requireIdentity } from "@/lib/identity";
 
-export const runtime = "edge";
 
 export function OPTIONS(request: Request) { return corsPreflight(request, "POST, OPTIONS"); }
 

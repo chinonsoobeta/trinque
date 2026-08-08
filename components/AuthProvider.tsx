@@ -9,6 +9,7 @@ type Identity = {
   authType: "guest" | "chatgpt" | "supabase";
   displayName: string;
   email: string | null;
+  handle: string | null;
 };
 
 type AuthContextValue = {

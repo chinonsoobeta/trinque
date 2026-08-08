@@ -4,7 +4,6 @@ import { comments, contentReports, moderationActions, publishedDishes } from "@/
 import { isModerator } from "@/lib/admin";
 import { AuthenticationError, requireAuthenticatedIdentity } from "@/lib/auth";
 
-export const runtime = "edge";
 const actions = ["hide", "remove", "restore", "resolve", "reject"] as const;
 
 async function requireModerator(request: Request) {

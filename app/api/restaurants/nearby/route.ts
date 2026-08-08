@@ -6,7 +6,6 @@ import { SUPPORTED_LANGUAGES, type SupportedLanguage } from "@/lib/regions";
 import { budgetResponse, enforceUsageBudget, requestIdFor, UsageBudgetError } from "@/lib/operations";
 import { requireIdentity } from "@/lib/identity";
 
-export const runtime = "edge";
 
 export async function GET(request: Request) {
   const requestId = requestIdFor(request);
